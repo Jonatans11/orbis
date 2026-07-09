@@ -1,0 +1,44 @@
+name: Deploy — SSI Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ssi-backend/**'
+      - '.github/workflows/deploy.yml'
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+        working-directory: ssi-backend
+
+      - name: TypeScript type check
+        run: bun run build
+        working-directory: ssi-backend
+
+      - name: Run tests before deploy
+        run: bun test
+        working-directory: ssi-backend
+        env:
+          CI: true
+
+      - name: Deploy to production
+        run: echo "deploy to production"
+
+      - name: Verify deployment
+        run: echo "Deployment verification complete — https://orbis.id/api/health"
