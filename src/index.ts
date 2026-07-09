@@ -40,12 +40,38 @@ initDatabase();
 
 // ─── Health ──────────────────────────────────────────────────────────────────
 
+/**
+ * GET /api/health
+ * Production health check endpoint.
+ * Returns module-level status: server version, DB connectivity, JWT config.
+ */
 app.get("/api/health", (_req: Request, res: Response) => {
+  const checks: Record<string, string> = {};
+
+  // Check JWT_SECRET configuration
+  try {
+    const jwtSecretSet = !!process.env.JWT_SECRET;
+    checks.jwt = jwtSecretSet ? "configured" : "using_auto_generated_dev_secret";
+  } catch {
+    checks.jwt = "error";
+  }
+
+  // Check team-db availability
+  try {
+    execSync("team-db \"SELECT 1\"", { encoding: "utf-8", timeout: 5_000 });
+    checks.database = "connected";
+  } catch {
+    checks.database = "unreachable";
+  }
+
+  const allHealthy = checks.database === "connected";
+
   res.json({
-    status: "ok",
+    status: allHealthy ? "ok" : "degraded",
     version: "1.0.0",
     service: "orbis-ssi-backend",
     timestamp: new Date().toISOString(),
+    checks,
   });
 });
 

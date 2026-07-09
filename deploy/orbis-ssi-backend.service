@@ -1,0 +1,25 @@
+[Unit]
+Description=ORBIS.ID Self-Sovereign Identity Backend
+Documentation=https://github.com/Jonatans11/orbis
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=orbis
+Group=orbis
+WorkingDirectory=/opt/orbis-ssi-backend
+EnvironmentFile=-/opt/orbis-ssi-backend/.env
+ExecStart=/usr/bin/node --import tsx src/index.ts
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
