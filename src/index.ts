@@ -11,6 +11,8 @@ import express, { type Request, type Response } from "express";
 import cors from "cors";
 import { randomBytes, createHash } from "node:crypto";
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { initDatabase, listCredentials, getVerificationsForCredential } from "./db/metadata.js";
 import * as didRegistry from "./did/index.js";
 import { issueCredential } from "./vc/issue.js";
@@ -73,6 +75,22 @@ app.get("/api/health", (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     checks,
   });
+});
+
+// ─── OpenAPI Spec ────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/openapi.json
+ * Serve the OpenAPI 3.1 specification document.
+ */
+app.get("/api/openapi.json", (_req: Request, res: Response) => {
+  try {
+    const specPath = join(process.cwd(), "openapi.yaml");
+    const spec = readFileSync(specPath, "utf-8");
+    res.type("application/json").send(spec);
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: `Failed to load OpenAPI spec: ${err.message}` });
+  }
 });
 
 // ─── DID Endpoints ───────────────────────────────────────────────────────────
@@ -192,7 +210,7 @@ app.get("/api/did/list", (req: Request, res: Response) => {
 app.put("/api/did/:id/revoke", (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    didRegistry.revokeDID(id);
+    didRegistry.revokeDID(String(id));
     res.json({ success: true, message: "DID revoked" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
@@ -333,7 +351,7 @@ app.get("/api/vc/credentials", (req: Request, res: Response) => {
 app.get("/api/vc/credentials/:credentialId/verifications", (req: Request, res: Response) => {
   try {
     const { credentialId } = req.params;
-    const verifications = getVerificationsForCredential(credentialId);
+    const verifications = getVerificationsForCredential(String(credentialId));
 
     res.json({
       success: true,
@@ -589,7 +607,7 @@ app.get("/api/trust/check/:did", (req: Request, res: Response) => {
  */
 app.put("/api/trust/:id/suspend", (req: Request, res: Response) => {
   try {
-    trustRegistry.suspendEntity(req.params.id);
+    trustRegistry.suspendEntity(String(req.params.id));
     res.json({ success: true, message: "Entity suspended" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
@@ -602,7 +620,7 @@ app.put("/api/trust/:id/suspend", (req: Request, res: Response) => {
  */
 app.put("/api/trust/:id/reactivate", (req: Request, res: Response) => {
   try {
-    trustRegistry.reactivateEntity(req.params.id);
+    trustRegistry.reactivateEntity(String(req.params.id));
     res.json({ success: true, message: "Entity reactivated" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
@@ -615,7 +633,7 @@ app.put("/api/trust/:id/reactivate", (req: Request, res: Response) => {
  */
 app.delete("/api/trust/:id", (req: Request, res: Response) => {
   try {
-    trustRegistry.removeEntity(req.params.id);
+    trustRegistry.removeEntity(String(req.params.id));
     res.json({ success: true, message: "Entity removed from trust registry" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
