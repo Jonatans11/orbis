@@ -15,6 +15,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { createHash } from "node:crypto";
+import { execSync } from "node:child_process";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -397,7 +398,6 @@ interface ZKVerificationRecord {
  */
 function storeVerification(record: ZKVerificationRecord): void {
   try {
-    const { execSync } = require("node:child_process");
     const sql = `INSERT INTO ssi_verifications (id, credential_id, verifier_did, verified, reason, timestamp) VALUES ('${record.id}', 'zk-${record.proof_type}-${record.field}', NULL, ${record.verified}, '${record.details.replace(/'/g, "''")}', '${record.timestamp}')`;
     execSync(`team-db ${JSON.stringify(sql)}`, {
       encoding: "utf-8",
