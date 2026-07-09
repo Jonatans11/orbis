@@ -16,6 +16,7 @@ import * as didRegistry from "./did/index.js";
 import { issueCredential } from "./vc/issue.js";
 import { verifyCredential } from "./vc/verify.js";
 import { createZKProof, verifyZKProof } from "./vc/zk.js";
+import { verifyZK } from "./vc/verify-zk.js";
 import * as trustRegistry from "./trust/registry.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import * as didcomm from "./didcomm/index.js";
@@ -316,6 +317,35 @@ app.get("/api/vc/credentials/:credentialId/verifications", (req: Request, res: R
         reason: v.reason,
         timestamp: v.timestamp,
       })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * POST /api/vc/verify-zk
+ * Verify a ZK hash-commitment or Merkle-inclusion proof.
+ * Body: { proof, publicInputs?, credential? }
+ *   proof can be a hash-commitment proof (field, commitmentHash, revealedValue?, nonce?)
+ *   or a Merkle-inclusion proof (value, root, siblings, leafIndex, totalLeaves)
+ */
+app.post("/api/vc/verify-zk", (req: Request, res: Response) => {
+  try {
+    const { proof, publicInputs, credential } = req.body;
+
+    if (!proof) {
+      res.status(400).json({ error: true, message: "proof is required" });
+      return;
+    }
+
+    const result = verifyZK(proof, publicInputs, credential);
+
+    res.json({
+      success: result.verified,
+      verified: result.verified,
+      proofDetails: result.proofDetails,
+      ...(result.error ? { error: result.error } : {}),
     });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
