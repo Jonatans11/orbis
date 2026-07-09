@@ -9,12 +9,22 @@
 
 import express, { type Request, type Response } from "express";
 import cors from "cors";
+import { randomBytes, createHash } from "node:crypto";
+import { execSync } from "node:child_process";
 import { initDatabase, listCredentials, getVerificationsForCredential } from "./db/metadata.js";
 import * as didRegistry from "./did/index.js";
 import { issueCredential } from "./vc/issue.js";
 import { verifyCredential } from "./vc/verify.js";
+import { createZKProof, verifyZKProof } from "./vc/zk.js";
 import * as trustRegistry from "./trust/registry.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
+import * as didcomm from "./didcomm/index.js";
+import * as didcommTypes from "./didcomm/types.js";
+import { v4 as uuidv4 } from "uuid";
+import { extractPublicKey } from "./did/key.js";
+import gatewayRoutes from "./gateway/routes.js";
+import { usageMiddleware } from "./gateway/middleware.js";
+import { requireAuth, rateLimitMiddleware } from "./gateway/middleware.js";
 
 // ─── Server Setup ────────────────────────────────────────────────────────────
 
@@ -312,6 +322,112 @@ app.get("/api/vc/credentials/:credentialId/verifications", (req: Request, res: R
   }
 });
 
+// ─── ZK Proof Endpoints ───────────────────────────────────────────────────────
+
+/**
+ * POST /api/vc/zk/prove
+ * Create a ZK selective disclosure proof from a Verifiable Credential.
+ * Body: { credential, holderDID, holderSecretKey, revealFields?, hideFields?, 
+ *         derivedPredicates?, challenge?, domain? }
+ */
+app.post("/api/vc/zk/prove", async (req: Request, res: Response) => {
+  try {
+    const {
+      credential,
+      holderDID,
+      holderSecretKey,
+      revealFields,
+      hideFields,
+      derivedPredicates,
+      challenge,
+      domain,
+    } = req.body;
+
+    if (!credential) {
+      res.status(400).json({ error: true, message: "credential is required" });
+      return;
+    }
+    if (!holderDID) {
+      res.status(400).json({ error: true, message: "holderDID is required" });
+      return;
+    }
+    if (!holderSecretKey) {
+      res.status(400).json({ error: true, message: "holderSecretKey is required (hex-encoded)" });
+      return;
+    }
+
+    const secretKeyBytes = Buffer.from(holderSecretKey, "hex");
+    if (secretKeyBytes.length !== 32) {
+      res.status(400).json({ error: true, message: "holderSecretKey must be a 32-byte hex string" });
+      return;
+    }
+
+    const result = await createZKProof({
+      credential,
+      holderDID,
+      holderSecretKey: secretKeyBytes,
+      revealFields,
+      hideFields,
+      derivedPredicates,
+      challenge,
+      domain,
+    });
+
+    res.status(201).json({
+      success: true,
+      proofId: result.proofId,
+      proof: result.proof,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * POST /api/vc/zk/verify
+ * Verify a ZK selective disclosure proof.
+ * Body: { proof, verifierDID?, challenge?, checkTrustRegistry?, 
+ *         requiredCredentialTypes? }
+ */
+app.post("/api/vc/zk/verify", async (req: Request, res: Response) => {
+  try {
+    const { proof, verifierDID, challenge, checkTrustRegistry, requiredCredentialTypes } = req.body;
+
+    if (!proof) {
+      res.status(400).json({ error: true, message: "proof is required" });
+      return;
+    }
+
+    const result = await verifyZKProof(proof, {
+      verifierDID,
+      challenge,
+      checkTrustRegistry: checkTrustRegistry || false,
+      requiredCredentialTypes,
+    });
+
+    res.json({
+      success: result.verified,
+      ...result,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * POST /api/vc/zk/challenge
+ * Generate a challenge for a ZK proof (prevents replay attacks).
+ * Returns a random challenge string that the verifier should send to the holder.
+ */
+app.post("/api/vc/zk/challenge", (_req: Request, res: Response) => {
+  const challenge = randomBytes(32).toString("hex");
+  res.json({
+    success: true,
+    challenge,
+    expiresIn: 300, // 5 minutes
+  });
+});
+
 // ─── Trust Registry Endpoints ────────────────────────────────────────────────
 
 /**
@@ -450,6 +566,355 @@ app.delete("/api/trust/:id", (req: Request, res: Response) => {
   }
 });
 
+// ─── Gateway Routes ──────────────────────────────────────────────────────────
+
+// Mount developer gateway routes (these handle their own auth internally)
+app.use("/api/gateway", gatewayRoutes);
+app.use("/api/developer", gatewayRoutes);
+
+// Apply usage tracking to all protected API routes
+// This wraps res.json to log API usage
+app.use("/api", usageMiddleware);
+
+// ─── DIDComm API Endpoints ────────────────────────────────────────────────────
+
+/**
+ * POST /api/didcomm/send
+ * Send an encrypted DIDComm message to a peer DID.
+ * Body: { fromDID, toDID, type?, body, threadId?, senderSecretKey (hex), encryptionType? }
+ */
+app.post("/api/didcomm/send", async (req: Request, res: Response) => {
+  try {
+    const { fromDID, toDID, type, body, threadId, senderSecretKey, encryptionType } = req.body;
+
+    if (!fromDID) {
+      res.status(400).json({ error: true, message: "fromDID is required" });
+      return;
+    }
+    if (!toDID) {
+      res.status(400).json({ error: true, message: "toDID is required" });
+      return;
+    }
+    if (!body || typeof body !== "object") {
+      res.status(400).json({ error: true, message: "body must be an object" });
+      return;
+    }
+    if (!senderSecretKey) {
+      res.status(400).json({ error: true, message: "senderSecretKey is required (hex-encoded)" });
+      return;
+    }
+
+    // Decode secret key
+    const secretKeyBytes = Buffer.from(senderSecretKey, "hex");
+    if (secretKeyBytes.length !== 32) {
+      res.status(400).json({ error: true, message: "senderSecretKey must be a 32-byte hex string" });
+      return;
+    }
+
+    // Get recipient's public key
+    const recipientPubKey = extractPublicKey(toDID);
+    if (!recipientPubKey) {
+      res.status(400).json({ error: true, message: `Cannot resolve public key for recipient: ${toDID}` });
+      return;
+    }
+
+    // Pick message type
+    const msgType = type || didcommTypes.BASIC_MESSAGE_TYPE;
+
+    const msg: didcommTypes.DIDCommMessage = {
+      from: fromDID,
+      to: [toDID],
+      type: msgType,
+      id: uuidv4(),
+      thid: threadId,
+      created_time: Math.floor(Date.now() / 1000),
+      body,
+    };
+
+    const stored = await didcomm.encryptAndStoreMessage(
+      msg,
+      secretKeyBytes,
+      recipientPubKey,
+      encryptionType || "authcrypt"
+    );
+
+    res.status(201).json({
+      success: true,
+      messageId: msg.id,
+      storedMessage: {
+        id: stored.id,
+        msg_type: stored.msg_type,
+        from_did: stored.from_did,
+        to_did: stored.to_did,
+        status: stored.status,
+        created_at: stored.created_at,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * GET /api/didcomm/inbox
+ * Retrieve inbox messages for a DID.
+ * Query: did (required), status (optional filter: sent | delivered | read)
+ */
+app.get("/api/didcomm/inbox", (req: Request, res: Response) => {
+  try {
+    const did = req.query.did as string;
+    if (!did) {
+      res.status(400).json({ error: true, message: "did query parameter is required" });
+      return;
+    }
+
+    let messages = didcomm.getInbox(did);
+
+    // Optional status filter
+    const statusFilter = req.query.status as string | undefined;
+    if (statusFilter && ["sent", "delivered", "read"].includes(statusFilter)) {
+      messages = messages.filter((m) => m.status === statusFilter);
+    }
+
+    res.json({
+      success: true,
+      count: messages.length,
+      messages: messages.map((m) => ({
+        id: m.id,
+        msg_type: m.msg_type,
+        from_did: m.from_did,
+        to_did: m.to_did,
+        body: m.body,
+        status: m.status,
+        thread_id: m.thread_id,
+        created_at: m.created_at,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * GET /api/didcomm/messages/:id
+ * Get a specific DIDComm message by its database ID.
+ */
+app.get("/api/didcomm/messages/:id", (req: Request, res: Response) => {
+  try {
+    const messageId = req.params.id as string;
+    const message = didcomm.getMessageById(messageId);
+
+    if (!message) {
+      res.status(404).json({ error: true, message: "Message not found" });
+      return;
+    }
+
+    // Mark as read when retrieved
+    didcomm.markAsRead(messageId);
+
+    res.json({
+      success: true,
+      message: {
+        id: message.id,
+        msg_type: message.msg_type,
+        from_did: message.from_did,
+        to_did: message.to_did,
+        body: message.body,
+        status: message.status,
+        thread_id: message.thread_id,
+        created_at: message.created_at,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * PUT /api/didcomm/messages/:id/status
+ * Update the status of a message.
+ * Body: { status: "delivered" | "read" }
+ */
+app.put("/api/didcomm/messages/:id/status", (req: Request, res: Response) => {
+  try {
+    const messageId = req.params.id as string;
+    const { status } = req.body;
+
+    if (!status || !["delivered", "read"].includes(status)) {
+      res.status(400).json({ error: true, message: "status must be 'delivered' or 'read'" });
+      return;
+    }
+
+    const message = didcomm.getMessageById(messageId);
+    if (!message) {
+      res.status(404).json({ error: true, message: "Message not found" });
+      return;
+    }
+
+    if (status === "delivered") {
+      didcomm.markAsDelivered(messageId);
+    } else {
+      didcomm.markAsRead(messageId);
+    }
+
+    res.json({ success: true, message: `Message marked as ${status}` });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * POST /api/didcomm/trust-ping
+ * Send a DIDComm trust ping.
+ * Body: { fromDID, toDID, senderSecretKey (hex), comment? }
+ */
+app.post("/api/didcomm/trust-ping", async (req: Request, res: Response) => {
+  try {
+    const { fromDID, toDID, senderSecretKey, comment } = req.body;
+
+    if (!fromDID) {
+      res.status(400).json({ error: true, message: "fromDID is required" });
+      return;
+    }
+    if (!toDID) {
+      res.status(400).json({ error: true, message: "toDID is required" });
+      return;
+    }
+    if (!senderSecretKey) {
+      res.status(400).json({ error: true, message: "senderSecretKey is required (hex-encoded)" });
+      return;
+    }
+
+    const secretKeyBytes = Buffer.from(senderSecretKey, "hex");
+    if (secretKeyBytes.length !== 32) {
+      res.status(400).json({ error: true, message: "senderSecretKey must be a 32-byte hex string" });
+      return;
+    }
+
+    const recipientPubKey = extractPublicKey(toDID);
+    if (!recipientPubKey) {
+      res.status(400).json({ error: true, message: `Cannot resolve public key for recipient: ${toDID}` });
+      return;
+    }
+
+    const stored = await didcomm.sendTrustPing(fromDID, toDID, secretKeyBytes, recipientPubKey, comment);
+
+    res.status(201).json({
+      success: true,
+      messageId: stored.id,
+      status: stored.status,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * POST /api/didcomm/oob/create
+ * Create an out-of-band invitation.
+ * Body: { fromDID, label, goal?, goalCode?, endpoint? }
+ */
+app.post("/api/didcomm/oob/create", (req: Request, res: Response) => {
+  try {
+    const { fromDID, label, goal, goalCode, endpoint } = req.body;
+
+    if (!fromDID) {
+      res.status(400).json({ error: true, message: "fromDID is required" });
+      return;
+    }
+    if (!label) {
+      res.status(400).json({ error: true, message: "label is required" });
+      return;
+    }
+
+    const invitation = didcomm.createOOBInvitation(fromDID, label, { goal, goalCode, endpoint });
+
+    res.status(201).json({
+      success: true,
+      invitationId: invitation.record.id,
+      invitationUrl: invitation.invitationUrl,
+      messageId: invitation.message.id,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * GET /api/didcomm/oob/parse
+ * Parse an out-of-band invitation URL.
+ * Query: url (the invitation URL)
+ */
+app.get("/api/didcomm/oob/parse", (req: Request, res: Response) => {
+  try {
+    const invitationUrl = req.query.url as string;
+    if (!invitationUrl) {
+      res.status(400).json({ error: true, message: "url query parameter is required" });
+      return;
+    }
+
+    const parsed = didcomm.parseOOBInvitation(invitationUrl);
+    if (!parsed) {
+      res.status(400).json({ error: true, message: "Invalid or malformed invitation URL" });
+      return;
+    }
+
+    res.json({
+      success: true,
+      invitation: parsed,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * GET /api/didcomm/oob/invitations
+ * List active OOB invitations for a DID.
+ * Query: did (required)
+ */
+app.get("/api/didcomm/oob/invitations", (req: Request, res: Response) => {
+  try {
+    const did = req.query.did as string;
+    if (!did) {
+      res.status(400).json({ error: true, message: "did query parameter is required" });
+      return;
+    }
+
+    const invitations = didcomm.listActiveInvitations(did);
+
+    res.json({
+      success: true,
+      count: invitations.length,
+      invitations,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * PUT /api/didcomm/oob/:id/consume
+ * Consume (mark used) an out-of-band invitation.
+ */
+app.put("/api/didcomm/oob/:id/consume", (req: Request, res: Response) => {
+  try {
+    const invitationId = req.params.id as string;
+    const invitation = didcomm.getOOBInvitation(invitationId);
+
+    if (!invitation) {
+      res.status(404).json({ error: true, message: "Invitation not found" });
+      return;
+    }
+
+    didcomm.consumeOOBInvitation(invitationId);
+
+    res.json({ success: true, message: "Invitation consumed" });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
 // ─── Error Handling ──────────────────────────────────────────────────────────
 
 app.use(notFoundHandler);
@@ -463,6 +928,43 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`[ORBIS.SSI] DID APIs: POST /api/did/create, GET /api/did/resolve/:did`);
   console.log(`[ORBIS.SSI] VC APIs: POST /api/vc/issue, POST /api/vc/verify`);
   console.log(`[ORBIS.SSI] Trust APIs: POST /api/trust/register, GET /api/trust/issuers`);
+  console.log(`[ORBIS.SSI] Developer Dashboard: http://localhost:${PORT}/api/developer/dashboard`);
+  console.log(`[ORBIS.SSI] Developer API Register: POST /api/developer/register`);
+
+  // Seed admin API key if none exists
+  try {
+    const seedResult = execSync(
+      `team-db "SELECT COUNT(*) as cnt FROM api_keys"`,
+      { encoding: "utf-8", timeout: 5_000 }
+    );
+    const seedRows = JSON.parse(seedResult.trim());
+    const keyCount = seedRows[0]?.cnt || 0;
+
+    if (keyCount === 0) {
+      console.log("[ORBIS.SSI] No API keys found. Seeding admin key...");
+      const adminRawKey = `orb_${randomBytes(24).toString("base64url")}`;
+      const adminKeyHash = createHash("sha256").update(adminRawKey).digest("hex");
+      const adminId = randomBytes(16).toString("hex");
+      const now = new Date().toISOString();
+      const fullScopes = "did:read,did:write,vc:issue,vc:verify,trust:read,trust:write";
+
+      execSync(
+        `team-db "INSERT INTO api_keys (id, name, email, key_hash, scopes, created_at) VALUES ('${adminId}', 'Admin (auto-seeded)', 'admin@orbis.id', '${adminKeyHash}', '${fullScopes}', '${now}')"`,
+        { encoding: "utf-8", timeout: 10_000 }
+      );
+
+      console.log(`[ORBIS.SSI] ╔══════════════════════════════════════════════════╗`);
+      console.log(`[ORBIS.SSI] ║         ADMIN API KEY — SAVE THIS                ║`);
+      console.log(`[ORBIS.SSI] ╠══════════════════════════════════════════════════╣`);
+      console.log(`[ORBIS.SSI] ║  ${adminRawKey}`);
+      console.log(`[ORBIS.SSI] ╚══════════════════════════════════════════════════╝`);
+      console.log(`[ORBIS.SSI] Scope: ${fullScopes}`);
+    } else {
+      console.log(`[ORBIS.SSI] ${keyCount} API key(s) already exist — skipping seed.`);
+    }
+  } catch (seedErr: any) {
+    console.log(`[ORBIS.SSI] Seed check skipped: ${seedErr.message}`);
+  }
 });
 
 export default app;

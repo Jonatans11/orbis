@@ -77,7 +77,7 @@ function buildDIDWebResult(
     id: verificationMethodId,
     type: "Ed25519VerificationKey2020",
     controller: did,
-    publicKeyMultibase: `z${publicKeyMultibase}`,
+    publicKeyMultibase: publicKeyMultibase,
   };
 
   const didDocument: DIDDocument = {

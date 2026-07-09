@@ -69,14 +69,14 @@ function buildDIDKeyResult(secretKey: Uint8Array, publicKey: Uint8Array): DIDKey
   encoded.set(publicKey, ED25519_PUBLIC_KEY_PREFIX.length);
 
   const publicKeyMultibase = base58btc.encode(encoded);
-  const did = `did:key:z${publicKeyMultibase}`;
-  const verificationMethodId = `${did}#z${publicKeyMultibase}`;
+  const did = `did:key:${publicKeyMultibase}`;
+  const verificationMethodId = `${did}#${publicKeyMultibase}`;
 
   const verificationMethod: VerificationMethod = {
     id: verificationMethodId,
     type: "Ed25519VerificationKey2020",
     controller: did,
-    publicKeyMultibase: `z${publicKeyMultibase}`,
+    publicKeyMultibase,
   };
 
   const didDocument: DIDDocument = {
