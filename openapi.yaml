@@ -1,0 +1,781 @@
+openapi: "3.1.0"
+info:
+  title: ORBIS.ID SSI Backend API
+  description: |
+    Self-Sovereign Identity backend for ORBIS.ID. Provides DID management,
+    Verifiable Credential issuance and verification, and a trust registry.
+  version: "1.0.0"
+  contact:
+    name: ORBIS.ID Team
+    url: https://orbis.id
+servers:
+  - url: http://localhost:3001
+    description: Local development server
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags:
+        - System
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/did/create:
+    post:
+      summary: Create a new DID
+      description: Generates a new Decentralized Identifier (did:key or did:web)
+      operationId: createDID
+      tags:
+        - DID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - method
+              properties:
+                method:
+                  type: string
+                  enum: [key, web]
+                  description: DID method to create
+                domain:
+                  type: string
+                  description: Domain for did:web (required if method is web)
+                  example: orbis.id
+                path:
+                  type: string
+                  description: Optional path for did:web
+                  example: issuer/abc
+      responses:
+        "201":
+          description: DID created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DIDCreateResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/did/resolve/{did}:
+    get:
+      summary: Resolve a DID
+      description: Resolves a DID to its DID Document
+      operationId: resolveDID
+      tags:
+        - DID
+      parameters:
+        - name: did
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^did:"
+          example: "did:key:z6MkhaXgBZDv..."
+      responses:
+        "200":
+          description: DID Document resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DIDResolveResponse"
+        "404":
+          description: DID not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/did/list:
+    get:
+      summary: List stored DIDs
+      description: Lists all DIDs stored in the registry, optionally filtered by method
+      operationId: listDIDs
+      tags:
+        - DID
+      parameters:
+        - name: method
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [key, web]
+      responses:
+        "200":
+          description: List of DIDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DIDListResponse"
+  /api/did/{id}/revoke:
+    put:
+      summary: Revoke a DID
+      description: Marks a DID as revoked
+      operationId: revokeDID
+      tags:
+        - DID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: DID revoked successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /api/vc/issue:
+    post:
+      summary: Issue a Verifiable Credential
+      description: Creates a signed Verifiable Credential with Ed25519 Signature 2020 proof
+      operationId: issueCredential
+      tags:
+        - Verifiable Credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - issuerDID
+                - issuerSecretKey
+                - subjectDID
+                - claims
+              properties:
+                issuerDID:
+                  type: string
+                  description: DID of the credential issuer
+                issuerSecretKey:
+                  type: string
+                  description: Ed25519 private key (hex-encoded, 32 bytes)
+                subjectDID:
+                  type: string
+                  description: DID of the credential subject
+                claims:
+                  type: object
+                  description: Claim data to include in the credential
+                  properties:
+                    name:
+                      type: string
+                    email:
+                      type: string
+                    dateOfBirth:
+                      type: string
+                      format: date
+                type:
+                  type: array
+                  items:
+                    type: string
+                  description: Credential types (defaults to VerifiableCredential)
+                  example: [VerifiableCredential, IdentityCredential]
+                schemaUrl:
+                  type: string
+                  format: uri
+                  description: URL of a JSON Schema for the credential
+                expirationDate:
+                  type: string
+                  format: date-time
+                  description: Optional expiration date
+      responses:
+        "201":
+          description: Credential issued successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VCIssueResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/vc/verify:
+    post:
+      summary: Verify a Verifiable Credential
+      description: |
+        Verifies a Verifiable Credential by checking structure, expiration,
+        proof signature, and optionally trust registry authorization
+      operationId: verifyCredential
+      tags:
+        - Verifiable Credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - credential
+              properties:
+                credential:
+                  type: object
+                  description: The signed Verifiable Credential to verify
+                verifierDID:
+                  type: string
+                  description: DID of the verifier (for audit logging)
+                checkTrustRegistry:
+                  type: boolean
+                  description: Whether to check the issuer against the trust registry
+                  default: false
+                requiredCredentialTypes:
+                  type: array
+                  items:
+                    type: string
+                  description: Required credential types that must be present
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VCVerifyResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/vc/credentials:
+    get:
+      summary: List issued credentials
+      description: Lists metadata for issued credentials, optionally filtered by issuer
+      operationId: listCredentials
+      tags:
+        - Verifiable Credentials
+      parameters:
+        - name: issuer
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Filter by issuer DID
+      responses:
+        "200":
+          description: List of credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialListResponse"
+  /api/vc/credentials/{credentialId}/verifications:
+    get:
+      summary: Get verification history
+      description: Returns the verification log for a specific credential
+      operationId: getCredentialVerifications
+      tags:
+        - Verifiable Credentials
+      parameters:
+        - name: credentialId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uri
+            description: The credential ID (urn:uuid:...)
+      responses:
+        "200":
+          description: Verification history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationHistoryResponse"
+  /api/trust/register:
+    post:
+      summary: Register a trusted entity
+      description: Adds an entity to the trust registry
+      operationId: registerTrustedEntity
+      tags:
+        - Trust Registry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - did
+                - name
+              properties:
+                did:
+                  type: string
+                  description: DID of the entity to trust
+                name:
+                  type: string
+                  description: Human-readable name of the entity
+                category:
+                  type: string
+                  enum: [issuer, verifier, both]
+                  default: issuer
+                authorizedCredentialTypes:
+                  type: array
+                  items:
+                    type: string
+                  description: Credential types this issuer is authorized for
+                addedBy:
+                  type: string
+                  description: DID of the admin who added this entry
+      responses:
+        "201":
+          description: Entity registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustRegisterResponse"
+        "409":
+          description: Entity already exists in trust registry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/trust/issuers:
+    get:
+      summary: List active trusted issuers
+      description: Returns all active (non-suspended, non-revoked) trusted issuers
+      operationId: listActiveIssuers
+      tags:
+        - Trust Registry
+      responses:
+        "200":
+          description: List of active issuers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustIssuersResponse"
+  /api/trust/entities:
+    get:
+      summary: List all trust registry entries
+      description: Lists all entities in the trust registry, optionally filtered by category
+      operationId: listTrustEntities
+      tags:
+        - Trust Registry
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [issuer, verifier, both]
+      responses:
+        "200":
+          description: List of trust entities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustEntitiesResponse"
+  /api/trust/check/{did}:
+    get:
+      summary: Check trust status
+      description: Checks if a DID is a trusted issuer
+      operationId: checkTrustStatus
+      tags:
+        - Trust Registry
+      parameters:
+        - name: did
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Trust status check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustCheckResponse"
+  /api/trust/{id}/suspend:
+    put:
+      summary: Suspend a trusted entity
+      operationId: suspendTrustEntity
+      tags:
+        - Trust Registry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Entity suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /api/trust/{id}/reactivate:
+    put:
+      summary: Reactivate a suspended entity
+      operationId: reactivateTrustEntity
+      tags:
+        - Trust Registry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Entity reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /api/trust/{id}:
+    delete:
+      summary: Remove a trust entity
+      description: Removes an entity from the trust registry entirely
+      operationId: removeTrustEntity
+      tags:
+        - Trust Registry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Entity removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: "1.0.0"
+        service:
+          type: string
+          example: orbis-ssi-backend
+        timestamp:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: boolean
+          example: true
+        message:
+          type: string
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+    DIDCreateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        did:
+          type: string
+          example: "did:key:z6MkhaXgBZDv..."
+        method:
+          type: string
+          enum: [key, web]
+        verificationMethodId:
+          type: string
+        didDocument:
+          type: object
+          properties:
+            "@context":
+              type: array
+              items:
+                type: string
+            id:
+              type: string
+            verificationMethod:
+              type: array
+              items:
+                $ref: "#/components/schemas/VerificationMethod"
+            authentication:
+              type: array
+              items:
+                type: string
+            assertionMethod:
+              type: array
+              items:
+                type: string
+    VerificationMethod:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          example: Ed25519VerificationKey2020
+        controller:
+          type: string
+        publicKeyMultibase:
+          type: string
+    DIDResolveResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        did:
+          type: string
+        didDocument:
+          type: object
+        record:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+              enum: [active, revoked, deactivated]
+            created_at:
+              type: string
+              format: date-time
+    DIDListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        count:
+          type: integer
+        dids:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              did:
+                type: string
+              method:
+                type: string
+              status:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+    VCIssueResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        credentialId:
+          type: string
+        credential:
+          type: object
+          properties:
+            "@context":
+              type: array
+              items:
+                type: string
+            id:
+              type: string
+            type:
+              type: array
+              items:
+                type: string
+            issuer:
+              type: string
+            issuanceDate:
+              type: string
+              format: date-time
+            expirationDate:
+              type: string
+              format: date-time
+            credentialSubject:
+              type: object
+            proof:
+              $ref: "#/components/schemas/Proof"
+        performance:
+          type: object
+          properties:
+            issuanceTimeMs:
+              type: integer
+    Proof:
+      type: object
+      properties:
+        type:
+          type: string
+          example: Ed25519Signature2020
+        created:
+          type: string
+          format: date-time
+        verificationMethod:
+          type: string
+        cryptosuite:
+          type: string
+          example: ed25519-2020
+        proofPurpose:
+          type: string
+          example: assertionMethod
+        proofValue:
+          type: string
+    VCVerifyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        verified:
+          type: boolean
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/VerificationCheck"
+        credentialId:
+          type: string
+        issuerDID:
+          type: string
+        subjectDID:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    VerificationCheck:
+      type: object
+      properties:
+        name:
+          type: string
+          enum: [structure, expiration, issuer-did, proof-signature, trust-registry, required-types]
+        passed:
+          type: boolean
+        message:
+          type: string
+    CredentialListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        count:
+          type: integer
+        credentials:
+          type: array
+          items:
+            type: object
+            properties:
+              credential_id:
+                type: string
+              issuer_did:
+                type: string
+              subject_did:
+                type: string
+              type:
+                type: string
+              status:
+                type: string
+                enum: [active, revoked, expired]
+              issuance_date:
+                type: string
+                format: date-time
+    VerificationHistoryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        count:
+          type: integer
+        verifications:
+          type: array
+          items:
+            type: object
+            properties:
+              verified:
+                type: boolean
+              reason:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+    TrustRegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        entry:
+          $ref: "#/components/schemas/TrustEntry"
+    TrustEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        did:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          enum: [issuer, verifier, both]
+        authorizedCredentialTypes:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, suspended, revoked]
+        addedBy:
+          type: string
+          nullable: true
+        addedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TrustIssuersResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        count:
+          type: integer
+        issuers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrustEntry"
+    TrustEntitiesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        count:
+          type: integer
+        entities:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrustEntry"
+    TrustCheckResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        did:
+          type: string
+        trusted:
+          type: boolean
+        entry:
+          type: object
+          nullable: true
+          $ref: "#/components/schemas/TrustEntry"

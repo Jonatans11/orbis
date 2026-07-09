@@ -1,0 +1,33 @@
+# ─── ORBIS.ID SSI Backend ───────────────────────────────────────
+# Docker Compose for local development and testing.
+# The SSI backend uses the shared team-db (Turso) for storage,
+# so no local database container is strictly required. This compose
+# file provides the backend as a standalone service.
+
+version: "3.9"
+
+services:
+  # ── SSI Backend API ──────────────────────────────────────────────
+  ssi-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orbis-ssi-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    # Mount host team-db binary for database access inside container
+    volumes:
+      - /usr/local/bin/team-db:/usr/local/bin/team-db:ro
+    # Allow the container to run team-db (needs access to host binary)
+    security_opt:
+      - no-new-privileges:true
