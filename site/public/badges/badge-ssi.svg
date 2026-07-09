@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Self-Sovereign Identity">
+  <defs>
+    <linearGradient id="b3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="92" height="92" rx="22" fill="url(#b3)" stroke="#334155" stroke-width="1"/>
+  <g transform="translate(48 44)" fill="none" stroke="#34D399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle r="20"/>
+    <path d="M0 -12v6M0 6v6M-12 0h6M6 0h6"/>
+    <circle r="3" fill="#34D399"/>
+  </g>
+  <text x="48" y="80" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="8" font-weight="600" letter-spacing="0.06em">SELF-SOVEREIGN</text>
+</svg>
