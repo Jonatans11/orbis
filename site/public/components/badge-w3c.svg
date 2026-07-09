@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="W3C Verifiable Credentials">
+  <defs>
+    <linearGradient id="b1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="92" height="92" rx="22" fill="url(#b1)" stroke="#334155" stroke-width="1"/>
+  <g transform="translate(48 42)" fill="none" stroke="#22D3EE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle r="20"/>
+    <path d="M-9 0 0 9 9 -9"/>
+  </g>
+  <text x="48" y="80" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="9" font-weight="600" letter-spacing="0.06em">W3C VC</text>
+</svg>

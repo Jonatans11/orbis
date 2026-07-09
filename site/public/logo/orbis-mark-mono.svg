@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="ORBIS.ID mark (monochrome)">
+  <title>ORBIS.ID mark — monochrome</title>
+  <!-- Inverted: outer rings stay in currentColor, core is punched out as background -->
+  <circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" stroke-width="3" stroke-opacity="0.5"/>
+  <circle cx="60" cy="60" r="40" fill="none" stroke="currentColor" stroke-width="2.5" stroke-opacity="0.7" stroke-dasharray="2 4"/>
+  <circle cx="60" cy="60" r="28" fill="none" stroke="currentColor" stroke-width="2.5"/>
+  <!-- Core filled, check drawn on top using mix-blend trick: white overlay via mask would be heavier; just use a contrasting path with a circle punched -->
+  <circle cx="60" cy="60" r="14" fill="currentColor"/>
+  <path d="M52 60.5 L58 66.5 L68.5 55.5" fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

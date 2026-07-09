@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.tanstack/
+.run/
+*.log
+.env
+.env.local

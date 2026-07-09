@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 480" width="600" height="480" role="img" aria-label="ORBIS.ID network illustration — your identity at the center of a trusted network">
+  <defs>
+    <linearGradient id="netOrbit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="55%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="netOrbitSoft" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#22D3EE" stop-opacity="0.2"/>
+    </linearGradient>
+    <radialGradient id="netGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#0B1020" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="netBlur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+
+  <!-- Background glow -->
+  <circle cx="300" cy="240" r="240" fill="url(#netGlow)"/>
+
+  <!-- Connection lines (drawn first so they sit under nodes) -->
+  <g stroke="#4F46E5" stroke-opacity="0.35" stroke-width="1.5" fill="none">
+    <path d="M300 240 L150 130"/>
+    <path d="M300 240 L450 130"/>
+    <path d="M300 240 L100 240"/>
+    <path d="M300 240 L500 240"/>
+    <path d="M300 240 L150 360"/>
+    <path d="M300 240 L450 360"/>
+    <path d="M150 130 L100 240"/>
+    <path d="M150 130 L300 240"/>
+    <path d="M450 130 L500 240"/>
+    <path d="M450 130 L300 240"/>
+    <path d="M100 240 L150 360"/>
+    <path d="M500 240 L450 360"/>
+  </g>
+
+  <!-- Orbit rings -->
+  <g transform="translate(300 240)" fill="none" stroke="url(#netOrbitSoft)">
+    <circle r="180" stroke-width="1" stroke-opacity="0.4"/>
+    <circle r="120" stroke-width="1.5" stroke-opacity="0.5" stroke-dasharray="2 5"/>
+    <circle r="64" stroke-width="2" stroke-opacity="0.7"/>
+  </g>
+
+  <!-- Center: identity (you) -->
+  <g transform="translate(300 240)">
+    <circle r="44" fill="url(#netOrbit)"/>
+    <circle r="44" fill="#FFFFFF" fill-opacity="0.1" filter="url(#netBlur)"/>
+    <circle r="44" stroke="#FFFFFF" stroke-opacity="0.4" stroke-width="1.5" fill="none"/>
+    <g fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-12 0 L-3 9 L14 -10"/>
+    </g>
+  </g>
+
+  <!-- Satellite nodes: issuers, verifiers, services -->
+  <!-- Top-left: Government -->
+  <g transform="translate(150 130)">
+    <circle r="22" fill="#1E293B" stroke="#22D3EE" stroke-width="2"/>
+    <g fill="none" stroke="#22D3EE" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-9 -1 -4 -1 -4 7 -9 7zM-4 -1 5 -1 5 7 -4 7zM5 0 9 -3 9 7 5 7z"/>
+      <path d="M-9 9 H9"/>
+    </g>
+  </g>
+  <text x="150" y="100" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="600" letter-spacing="0.04em">GOVERNMENT</text>
+
+  <!-- Top-right: Bank -->
+  <g transform="translate(450 130)">
+    <circle r="22" fill="#1E293B" stroke="#10B981" stroke-width="2"/>
+    <g fill="none" stroke="#10B981" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-9 5 0 -2 9 5"/>
+      <path d="M-7 5v6h14V5"/>
+      <path d="M-3 11v-3M3 11v-3"/>
+    </g>
+  </g>
+  <text x="450" y="100" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="600" letter-spacing="0.04em">BANK</text>
+
+  <!-- Left: University -->
+  <g transform="translate(100 240)">
+    <circle r="22" fill="#1E293B" stroke="#F59E0B" stroke-width="2"/>
+    <g fill="none" stroke="#F59E0B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-9 0 0 -5 9 0 0 5z"/>
+      <path d="M-6 1v6c0 1 3 2 6 2s6-1 6-2V1"/>
+    </g>
+  </g>
+  <text x="100" y="290" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="600" letter-spacing="0.04em">UNIVERSITY</text>
+
+  <!-- Right: Verifier (store) -->
+  <g transform="translate(500 240)">
+    <circle r="22" fill="#1E293B" stroke="#A78BFA" stroke-width="2"/>
+    <g fill="none" stroke="#A78BFA" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-8 -5h16l-2 14h-12z"/>
+      <path d="M-5 -5v-3a5 5 0 0 1 10 0v3"/>
+    </g>
+  </g>
+  <text x="500" y="290" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="600" letter-spacing="0.04em">VERIFIER</text>
+
+  <!-- Bottom-left: Health -->
+  <g transform="translate(150 360)">
+    <circle r="22" fill="#1E293B" stroke="#F472B6" stroke-width="2"/>
+    <g fill="none" stroke="#F472B6" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 8 -8 -2H-3L0 -5 3 -2H8z"/>
+    </g>
+  </g>
+  <text x="150" y="410" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="600" letter-spacing="0.04em">HEALTH</text>
+
+  <!-- Bottom-right: Employer -->
+  <g transform="translate(450 360)">
+    <circle r="22" fill="#1E293B" stroke="#FB923C" stroke-width="2"/>
+    <g fill="none" stroke="#FB923C" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="-8" y="-7" width="16" height="12" rx="1.5"/>
+      <path d="M-4 -2h8M-4 1h6"/>
+    </g>
+  </g>
+  <text x="450" y="410" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="600" letter-spacing="0.04em">EMPLOYER</text>
+
+  <!-- Small floating nodes -->
+  <g fill="#22D3EE" fill-opacity="0.6">
+    <circle cx="220" cy="170" r="2"/>
+    <circle cx="380" cy="170" r="2"/>
+    <circle cx="220" cy="310" r="2"/>
+    <circle cx="380" cy="310" r="2"/>
+  </g>
+</svg>

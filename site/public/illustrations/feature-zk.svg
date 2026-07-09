@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="320" height="200" role="img" aria-label="Zero-knowledge proof illustration">
+  <defs>
+    <linearGradient id="zkOrbit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="320" height="200" rx="16" fill="#0F172A" stroke="#1E293B"/>
+
+  <!-- Left: claim (data) -->
+  <g transform="translate(40 100)">
+    <rect x="-44" y="-30" width="88" height="60" rx="10" fill="#1E293B" stroke="#334155"/>
+    <text x="0" y="-8" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="9" font-weight="600" letter-spacing="0.06em">CLAIM</text>
+    <text x="0" y="8" text-anchor="middle" fill="#F8FAFC" font-family="JetBrains Mono, monospace" font-size="9">DOB: 2006-04-12</text>
+    <text x="0" y="20" text-anchor="middle" fill="#F8FAFC" font-family="JetBrains Mono, monospace" font-size="9">AGE: 20</text>
+  </g>
+
+  <!-- Arrow / transformation -->
+  <g transform="translate(160 100)">
+    <circle r="32" fill="url(#zkOrbit)"/>
+    <g fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-10 -6 H6 M-2 -12 6 -6 -2 0"/>
+    </g>
+  </g>
+
+  <!-- Right: proof (no data) -->
+  <g transform="translate(280 100)">
+    <rect x="-44" y="-30" width="88" height="60" rx="10" fill="#1E293B" stroke="#22D3EE" stroke-width="1.5"/>
+    <text x="0" y="-8" text-anchor="middle" fill="#22D3EE" font-family="Inter, system-ui, sans-serif" font-size="9" font-weight="600" letter-spacing="0.06em">PROOF</text>
+    <text x="0" y="6" text-anchor="middle" fill="#F8FAFC" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="700">Yes, 18+</text>
+    <text x="0" y="20" text-anchor="middle" fill="#64748B" font-family="Inter, system-ui, sans-serif" font-size="8">no data shared</text>
+  </g>
+</svg>
