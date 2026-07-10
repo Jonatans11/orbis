@@ -28,6 +28,11 @@ import { extractPublicKey } from "./did/key.js";
 import gatewayRoutes from "./gateway/routes.js";
 import { usageMiddleware } from "./gateway/middleware.js";
 import { requireAuth, rateLimitMiddleware } from "./gateway/middleware.js";
+import adminRoutes from "./admin/routes.js";
+import { ensureAdminColumns, ensureApiKeyColumns, ensureSystemWebhooksTable, seedAdminUser } from "./admin/auth.js";
+import walletRoutes from "./wallet/routes.js";
+import { initWalletTables } from "./wallet/db.js";
+import { initAuthTables, registerHandler, loginHandler, meHandler, changePasswordHandler, linkDIDHandler, requireJwt } from "./security/jwt.js";
 
 // ─── Server Setup ────────────────────────────────────────────────────────────
 
@@ -39,6 +44,54 @@ app.use(express.json({ limit: "1mb" }));
 
 // Initialize database tables
 initDatabase();
+
+// Ensure admin columns exist (migration for existing databases)
+try { ensureAdminColumns(); } catch {}
+
+// Ensure API key columns and system webhooks table exist
+try { ensureApiKeyColumns(); } catch {}
+try { ensureSystemWebhooksTable(); } catch {}
+
+// Initialize wallet database tables
+try { initWalletTables(); } catch {}
+
+// Initialize auth tables and seed the master admin user
+try { initAuthTables(); } catch {}
+try { seedAdminUser(); } catch {}
+
+// ─── Auth Routes ────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/auth/register
+ * Register a new user account.
+ */
+app.post("/api/auth/register", async (req: Request, res: Response) => {
+  await registerHandler(req, res);
+});
+
+/**
+ * POST /api/auth/login
+ * Authenticate and receive a JWT token.
+ */
+app.post("/api/auth/login", async (req: Request, res: Response) => {
+  await loginHandler(req, res);
+});
+
+/**
+ * GET /api/auth/me
+ * Get current user profile from JWT token.
+ */
+app.get("/api/auth/me", requireJwt, (req: Request, res: Response) => {
+  meHandler(req, res);
+});
+
+/**
+ * PUT /api/auth/did
+ * Link a DID to the authenticated user's account.
+ */
+app.put("/api/auth/did", requireJwt, async (req: Request, res: Response) => {
+  await linkDIDHandler(req, res);
+});
 
 // ─── Health ──────────────────────────────────────────────────────────────────
 
@@ -989,6 +1042,23 @@ app.put("/api/didcomm/oob/:id/consume", (req: Request, res: Response) => {
   }
 });
 
+// ─── Admin Routes ────────────────────────────────────────────────────────────
+
+// Mount admin routes (requireAdmin middleware is applied per-route, not globally)
+app.use("/api/admin", adminRoutes);
+
+// ─── Wallet Routes ───────────────────────────────────────────────────────────
+
+// Mount wallet routes (JWT auth per-route via requireJwt middleware)
+app.use("/api/wallet", walletRoutes);
+
+// ─── Auth Routes ─────────────────────────────────────────────────────────────
+app.post("/api/auth/register", registerHandler);
+app.post("/api/auth/login", loginHandler);
+app.get("/api/auth/me", requireJwt, meHandler);
+app.post("/api/auth/change-password", requireJwt, changePasswordHandler);
+app.post("/api/auth/link-did", requireJwt, linkDIDHandler);
+
 // ─── Error Handling ──────────────────────────────────────────────────────────
 
 app.use(notFoundHandler);
@@ -1028,8 +1098,8 @@ app.listen(PORT, "0.0.0.0", () => {
       );
 
       console.log(`[ORBIS.SSI] ╔══════════════════════════════════════════════════╗`);
-      console.log(`[ORBIS.SSI] ║         ADMIN API KEY — SAVE THIS                ║`);
-      console.log(`[ORBIS.SSI] ╠══════════════════════════════════════════════════╣`);
+      console.log(`[ORBIS.SSI] ���         ADMIN API KEY — SAVE THIS                ║`);
+      console.log(`[ORBIS.SSI] ╠═══════════════════════════════════════════════���══╣`);
       console.log(`[ORBIS.SSI] ║  ${adminRawKey}`);
       console.log(`[ORBIS.SSI] ╚══════════════════════════════════════════════════╝`);
       console.log(`[ORBIS.SSI] Scope: ${fullScopes}`);
