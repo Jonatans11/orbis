@@ -1,27 +1,44 @@
 /**
- * Typed ORBIS API client, shared by the native app and PWA.
+ * Typed ORBIS API client, shared by the native app (m/wallet-app) and PWA (m/web).
  *
- * - Live endpoints: /api/auth, /api/did, /api/vc, /api/trust, /api/didcomm (orbis-repo src/index.ts)
- * - Planned endpoints (wallet-specs/02-API-SPEC.md): /api/wallet/*, /api/auth/oauth/exchange, /api/auth/refresh
- *   — typed now so app code compiles against the contract; server lands in Phases 1–3.
+ * Verified against the live backend:
+ * - /api/auth   → src/security/jwt.ts   (register/login/me/change-password/link-did)
+ * - /api/did, /api/vc, /api/trust, /api/didcomm → src/index.ts
+ * - /api/wallet → src/wallet/routes.ts  (lifecycle, backup, vault, grants, push, admin)
+ *
+ * Error envelope is flat: { error: true, code?, message } — parseErrorBody() also
+ * accepts the nested { error: { code, message } } form for forward compatibility.
+ *
+ * Planned-only endpoints (02-API-SPEC §5, not on the server yet): auth.oauthExchange,
+ * auth.refresh — typed now so app code compiles against the contract.
  */
 import { ApiError, NetworkError } from "./errors.js";
 import type {
   AuthSession,
   AuthUser,
   BackupItem,
+  BackupListResult,
+  BackupResult,
   DidRecord,
   DidcommMessage,
+  GrantListResult,
+  GrantRedemption,
+  MessagesWaiting,
   OAuthProvider,
+  OkResponse,
   OobInvitation,
-  ShareGrant,
+  ShareGrantCreated,
   ShareGrantRequest,
   TrustCheck,
   VaultCategory,
-  VaultRecordMeta,
+  VaultListResult,
+  VaultRecordResult,
   VaultStoreRequest,
+  VaultStoreResult,
   VerifiableCredential,
   VerifyResult,
+  WalletAdminCredentialsResult,
+  WalletAdminUsersResult,
   WalletRegisterRequest,
   WalletRegistration,
   WalletStatus,
@@ -44,6 +61,31 @@ interface RequestOpts {
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined> | undefined;
   auth?: boolean;
+}
+
+/** Accepts both the live flat envelope and the nested spec envelope. */
+function parseErrorBody(
+  payload: unknown,
+  fallbackCode: string,
+  fallbackMessage: string,
+): { code: string; message: string } {
+  if (payload && typeof payload === "object") {
+    const p = payload as Record<string, unknown>;
+    // nested: { error: { code, message } }
+    if (p.error && typeof p.error === "object") {
+      const e = p.error as Record<string, unknown>;
+      return {
+        code: typeof e.code === "string" ? e.code : fallbackCode,
+        message: typeof e.message === "string" ? e.message : fallbackMessage,
+      };
+    }
+    // flat (live server): { error: true, code?, message }
+    return {
+      code: typeof p.code === "string" ? p.code : fallbackCode,
+      message: typeof p.message === "string" ? p.message : fallbackMessage,
+    };
+  }
+  return { code: fallbackCode, message: fallbackMessage };
 }
 
 export class OrbisApiClient {
@@ -94,15 +136,13 @@ export class OrbisApiClient {
     if (!res) throw new NetworkError(`Network request failed: ${method} ${path}`, lastCause);
 
     if (!res.ok) {
-      let code = `HTTP_${res.status}`;
-      let message = res.statusText;
+      let payload: unknown;
       try {
-        const payload = (await res.json()) as { error?: { code?: string; message?: string } };
-        code = payload.error?.code ?? code;
-        message = payload.error?.message ?? message;
+        payload = await res.json();
       } catch {
         /* non-JSON error body */
       }
+      const { code, message } = parseErrorBody(payload, `HTTP_${res.status}`, res.statusText);
       const err = new ApiError(res.status, code, message);
       if (err.isWalletWiped) this.opts.onWalletWiped?.();
       throw err;
@@ -111,12 +151,13 @@ export class OrbisApiClient {
     return (await res.json()) as T;
   }
 
-  // ---------------- auth (live) ----------------
+  // ---------------- auth (live: src/security/jwt.ts) ----------------
   readonly auth = {
-    register: (email: string, password: string) =>
+    /** POST /api/auth/register — displayName is required by the server. */
+    register: (email: string, password: string, displayName: string) =>
       this.request<AuthSession>("/api/auth/register", {
         method: "POST",
-        body: { email, password },
+        body: { email, password, displayName },
         auth: false,
       }),
     login: (email: string, password: string) =>
@@ -125,15 +166,15 @@ export class OrbisApiClient {
         body: { email, password },
         auth: false,
       }),
-    me: () => this.request<AuthUser>("/api/auth/me"),
+    me: () => this.request<{ success: boolean; user: AuthUser }>("/api/auth/me"),
     changePassword: (currentPassword: string, newPassword: string) =>
-      this.request<{ ok: boolean }>("/api/auth/password", {
-        method: "PUT",
+      this.request<OkResponse>("/api/auth/change-password", {
+        method: "POST",
         body: { currentPassword, newPassword },
       }),
     linkDid: (did: string) =>
-      this.request<{ ok: boolean }>("/api/auth/did", { method: "PUT", body: { did } }),
-    // planned (02-API-SPEC §5)
+      this.request<OkResponse>("/api/auth/link-did", { method: "POST", body: { did } }),
+    // planned (02-API-SPEC §5) — server does not implement these yet
     oauthExchange: (provider: OAuthProvider, idToken: string, nonce: string) =>
       this.request<AuthSession>("/api/auth/oauth/exchange", {
         method: "POST",
@@ -156,7 +197,7 @@ export class OrbisApiClient {
       this.request<Record<string, unknown>>(`/api/did/resolve/${encodeURIComponent(did)}`),
     list: () => this.request<{ dids: DidRecord[] } | DidRecord[]>("/api/did/list"),
     revoke: (id: string) =>
-      this.request<{ ok: boolean }>(`/api/did/${encodeURIComponent(id)}/revoke`, { method: "PUT" }),
+      this.request<OkResponse>(`/api/did/${encodeURIComponent(id)}/revoke`, { method: "PUT" }),
   };
 
   // ---------------- vc (live) ----------------
@@ -173,6 +214,10 @@ export class OrbisApiClient {
       this.request<{ challenge: string; [k: string]: unknown }>("/api/vc/zk/challenge", {
         method: "POST",
       }),
+    /**
+     * SECURITY: do NOT call from wallet code with holder secrets — proving must happen
+     * on-device (m/core/vc/zk). Server-side prove is a verifier/test utility only.
+     */
     zkProve: (body: Record<string, unknown>) =>
       this.request<Record<string, unknown>>("/api/vc/zk/prove", { method: "POST", body }),
     zkVerify: (body: Record<string, unknown>) =>
@@ -181,8 +226,11 @@ export class OrbisApiClient {
 
   // ---------------- trust (live) ----------------
   readonly trust = {
+    register: (body: Record<string, unknown>) =>
+      this.request<Record<string, unknown>>("/api/trust/register", { method: "POST", body }),
     check: (did: string) => this.request<TrustCheck>(`/api/trust/check/${encodeURIComponent(did)}`),
     issuers: () => this.request<unknown>("/api/trust/issuers"),
+    entities: () => this.request<unknown>("/api/trust/entities"),
   };
 
   // ---------------- didcomm (live) ----------------
@@ -206,78 +254,99 @@ export class OrbisApiClient {
       this.request<OobInvitation>("/api/didcomm/oob/create", { method: "POST", body }),
     oobParse: (url: string) =>
       this.request<OobInvitation>("/api/didcomm/oob/parse", { query: { url } }),
+    oobInvitations: () =>
+      this.request<{ invitations: OobInvitation[] } | OobInvitation[]>(
+        "/api/didcomm/oob/invitations",
+      ),
+    oobConsume: (id: string) =>
+      this.request<OkResponse>(`/api/didcomm/oob/${encodeURIComponent(id)}/consume`, {
+        method: "PUT",
+      }),
   };
 
-  // ---------------- wallet (planned — 02-API-SPEC) ----------------
+  // ---------------- wallet (live: src/wallet/routes.ts) ----------------
   readonly wallet = {
+    // --- lifecycle ---
     register: (body: WalletRegisterRequest) =>
       this.request<WalletRegistration>("/api/wallet/register", { method: "POST", body }),
+    /** Poll on app foreground. Throws ApiError(410 WALLET_WIPED) if remotely wiped. */
     status: () => this.request<WalletStatus>("/api/wallet/status"),
     deleteDevice: (deviceId: string) =>
-      this.request<void>(`/api/wallet/device/${encodeURIComponent(deviceId)}`, {
+      this.request<OkResponse>(`/api/wallet/device/${encodeURIComponent(deviceId)}`, {
         method: "DELETE",
       }),
     setPushToken: (pushToken: string) =>
-      this.request<void>("/api/wallet/push-token", { method: "PUT", body: { pushToken } }),
+      this.request<OkResponse>("/api/wallet/push-token", { method: "PUT", body: { pushToken } }),
 
+    // --- credential backup (ciphertext only — server never sees plaintext) ---
     backupCredentials: (items: BackupItem[]) =>
-      this.request<{ results: unknown[] }>("/api/wallet/credentials/backup", {
+      this.request<BackupResult>("/api/wallet/credentials/backup", {
         method: "POST",
         body: { items },
       }),
     listBackups: (includeCiphertext = false) =>
-      this.request<{ items: BackupItem[] }>("/api/wallet/credentials/backup", {
+      this.request<BackupListResult>("/api/wallet/credentials/backup", {
         query: includeCiphertext ? { include: "ciphertext" } : undefined,
       }),
     deleteBackup: (localId: string) =>
-      this.request<void>(`/api/wallet/credentials/backup/${encodeURIComponent(localId)}`, {
+      this.request<OkResponse>(`/api/wallet/credentials/backup/${encodeURIComponent(localId)}`, {
         method: "DELETE",
       }),
 
+    // --- encrypted data vault ---
     storeData: (body: VaultStoreRequest) =>
-      this.request<VaultRecordMeta>("/api/wallet/data/store", { method: "POST", body }),
-    listData: (category: VaultCategory, cursor?: string) =>
-      this.request<{ items: VaultRecordMeta[]; nextCursor?: string }>(
-        `/api/wallet/data/${category}`,
-        { query: cursor ? { cursor } : undefined },
-      ),
+      this.request<VaultStoreResult>("/api/wallet/data/store", { method: "POST", body }),
+    listData: (category: VaultCategory, opts?: { cursor?: string; limit?: number }) =>
+      this.request<VaultListResult>(`/api/wallet/data/${category}`, {
+        query: { cursor: opts?.cursor, limit: opts?.limit },
+      }),
     getRecord: (recordId: string, includeCiphertext = true) =>
-      this.request<VaultRecordMeta>(`/api/wallet/data/record/${encodeURIComponent(recordId)}`, {
+      this.request<VaultRecordResult>(`/api/wallet/data/record/${encodeURIComponent(recordId)}`, {
         query: includeCiphertext ? { include: "ciphertext" } : undefined,
       }),
     deleteRecord: (recordId: string) =>
-      this.request<void>(`/api/wallet/data/record/${encodeURIComponent(recordId)}`, {
+      this.request<OkResponse>(`/api/wallet/data/record/${encodeURIComponent(recordId)}`, {
         method: "DELETE",
       }),
 
+    // --- data sharing grants (consent ledger) ---
     createGrant: (body: ShareGrantRequest) =>
-      this.request<ShareGrant>("/api/wallet/data/share", { method: "POST", body }),
+      this.request<ShareGrantCreated>("/api/wallet/data/share", { method: "POST", body }),
+    /** Grantee-side redemption. Caller must have the grantee DID linked to their account. */
     redeemGrant: (grantId: string) =>
-      this.request<VaultRecordMeta & { encryptedKey: string }>(
-        `/api/wallet/share/${encodeURIComponent(grantId)}`,
-      ),
+      this.request<GrantRedemption>(`/api/wallet/share/${encodeURIComponent(grantId)}`),
     listGrants: (recordId?: string) =>
-      this.request<{ grants: ShareGrant[] }>("/api/wallet/data/grants", {
+      this.request<GrantListResult>("/api/wallet/data/grants", {
         query: recordId ? { recordId } : undefined,
       }),
     revokeGrant: (grantId: string) =>
-      this.request<void>(`/api/wallet/data/grants/${encodeURIComponent(grantId)}`, {
+      this.request<OkResponse>(`/api/wallet/data/grants/${encodeURIComponent(grantId)}`, {
         method: "DELETE",
+      }),
+
+    // --- didcomm push hints ---
+    messagesWaiting: () => this.request<MessagesWaiting>("/api/wallet/messages/waiting"),
+    /** Acknowledge receipt — marks the given messages 'delivered'. */
+    ackMessages: (messageIds?: string[]) =>
+      this.request<OkResponse>("/api/wallet/messages/waiting", {
+        method: "PUT",
+        body: { messageIds },
       }),
   };
 
-  // ---------------- admin (JWT-authed admin users only) ----------------
+  // ---------------- wallet admin (live; requires admin JWT) ----------------
   readonly admin = {
-    walletUsers: () => this.request<unknown>("/api/admin/wallet/users"),
-    walletStats: () => this.request<unknown>("/api/admin/wallet/stats"),
-    wipeWallet: (walletId: string, reason: string) =>
-      this.request<void>(`/api/admin/wallet/${encodeURIComponent(walletId)}/wipe`, {
-        method: "PUT",
+    walletUsers: () => this.request<WalletAdminUsersResult>("/api/wallet/admin/users"),
+    walletCredentials: () =>
+      this.request<WalletAdminCredentialsResult>("/api/wallet/admin/credentials"),
+    remoteWipe: (walletId: string, reason: string) =>
+      this.request<OkResponse>(`/api/wallet/admin/remote-wipe/${encodeURIComponent(walletId)}`, {
+        method: "DELETE",
         body: { reason },
       }),
-    grants: () => this.request<unknown>("/api/admin/wallet/grants"),
   };
 
   // ---------------- misc ----------------
-  health = () => this.request<{ status: string; [k: string]: unknown }>("/api/health", { auth: false });
+  health = () =>
+    this.request<{ status: string; [k: string]: unknown }>("/api/health", { auth: false });
 }
