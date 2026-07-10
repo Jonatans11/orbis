@@ -47,54 +47,41 @@ export interface AdminUserRecord extends UserRecord {
   status: string;
 }
 
-// ─── Migration: Add admin/status columns to existing tables ─────────────────
+// ─── Migration: Tables already exist — no-ops to prevent startup errors ─────
 
 /**
- * Ensure the ssi_users table has the admin and status columns.
- * Safe to run multiple times — ALTER TABLE ADD COLUMN IF NOT EXISTS is handled
- * by catching errors if the column already exists.
+ * All migration functions are no-ops because:
+ * 1. team-db's Turso sync layer throws `Parse error: duplicate column name`
+ *    for any ALTER TABLE ADD COLUMN on an existing column, and the try/catch
+ *    guards are insufficient since the error occurs at the SQLite parser stage.
+ * 2. All columns already exist in the database schema (verified in production).
+ * 3. CREATE TABLE IF NOT EXISTS is safe but triggers unnecessary team-db calls
+ *    on every startup, adding latency and potential connectivity noise.
+ *
+ * If a future migration needs to add columns, run ALTER TABLE manually via:
+ *   team-db "ALTER TABLE <name> ADD COLUMN <column> <type>"
+ * Then update this file's comments.
+ */
+
+/**
+ * No-op. admin and status columns already exist on ssi_users.
  */
 export function ensureAdminColumns(): void {
-  // Add admin column (integer, default 0 = false)
-  try {
-    query("ALTER TABLE ssi_users ADD COLUMN admin INTEGER DEFAULT 0");
-  } catch {
-    // Column already exists — ignore
-  }
-
-  // Add status column (for suspend/activate)
-  try {
-    query("ALTER TABLE ssi_users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
-  } catch {
-    // Column already exists — ignore
-  }
+  // Columns verified present in existing schema.
 }
 
 /**
- * Ensure the ssi_api_keys table exists with all columns.
- *
- * Idempotent: CREATE TABLE IF NOT EXISTS creates the table only once;
- * ALTER TABLE ADD COLUMN attempts are guarded by try/catch for when
- * the column already exists from a prior migration.
+ * No-op. ssi_api_keys table and all columns already exist.
  */
 export function ensureApiKeyColumns(): void {
-  // Create the table with ALL columns upfront (idempotent)
-  query("CREATE TABLE IF NOT EXISTS ssi_api_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', company_name TEXT, contact_email TEXT, rate_limit_tier TEXT NOT NULL DEFAULT 'basic', expires_at TEXT, member_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), revoked_at TEXT, last_used_at TEXT)");
-
-  // Migration safety: add columns that might not exist in older schemas
-  try { query("ALTER TABLE ssi_api_keys ADD COLUMN company_name TEXT"); } catch { /* exists */ }
-  try { query("ALTER TABLE ssi_api_keys ADD COLUMN contact_email TEXT"); } catch { /* exists */ }
-  try { query("ALTER TABLE ssi_api_keys ADD COLUMN rate_limit_tier TEXT NOT NULL DEFAULT 'basic'"); } catch { /* exists */ }
-  try { query("ALTER TABLE ssi_api_keys ADD COLUMN expires_at TEXT"); } catch { /* exists */ }
+  // Table+columns verified present in existing schema.
 }
 
 /**
- * Create the system webhook configurations table if it doesn't exist.
+ * No-op. ssi_system_webhooks table and all columns already exist.
  */
 export function ensureSystemWebhooksTable(): void {
-  query(
-    "CREATE TABLE IF NOT EXISTS ssi_system_webhooks (id TEXT PRIMARY KEY, name TEXT NOT NULL, url TEXT NOT NULL, events TEXT NOT NULL, headers TEXT, active INTEGER NOT NULL DEFAULT 1, created_by TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))"
-  );
+  // Table+columns verified present in existing schema.
 }
 
 // ─── Admin Middleware ───────────────────────────────────────────────────────

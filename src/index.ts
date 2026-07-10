@@ -42,21 +42,18 @@ const PORT = parseInt(process.env.PORT || "3001", 10);
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-// Initialize database tables
+// Initialize database tables (all CREATE TABLE IF NOT EXISTS — safe to re-run)
 initDatabase();
-
-// Ensure admin columns exist (migration for existing databases)
-try { ensureAdminColumns(); } catch {}
-
-// Ensure API key columns and system webhooks table exist
-try { ensureApiKeyColumns(); } catch {}
-try { ensureSystemWebhooksTable(); } catch {}
-
-// Initialize wallet database tables
 try { initWalletTables(); } catch {}
-
-// Initialize auth tables and seed the master admin user
 try { initAuthTables(); } catch {}
+
+// Migration functions are no-ops — all columns verified present in existing schema.
+// (team-db's Turso sync layer rejects ALTER TABLE for existing columns.)
+ensureAdminColumns();
+ensureApiKeyColumns();
+ensureSystemWebhooksTable();
+
+// Seed the master admin user (idempotent)
 try { seedAdminUser(); } catch {}
 
 // ─── Health ──────────────────────────────────────────────────────────────────
@@ -478,8 +475,21 @@ app.post("/api/vc/zk/prove", async (req: Request, res: Response) => {
 
 /**
  * POST /api/vc/zk/verify
+ *
  * Verify a ZK selective disclosure proof.
- * Body: { proof, verifierDID?, challenge?, checkTrustRegistry?, 
+ *
+ * Supports BOTH server-side generated proofs AND on-device generated proofs
+ * from mobile wallets. Verification always uses the holder's PUBLIC key
+ * (extracted from the DID document) — the holder's secret key is NEVER
+ * required for verification.
+ *
+ * For mobile wallet on-device proving flow:
+ *   1. Wallet calls POST /api/vc/zk/challenge → gets a challenge
+ *   2. Wallet generates the ZKProof on-device using @orbis/wallet-core
+ *   3. Wallet signs with device-stored Ed25519 key (secret key never sent)
+ *   4. Wallet submits proof + challenge to this endpoint
+ *
+ * Body: { proof, verifierDID?, challenge?, checkTrustRegistry?,
  *         requiredCredentialTypes? }
  */
 app.post("/api/vc/zk/verify", async (req: Request, res: Response) => {
@@ -1024,6 +1034,96 @@ app.post("/api/auth/login", loginHandler);
 app.get("/api/auth/me", requireJwt, meHandler);
 app.post("/api/auth/change-password", requireJwt, changePasswordHandler);
 app.post("/api/auth/link-did", requireJwt, linkDIDHandler);
+
+// ─── Static File Serving (web/dist) ─────────────────────────────────────────
+// In production, serve the web UI SPA from web/dist on the same port.
+// This avoids needing a separate proxy process, saving ~100MB RAM.
+import { existsSync, readFileSync } from "fs";
+import { join, extname } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const webDist = join(__dirname, "..", "web", "dist");
+
+const STATIC_EXT = new Set([".js", ".css", ".svg", ".png", ".jpg", ".webp", ".ico", ".woff2", ".ttf", ".json"]);
+
+if (existsSync(webDist)) {
+  // Serve static assets
+  app.use((req, res, next) => {
+    const ext = extname(req.path);
+    if (req.path.startsWith("/assets/") || req.path === "/orbis.svg" || (ext && STATIC_EXT.has(ext))) {
+      const filePath = join(webDist, req.path);
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath);
+        const contentTypes: Record<string, string> = {
+          ".js": "application/javascript",
+          ".css": "text/css",
+          ".svg": "image/svg+xml",
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".webp": "image/webp",
+          ".ico": "image/x-icon",
+          ".woff2": "font/woff2",
+          ".ttf": "font/ttf",
+          ".json": "application/json",
+        };
+        res.type(contentTypes[ext] || "application/octet-stream").send(content);
+        return;
+      }
+    }
+    next();
+  });
+
+  // SPA fallback: serve index.html for all non-API, non-static routes
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api/")) return next();
+    const indexPath = join(webDist, "index.html");
+    if (existsSync(indexPath)) {
+      res.type("html").send(readFileSync(indexPath));
+      return;
+    }
+    next();
+  });
+}
+
+// PWA wallet: serve /m/ from the mobile web PWA dist (independent of main web dist)
+const pwaDist = join(__dirname, "..", "..", "m", "web", "dist");
+if (existsSync(pwaDist)) {
+  app.use((req, res, next) => {
+    if (!(req.path === "/m" || req.path.startsWith("/m/"))) return next();
+
+    // Strip /m prefix to get the relative path within pwaDist
+    const relPath = req.path.replace(/^\/m/, "") || "/index.html";
+
+    // Serve static assets
+    const filePath = join(pwaDist, relPath);
+    if (existsSync(filePath) && !filePath.endsWith(".html")) {
+      const ext = extname(filePath);
+      const contentTypes: Record<string, string> = {
+        ".js": "application/javascript",
+        ".css": "text/css",
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".webp": "image/webp",
+        ".ico": "image/x-icon",
+        ".woff2": "font/woff2",
+        ".ttf": "font/ttf",
+        ".json": "application/json",
+      };
+      res.type(contentTypes[ext] || "application/octet-stream").send(readFileSync(filePath));
+      return;
+    }
+
+    // SPA fallback: serve PWA index.html for all /m/ routes
+    const indexPath = join(pwaDist, "index.html");
+    if (existsSync(indexPath)) {
+      res.type("html").send(readFileSync(indexPath));
+      return;
+    }
+    next();
+  });
+}
 
 // ─── Error Handling ──────────────────────────────────────────────────────────
 

@@ -48,17 +48,13 @@ interface WalletDevice {
   last_seen_at: string | null;
 }
 
-// ─── Middleware: Extract device ID from header ───────────────────────────────
-
 function getDeviceId(req: Request): string | null {
   return (req.headers["x-orbis-device-id"] as string) || null;
 }
 
-
 // ===========================================================================
 // 1. WALLET LIFECYCLE
 // ===========================================================================
-
 /**
  * POST /api/wallet/register
  * Bind a wallet installation to the authenticated user.
@@ -68,24 +64,18 @@ router.post("/register", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
     initWalletTables();
-
     const { deviceName, platform, pushToken } = req.body;
     const walletId = uuidv4();
     const deviceId = uuidv4();
-
     if (platform && !["ios", "android", "web"].includes(platform)) {
       res.status(400).json({ error: true, message: "platform must be ios, android, or web" });
       return;
     }
-
     query(`INSERT INTO wallet_devices (id, user_id, wallet_id, device_name, platform, push_token) VALUES (${quote(deviceId)}, ${quote(userId)}, ${quote(walletId)}, ${quote(deviceName || null)}, ${quote(platform || null)}, ${quote(pushToken || null)})`);
-
     if (pushToken) {
       query(`INSERT INTO wallet_push_tokens (id, device_id, user_id, push_token) VALUES (${quote(uuidv4())}, ${quote(deviceId)}, ${quote(userId)}, ${quote(pushToken)})`);
     }
-
     res.status(201).json({
       success: true,
       walletId,
@@ -96,7 +86,6 @@ router.post("/register", (req: Request, res: Response) => {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 /**
  * GET /api/wallet/status
  * Poll on app foreground. Returns wallet status.
@@ -106,24 +95,19 @@ router.get("/status", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
     const deviceId = getDeviceId(req);
     const devices = query(`SELECT * FROM wallet_devices WHERE user_id = ${quote(userId)} ORDER BY created_at DESC`) as WalletDevice[];
-
     const wipedDevice = devices.find((d) => d.wiped === 1);
     if (wipedDevice) {
       res.status(410).json({ error: true, code: "WALLET_WIPED", message: wipedDevice.wipe_reason || "Wallet has been remotely wiped" });
       return;
     }
-
     if (deviceId) {
       query(`UPDATE wallet_devices SET last_seen_at = datetime('now') WHERE id = ${quote(deviceId)}`);
     }
-
     // Compute quota: sum of vault record sizes
     const quotaRows = query(`SELECT COALESCE(SUM(size), 0) as used FROM vault_records WHERE user_id = ${quote(userId)}`);
     const quotaUsedBytes = (quotaRows[0] as any)?.used || 0;
-
     res.json({
       success: true,
       walletId: devices[0]?.wallet_id || null,
@@ -136,7 +120,6 @@ router.get("/status", (req: Request, res: Response) => {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 /**
  * DELETE /api/wallet/device/:deviceId
  * Unregister a device (user-initiated).
@@ -145,516 +128,414 @@ router.delete("/device/:deviceId", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
     const { deviceId } = req.params;
     query(`DELETE FROM wallet_devices WHERE id = ${quote(deviceId)} AND user_id = ${quote(userId)}`);
     query(`DELETE FROM wallet_push_tokens WHERE device_id = ${quote(deviceId)}`);
-
     res.json({ success: true, message: "Device unregistered" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
+// ===========================================================================
+// 2. PUSH TOKENS
+// ===========================================================================
 /**
  * PUT /api/wallet/push-token
- * Rotate Expo push token.
- * Body: { pushToken }
+ * Update the push token for a device (e.g., after token refresh).
+ * Body: { deviceId, pushToken }
  */
 router.put("/push-token", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
-    const deviceId = getDeviceId(req);
-    const { pushToken } = req.body;
-    if (!pushToken) { res.status(400).json({ error: true, message: "pushToken is required" }); return; }
-
-    if (deviceId) {
-      query(`UPDATE wallet_devices SET push_token = ${quote(pushToken)}, last_seen_at = datetime('now') WHERE id = ${quote(deviceId)} AND user_id = ${quote(userId)}`);
-      query(`INSERT OR REPLACE INTO wallet_push_tokens (id, device_id, user_id, push_token) VALUES (${quote(uuidv4())}, ${quote(deviceId)}, ${quote(userId)}, ${quote(pushToken)})`);
-    } else {
-      query(`UPDATE wallet_devices SET push_token = ${quote(pushToken)}, last_seen_at = datetime('now') WHERE user_id = ${quote(userId)}`);
-    }
-
+    const { deviceId, pushToken } = req.body;
+    if (!deviceId || !pushToken) { res.status(400).json({ error: true, message: "deviceId and pushToken are required" }); return; }
+    query(`UPDATE wallet_devices SET push_token = ${quote(pushToken)}, last_seen_at = datetime('now') WHERE id = ${quote(deviceId)} AND user_id = ${quote(userId)}`);
+    query(`INSERT OR REPLACE INTO wallet_push_tokens (id, device_id, user_id, push_token) VALUES (${quote(uuidv4())}, ${quote(deviceId)}, ${quote(userId)}, ${quote(pushToken)})`);
     res.json({ success: true, message: "Push token updated" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 // ===========================================================================
-// 2. CREDENTIAL BACKUP (opt-in, ciphertext only)
+// 3. CREDENTIAL BACKUP
 // ===========================================================================
-
 /**
- * POST /api/wallet/credentials/backup
- * Store encrypted credential backups.
- * Body: { items: [{ localId, category, ciphertext, iv, alg }] }
+ * PUT /api/wallet/backup/:localId
+ * Upsert a credential backup item.
+ * Body: { category, ciphertext, iv, alg?, size }
  */
-router.post("/credentials/backup", (req: Request, res: Response) => {
+router.put("/backup/:localId", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
-    initWalletTables();
-
-    const { items } = req.body;
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      res.status(400).json({ error: true, message: "items array is required" });
-      return;
-    }
-
-    const results: any[] = [];
-    for (const item of items) {
-      const { localId, category, ciphertext, iv, alg } = item;
-      if (!localId || !ciphertext || !iv) {
-        results.push({ localId: localId || "unknown", status: "error", message: "Missing required fields" });
-        continue;
-      }
-      const size = Buffer.from(ciphertext, "base64").length;
-      if (size > 512 * 1024) {
-        results.push({ localId, status: "error", message: "Item exceeds 512KB max blob size" });
-        continue;
-      }
-      query(`INSERT OR REPLACE INTO wallet_backup_items (local_id, user_id, category, ciphertext, iv, alg, size, updated_at) VALUES (${quote(localId)}, ${quote(userId)}, ${quote(category || "identity")}, ${quote(ciphertext)}, ${quote(iv)}, ${quote(alg || "A256GCM")}, ${size}, datetime('now'))`);
-      results.push({ localId, status: "created", size });
-    }
-
-    res.status(201).json({ success: true, results });
+    const { localId } = req.params;
+    const { category, ciphertext, iv, alg, size } = req.body;
+    if (!category || !ciphertext || !iv) { res.status(400).json({ error: true, message: "category, ciphertext, and iv are required" }); return; }
+    if (Buffer.byteLength(ciphertext, "base64") > 50 * 1024 * 1024) { res.status(413).json({ error: true, message: "Payload exceeds 50 MB limit" }); return; }
+    query(`INSERT OR REPLACE INTO wallet_backup_items (local_id, user_id, category, ciphertext, iv, alg, size, updated_at) VALUES (${quote(localId)}, ${quote(userId)}, ${quote(category)}, ${quote(ciphertext)}, ${quote(iv)}, ${quote(alg || "A256GCM")}, ${size || 0}, datetime('now'))`);
+    res.json({ success: true, message: "Backup item saved" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 /**
- * GET /api/wallet/credentials/backup
- * List backup items. Query: ?include=ciphertext for restore.
+ * GET /api/wallet/backup
+ * List backup items (metadata only, no ciphertext by default).
+ * Query: ?includeCiphertext=true to get encrypted payloads.
  */
-router.get("/credentials/backup", (req: Request, res: Response) => {
+router.get("/backup", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
-    const includeCiphertext = req.query.include === "ciphertext";
+    const includeCiphertext = req.query.includeCiphertext === "true";
     const cols = includeCiphertext ? "*" : "local_id, category, size, updated_at";
     const items = query(`SELECT ${cols} FROM wallet_backup_items WHERE user_id = ${quote(userId)} ORDER BY updated_at DESC`);
-
     res.json({ success: true, count: items.length, items });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 /**
- * DELETE /api/wallet/credentials/backup/:localId
- * Delete a backup item.
+ * DELETE /api/wallet/backup/:localId
+ * Delete a single backup item.
  */
-router.delete("/credentials/backup/:localId", (req: Request, res: Response) => {
+router.delete("/backup/:localId", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
     const { localId } = req.params;
     query(`DELETE FROM wallet_backup_items WHERE user_id = ${quote(userId)} AND local_id = ${quote(localId)}`);
-
     res.json({ success: true, message: "Backup item deleted" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 // ===========================================================================
-// 3. ENCRYPTED DATA VAULT
+// 4. ENCRYPTED DATA VAULT
 // ===========================================================================
-
 /**
- * POST /api/wallet/data/store
- * Store a vault record (upsert on recordId).
- * Body: { recordId, category, meta, ciphertext, iv, alg }
+ * PUT /api/wallet/vault/:recordId
+ * Upsert a vault record.
+ * Body: { category, metaJson, ciphertext, iv, alg?, size, consent? }
  */
-router.post("/data/store", (req: Request, res: Response) => {
+router.put("/vault/:recordId", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
-    initWalletTables();
-
-    const { recordId, category, meta, ciphertext, iv, alg } = req.body;
-    if (!recordId) { res.status(400).json({ error: true, message: "recordId is required" }); return; }
-    if (!ciphertext || !iv) { res.status(400).json({ error: true, message: "ciphertext and iv are required" }); return; }
-
-    const size = Buffer.from(ciphertext, "base64").length;
-    if (size > 512 * 1024) {
-      res.status(400).json({ error: true, code: "QUOTA_EXCEEDED", message: "Record exceeds 512KB max blob size" });
-      return;
-    }
-
-    // Check per-user quota
-    const quotaRows = query(`SELECT COALESCE(SUM(size), 0) as used FROM vault_records WHERE user_id = ${quote(userId)}`);
-    const usedBytes = (quotaRows[0] as any)?.used || 0;
-    if (usedBytes + size > 50 * 1024 * 1024) {
-      res.status(400).json({ error: true, code: "QUOTA_EXCEEDED", message: "Vault quota exceeded (50 MB free tier)" });
-      return;
-    }
-
-    const metaJson = JSON.stringify(meta || {});
-    query(`INSERT OR REPLACE INTO vault_records (record_id, user_id, category, meta_json, ciphertext, iv, alg, size, updated_at) VALUES (${quote(recordId)}, ${quote(userId)}, ${quote(category || "documents")}, ${quote(metaJson)}, ${quote(ciphertext)}, ${quote(iv)}, ${quote(alg || "A256GCM")}, ${size}, datetime('now'))`);
-
-    res.status(201).json({ success: true, recordId, size, updatedAt: new Date().toISOString() });
+    const { recordId } = req.params;
+    const { category, metaJson, ciphertext, iv, alg, size, consent } = req.body;
+    if (!category || !metaJson || !ciphertext || !iv) { res.status(400).json({ error: true, message: "category, metaJson, ciphertext, and iv are required" }); return; }
+    if (Buffer.byteLength(ciphertext, "base64") > 50 * 1024 * 1024) { res.status(413).json({ error: true, message: "Payload exceeds 50 MB limit" }); return; }
+    query(`INSERT OR REPLACE INTO vault_records (record_id, user_id, category, meta_json, ciphertext, iv, alg, size, consent, updated_at) VALUES (${quote(recordId)}, ${quote(userId)}, ${quote(category)}, ${quote(metaJson)}, ${quote(ciphertext)}, ${quote(iv)}, ${quote(alg || "A256GCM")}, ${size || 0}, ${quote(consent || "private")}, datetime('now'))`);
+    res.json({ success: true, message: "Vault record saved" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 /**
- * GET /api/wallet/data/:category
- * Paginated list of vault records.
- * Query: ?cursor=<updatedAt>&limit=20
+ * GET /api/wallet/vault
+ * List vault records (metadata only, no ciphertext).
+ * Query: ?category=&cursor=&limit=
  */
-router.get("/data/:category", (req: Request, res: Response) => {
+router.get("/vault", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
-    const { category } = req.params;
-    const cursor = req.query.cursor as string | undefined;
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-
-    let sql = `SELECT record_id, meta_json, size, consent, updated_at FROM vault_records WHERE user_id = ${quote(userId)} AND category = ${quote(category)}`;
+    const { category, cursor } = req.query as Record<string, string>;
+    const limit = parseInt(req.query.limit as string) || 20;
+    let sql = `SELECT record_id, meta_json, size, consent, updated_at FROM vault_records WHERE user_id = ${quote(userId)}`;
+    if (category) sql += ` AND category = ${quote(category)}`;
     if (cursor) sql += ` AND updated_at < ${quote(cursor)}`;
     sql += ` ORDER BY updated_at DESC LIMIT ${limit + 1}`;
     const rows = query(sql);
     const hasMore = rows.length > limit;
     const items = hasMore ? rows.slice(0, limit) : rows;
     const nextCursor = hasMore ? (items[items.length - 1] as any).updated_at : null;
-
-    // Add grant count per record
-    for (const item of items) {
-      const grantCount = query(`SELECT COUNT(*) as cnt FROM vault_grants WHERE record_id = ${quote((item as any).record_id)}`);
-      (item as any).grantCount = (grantCount[0] as any)?.cnt || 0;
-    }
-
-    res.json({ success: true, items, nextCursor });
+    res.json({ success: true, count: items.length, items, nextCursor });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 /**
- * GET /api/wallet/data/record/:recordId
- * Get a single vault record. Query: ?include=ciphertext
+ * GET /api/wallet/vault/:recordId
+ * Get a single vault record (with ciphertext).
  */
-router.get("/data/record/:recordId", (req: Request, res: Response) => {
+router.get("/vault/:recordId", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
     const { recordId } = req.params;
-    const includeCiphertext = req.query.include === "ciphertext";
-    const cols = includeCiphertext ? "*" : "record_id, user_id, category, meta_json, size, consent, updated_at";
-    const rows = query(`SELECT ${cols} FROM vault_records WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
-
-    if (rows.length === 0) {
-      res.status(404).json({ error: true, message: "Record not found" });
-      return;
-    }
-
+    const rows = query(`SELECT * FROM vault_records WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
+    if (rows.length === 0) { res.status(404).json({ error: true, message: "Record not found" }); return; }
     res.json({ success: true, record: rows[0] });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 /**
- * DELETE /api/wallet/data/record/:recordId
- * Hard delete a vault record + cascade grants.
+ * DELETE /api/wallet/vault/:recordId
+ * Delete a vault record and its grants.
  */
-router.delete("/data/record/:recordId", (req: Request, res: Response) => {
+router.delete("/vault/:recordId", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
     const { recordId } = req.params;
     query(`DELETE FROM vault_grants WHERE record_id = ${quote(recordId)} AND owner_user_id = ${quote(userId)}`);
     query(`DELETE FROM vault_records WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
-
-    res.json({ success: true, message: "Record and associated grants deleted" });
+    res.json({ success: true, message: "Vault record and grants deleted" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 // ===========================================================================
-// 4. DATA SHARING GRANTS (CONSENT LEDGER)
+// 5. DATA-SHARING GRANTS
 // ===========================================================================
-
 /**
- * POST /api/wallet/data/share
- * Create a sharing grant for a vault record.
- * Body: { recordId, granteeDid, scope, expiresAt, price?, encryptedKey }
+ * POST /api/wallet/grants
+ * Create a time-limited data-sharing grant for a vault record.
+ * Body: { recordId, granteeDid, scope, encryptedKey, priceAmount?, priceCurrency?, expiresAt }
  */
-router.post("/data/share", (req: Request, res: Response) => {
+router.post("/grants", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
-    initWalletTables();
-
-    const { recordId, granteeDid, scope, expiresAt, price, encryptedKey } = req.body;
-    if (!recordId) { res.status(400).json({ error: true, message: "recordId is required" }); return; }
-    if (!granteeDid) { res.status(400).json({ error: true, message: "granteeDid is required" }); return; }
-    if (!scope || !["full", "meta-only"].includes(scope)) { res.status(400).json({ error: true, message: "scope must be 'full' or 'meta-only'" }); return; }
-    if (!expiresAt) { res.status(400).json({ error: true, message: "expiresAt is required" }); return; }
-    if (!encryptedKey) { res.status(400).json({ error: true, message: "encryptedKey is required" }); return; }
-
-    // Verify record ownership
-    const record = query(`SELECT record_id FROM vault_records WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
-    if (record.length === 0) {
-      res.status(404).json({ error: true, message: "Record not found" });
-      return;
+    const { recordId, granteeDid, scope, encryptedKey, priceAmount, priceCurrency, expiresAt } = req.body;
+    if (!recordId || !granteeDid || !scope || !encryptedKey || !expiresAt) {
+      res.status(400).json({ error: true, message: "recordId, granteeDid, scope, encryptedKey, and expiresAt are required" }); return;
     }
-
-    // Check expiry max 90 days
+    // Validate expiry: max 90 days
     const expiresMs = new Date(expiresAt).getTime();
-    const maxExpiry = Date.now() + 90 * 24 * 60 * 60 * 1000;
-    if (expiresMs > maxExpiry) {
-      res.status(400).json({ error: true, message: "expiresAt must be within 90 days" });
-      return;
-    }
-
+    const nowMs = Date.now();
+    const maxExpiry = nowMs + 90 * 24 * 60 * 60 * 1000;
+    if (expiresMs > maxExpiry) { res.status(400).json({ error: true, message: "Grant expiry cannot exceed 90 days" }); return; }
+    if (expiresMs <= nowMs) { res.status(400).json({ error: true, message: "Grant expiry must be in the future" }); return; }
     const grantId = uuidv4();
-    const priceAmount = price?.amount || 0;
-    const priceCurrency = price?.currency || "USD";
-
-    query(`INSERT INTO vault_grants (grant_id, record_id, owner_user_id, grantee_did, scope, encrypted_key, price_amount, price_currency, expires_at) VALUES (${quote(grantId)}, ${quote(recordId)}, ${quote(userId)}, ${quote(granteeDid)}, ${quote(scope)}, ${quote(encryptedKey)}, ${priceAmount}, ${quote(priceCurrency)}, ${quote(expiresAt)})`);
-
-    res.status(201).json({
-      success: true,
-      grantId,
-      shareUrl: `https://orbis.id/api/wallet/share/${grantId}`,
-    });
+    query(`INSERT INTO vault_grants (grant_id, record_id, owner_user_id, grantee_did, scope, encrypted_key, price_amount, price_currency, expires_at) VALUES (${quote(grantId)}, ${quote(recordId)}, ${quote(userId)}, ${quote(granteeDid)}, ${quote(scope)}, ${quote(encryptedKey)}, ${priceAmount || 0}, ${quote(priceCurrency || "USD")}, ${quote(expiresAt)})`);
+    res.status(201).json({ success: true, grantId, message: "Data-sharing grant created" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 /**
- * GET /api/wallet/share/:grantId
- * Grantee redemption endpoint.
- * Returns record data if grant is valid and not revoked/expired.
+ * GET /api/wallet/grants/:recordId
+ * List grants for a vault record.
  */
-router.get("/share/:grantId", (req: Request, res: Response) => {
+router.get("/grants/:recordId", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
-    const { grantId } = req.params;
-    const grants = query(`SELECT * FROM vault_grants WHERE grant_id = ${quote(grantId)}`);
-    if (grants.length === 0) {
-      res.status(404).json({ error: true, message: "Grant not found" });
-      return;
-    }
-
-    const grant = grants[0] as any;
-
-    // Check revoked
-    if (grant.revoked === 1) {
-      res.status(403).json({ error: true, code: "GRANT_REVOKED", message: "Grant has been revoked" });
-      return;
-    }
-
-    // Check expired
-    if (new Date(grant.expires_at) < new Date()) {
-      res.status(403).json({ error: true, code: "GRANT_EXPIRED", message: "Grant has expired" });
-      return;
-    }
-
-    // Get user's DID from auth
-    const users = query(`SELECT did FROM ssi_users WHERE id = ${quote(userId)}`);
-    if (users.length === 0 || !users[0].did) {
-      res.status(400).json({ error: true, message: "No DID linked to your account" });
-      return;
-    }
-    const userDid = (users[0] as any).did;
-
-    // Verify grantee DID matches
-    if (grant.grantee_did !== userDid) {
-      res.status(403).json({ error: true, code: "DEVICE_MISMATCH", message: "This grant is not for your DID" });
-      return;
-    }
-
-    // Get the record
-    const records = query(`SELECT meta_json, ciphertext, iv FROM vault_records WHERE record_id = ${quote(grant.record_id)}`);
-    if (records.length === 0) {
-      res.status(404).json({ error: true, message: "Referenced record not found" });
-      return;
-    }
-
-    const record = records[0] as any;
-
-    // Log access
-    query(`INSERT INTO grant_access_log (id, grant_id, accessed_by_did) VALUES (${quote(randomBytes(16).toString("hex"))}, ${quote(grantId)}, ${quote(userDid)})`);
-
-    res.json({
-      success: true,
-      meta: JSON.parse(record.meta_json || "{}"),
-      ciphertext: record.ciphertext,
-      iv: record.iv,
-      encryptedKey: grant.encrypted_key,
-      scope: grant.scope,
-      expiresAt: grant.expires_at,
-      price: { amount: grant.price_amount, currency: grant.price_currency },
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: true, message: err.message });
-  }
-});
-
-/**
- * GET /api/wallet/data/grants
- * List grants for a record. Query: ?recordId=...
- */
-router.get("/data/grants", (req: Request, res: Response) => {
-  try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
-    const recordId = req.query.recordId as string;
-    let grants;
-    if (recordId) {
-      grants = query(`SELECT g.*, (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count FROM vault_grants g WHERE g.record_id = ${quote(recordId)} AND g.owner_user_id = ${quote(userId)} ORDER BY g.created_at DESC`);
-    } else {
-      grants = query(`SELECT g.*, (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count FROM vault_grants g WHERE g.owner_user_id = ${quote(userId)} ORDER BY g.created_at DESC`);
-    }
-
-    // Add access log summaries
-    for (const grant of grants) {
-      const logs = query(`SELECT accessed_by_did, accessed_at FROM grant_access_log WHERE grant_id = ${quote((grant as any).grant_id)} ORDER BY accessed_at DESC LIMIT 10`);
-      (grant as any).accessLog = logs;
-    }
-
+    const { recordId } = req.params;
+    const grants = query(`SELECT g.*, (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count FROM vault_grants g WHERE g.record_id = ${quote(recordId)} AND g.owner_user_id = ${quote(userId)} ORDER BY g.created_at DESC`);
     res.json({ success: true, count: grants.length, grants });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 /**
- * DELETE /api/wallet/data/grants/:grantId
- * Revoke a sharing grant (immediate).
+ * DELETE /api/wallet/grants/:grantId/revoke
+ * Revoke a specific grant.
  */
-router.delete("/data/grants/:grantId", (req: Request, res: Response) => {
+router.delete("/grants/:grantId/revoke", (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
     const { grantId } = req.params;
     query(`UPDATE vault_grants SET revoked = 1 WHERE grant_id = ${quote(grantId)} AND owner_user_id = ${quote(userId)}`);
-
     res.json({ success: true, message: "Grant revoked" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
 // ===========================================================================
-// 5. DIDCOMM PUSH
+// 6. DIDCOMM PUSH HINTS
 // ===========================================================================
-
 /**
- * GET /api/wallet/messages/waiting
- * Check if there are waiting DIDComm messages.
+ * POST /api/wallet/didcomm/push-hint
+ * Register a DID-to-push-token hint for incoming DIDComm messages.
+ * Body: { userDID, pushToken }
  */
-router.get("/messages/waiting", (req: Request, res: Response) => {
+router.post("/didcomm/push-hint", (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
+    const { userDID, pushToken } = req.body;
+    if (!userDID || !pushToken) { res.status(400).json({ error: true, message: "userDID and pushToken are required" }); return; }
+    query(`UPDATE wallet_push_tokens SET push_token = ${quote(pushToken)} WHERE user_id = ${quote(userId)}`);
+    query(`INSERT OR REPLACE INTO wallet_message_queue (id, device_id, user_did, unread_count, last_message_at) VALUES (${quote(uuidv4())}, 'push-hint', ${quote(userDID)}, 0, datetime('now'))`);
+    res.json({ success: true, message: "Push hint registered" });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+// ===========================================================================
+// 7. REFRESH TOKENS
+// ===========================================================================
+/**
+ * POST /api/wallet/refresh
+ * Refresh the JWT using a refresh token.
+ * Body: { refreshToken }
+ */
+router.post("/refresh", (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) { res.status(400).json({ error: true, message: "refreshToken is required" }); return; }
+    const hash = require("crypto").createHash("sha256").update(refreshToken).digest("hex");
+    const rows = query(`SELECT * FROM refresh_tokens WHERE token_hash = ${quote(hash)} AND revoked = 0 AND expires_at > datetime('now')`);
+    if (rows.length === 0) { res.status(401).json({ error: true, message: "Invalid or expired refresh token" }); return; }
+    const tokenRow = rows[0] as any;
+    // Issue a new JWT
+    const jwt = require("jsonwebtoken");
+    const secret = process.env.JWT_SECRET || require("crypto").randomBytes(32).toString("hex");
+    const newToken = jwt.sign({ sub: tokenRow.user_id, email: "" }, secret, { expiresIn: "24h" });
+    res.json({ success: true, token: newToken });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+// ===========================================================================
+// 8. WALLET VERIFICATION STATUS
+// ===========================================================================
+/**
+ * POST /api/wallet/vc/present
+ *
+ * Verify a ZK selective disclosure proof generated ON-DEVICE by the wallet.
+ * The wallet creates and signs the proof using @orbis/wallet-core Ed25519 keys;
+ * the holder's secret key NEVER leaves the device.
+ *
+ * Flow:
+ *   1. Wallet calls POST /api/vc/zk/challenge to obtain replay-proof challenge
+ *   2. Wallet generates the ZKProof on-device (select fields to reveal/hide)
+ *   3. Wallet signs the proof with the device-stored Ed25519 key
+ *   4. Wallet POSTs the signed proof + challenge to this endpoint
+ *   5. Server verifies: structure, hidden commitments, holder binding (via
+ *      public key from DID document), challenge integrity, and optionally
+ *      the trust registry status of the original VC issuer
+ *
+ * Body:
+ * {
+ *   "proof": {
+ *     "@context": ["https://www.w3.org/ns/credentials/v2", "https://orbis.id/ns/zkp/v1"],
+ *     "id": "urn:uuid:...",
+ *     "type": ["VerifiablePresentation", "ZKPresentation"],
+ *     "verifiableCredential": { ... },
+ *     "holder": "did:key:z6Mk...",
+ *     "revealedFields": ["name", "email"],
+ *     "hiddenFields": ["ssn"],
+ *     "hiddenCommitments": [{"field": "ssn", "hash": "abc...", "nonce": "123..."}],
+ *     "proof": {
+ *       "type": "OrbisZKSelectiveDisclosure2025",
+ *       "created": "2025-01-01T00:00:00.000Z",
+ *       "proofPurpose": "authentication",
+ *       "verificationMethod": "did:key:z6Mk...#z6Mk...",
+ *       "cryptosuite": "orbis-zk-sd-2025",
+ *       "proofValue": "z...",
+ *       "challenge": "abc123..."
+ *     }
+ *   },
+ *   "challenge": "abc123...",
+ *   "checkTrustRegistry": false
+ * }
+ *
+ * Responses:
+ *   200 — { success: true, verified: true, proofId, holderDID, timestamp, checks }
+ *   400 — { error: true, message: "..." }
+ *   401 — { error: true, message: "Authentication required" }
+ *   403 — { success: false, error: true, message: "ZK presentation verification failed: ...", checks, proofId }
+ */
+router.post("/vc/present", async (req: Request, res: Response) => {
   try {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
 
-    const users = query(`SELECT did FROM ssi_users WHERE id = ${quote(userId)}`);
-    if (users.length === 0 || !users[0].did) {
-      res.json({ success: true, waiting: false, unreadCount: 0, didLinked: false });
+    const { proof, challenge, checkTrustRegistry } = req.body;
+
+    if (!proof) {
+      res.status(400).json({ error: true, message: "proof is required" });
+      return;
+    }
+    if (!proof.holder) {
+      res.status(400).json({ error: true, message: "proof.holder (holder DID) is required" });
+      return;
+    }
+    if (!proof.proof?.proofValue) {
+      res.status(400).json({ error: true, message: "proof.proof.proofValue (Ed25519 signature) is required" });
+      return;
+    }
+    if (!proof.verifiableCredential) {
+      res.status(400).json({ error: true, message: "proof.verifiableCredential is required" });
       return;
     }
 
-    const userDid = (users[0] as any).did as string;
-    const inboxMessages = query(`SELECT COUNT(*) AS cnt FROM didcomm_messages WHERE to_did = ${quote(userDid)} AND status = 'sent'`);
-    const unreadCount = (inboxMessages[0] as any)?.cnt || 0;
-    const lastMsg = query(`SELECT created_at FROM didcomm_messages WHERE to_did = ${quote(userDid)} AND status = 'sent' ORDER BY created_at DESC LIMIT 1`);
-    const lastMessageAt = lastMsg.length > 0 ? (lastMsg[0] as any).created_at : null;
+    // Dynamic import to avoid circular deps at module level
+    const { verifyZKProof } = await import("../vc/zk.js");
+
+    const result = await verifyZKProof(proof, {
+      verifierDID: `did:key:wallet-system`,
+      challenge: challenge || undefined,
+      checkTrustRegistry: checkTrustRegistry || false,
+    });
+
+    if (!result.verified) {
+      const failedChecks = result.checks.filter((c: any) => !c.passed);
+      const messages = failedChecks.map((c: any) => c.message).join("; ");
+      res.status(403).json({
+        success: false,
+        error: true,
+        message: `ZK presentation verification failed: ${messages}`,
+        checks: result.checks,
+        proofId: result.proofId,
+      });
+      return;
+    }
+
+    // Log the successful wallet presentation for audit
+    query(`INSERT INTO wallet_message_queue (id, device_id, user_did, unread_count, last_message_at)
+           VALUES (${quote(uuidv4())}, 'zk-presentation', ${quote(proof.holder)}, 0, datetime('now'))`);
 
     res.json({
       success: true,
-      waiting: unreadCount > 0,
-      unreadCount,
-      didLinked: true,
-      lastMessageAt,
-      pushHint: unreadCount > 0 ? { type: "didcomm.message-waiting", count: unreadCount } : null,
+      verified: true,
+      proofId: result.proofId,
+      holderDID: result.holderDID,
+      timestamp: result.timestamp,
+      checks: result.checks,
     });
   } catch (err: any) {
-    res.status(500).json({ error: true, message: err.message });
-  }
-});
-
-/**
- * PUT /api/wallet/messages/waiting
- * Mark messages as delivered (wallet acknowledges receipt).
- * Body: { messageIds?: string[] }
- */
-router.put("/messages/waiting", (req: Request, res: Response) => {
-  try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
-    const { messageIds } = req.body;
-    if (messageIds && Array.isArray(messageIds)) {
-      for (const msgId of messageIds) {
-        query(`UPDATE didcomm_messages SET status = 'delivered' WHERE id = ${quote(msgId)}`);
-      }
-    }
-
-    res.json({ success: true, message: "Messages acknowledged" });
-  } catch (err: any) {
-    res.status(500).json({ error: true, message: err.message });
+    res.status(500).json({ error: true, message: `ZK verification error: ${err.message}` });
   }
 });
 
 // ===========================================================================
-// 6. ADMIN ENDPOINTS
+// 9. ADMIN ENDPOINTS (wallet management)
 // ===========================================================================
-
 /**
  * GET /api/wallet/admin/users
- * List all wallet users with vault/grant counts.
+ * List all wallet users with vault/grant counts. Admin only.
  */
 router.get("/admin/users", (req: Request, res: Response) => {
   try {
     if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-
-    const users = query(`SELECT w.id, w.user_id, w.wallet_id, w.device_name, w.platform, w.wiped, w.created_at, w.last_seen_at, (SELECT COUNT(*) FROM vault_records WHERE user_id = w.user_id) as vault_count, (SELECT COUNT(*) FROM vault_grants WHERE owner_user_id = w.user_id) as grant_count FROM wallet_devices w ORDER BY w.created_at DESC`);
-
-    res.json({ success: true, count: users.length, users });
-  } catch (err: any) {
-    res.status(500).json({ error: true, message: err.message });
-  }
-});
-
-/**
- * GET /api/wallet/admin/credentials
- * List all backed-up credentials (metadata only).
- */
-router.get("/admin/credentials", (req: Request, res: Response) => {
-  try {
-    if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-
-    const items = query("SELECT b.local_id, b.user_id, b.category, b.size, b.updated_at FROM wallet_backup_items b ORDER BY b.updated_at DESC LIMIT 100");
-
+    const items = query("SELECT w.id, w.user_id, w.wallet_id, w.device_name, w.platform, w.wiped, w.created_at, w.last_seen_at, (SELECT COUNT(*) FROM vault_records WHERE user_id = w.user_id) as vault_count, (SELECT COUNT(*) FROM vault_grants WHERE owner_user_id = w.user_id) as grant_count FROM wallet_devices w ORDER BY w.created_at DESC");
     res.json({ success: true, count: items.length, items });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-
+/**
+ * GET /api/wallet/admin/credentials
+ * List wallet credentials (backup items). Admin only.
+ */
+router.get("/admin/credentials", (req: Request, res: Response) => {
+  try {
+    if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
+    const items = query("SELECT b.local_id, b.user_id, b.category, b.size, b.updated_at FROM wallet_backup_items b ORDER BY b.updated_at DESC LIMIT 100");
+    res.json({ success: true, count: items.length, items });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
 /**
  * DELETE /api/wallet/admin/remote-wipe/:walletId
  * Remote wipe a wallet (sets wiped flag, reason required).
@@ -663,13 +544,10 @@ router.get("/admin/credentials", (req: Request, res: Response) => {
 router.delete("/admin/remote-wipe/:walletId", (req: Request, res: Response) => {
   try {
     if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-
     const { walletId } = req.params;
     const { reason } = req.body;
     if (!reason) { res.status(400).json({ error: true, message: "reason is required" }); return; }
-
     query(`UPDATE wallet_devices SET wiped = 1, wipe_reason = ${quote(reason)} WHERE wallet_id = ${quote(walletId)}`);
-
     res.json({ success: true, message: "Remote wipe initiated" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
