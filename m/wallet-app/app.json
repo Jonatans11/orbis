@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "ORBIS.ID Wallet",
+    "slug": "orbis-wallet",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "orbisid",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B1020",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "id.orbis.wallet",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "ORBIS.ID uses Face ID to unlock your wallet and protect your keys.",
+        "NSCameraUsageDescription": "ORBIS.ID uses the camera to scan QR codes for credential exchange."
+      }
+    },
+    "android": {
+      "package": "id.orbis.wallet",
+      "edgeToEdgeEnabled": true,
+      "permissions": ["CAMERA", "USE_BIOMETRIC", "USE_FINGERPRINT"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B1020",
+          "imageWidth": 160
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ORBIS.ID uses the camera to scan QR codes for credential exchange."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "ORBIS.ID uses Face ID to unlock your wallet and protect your keys."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#4F46E5"
+        }
+      ]
+    ],
+    "extra": {
+      "apiBaseUrl": "https://orbis.ctonew.app"
+    }
+  }
+}
