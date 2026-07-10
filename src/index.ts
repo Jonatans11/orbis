@@ -59,40 +59,6 @@ try { initWalletTables(); } catch {}
 try { initAuthTables(); } catch {}
 try { seedAdminUser(); } catch {}
 
-// ─── Auth Routes ────────────────────────────────────────────────────────────
-
-/**
- * POST /api/auth/register
- * Register a new user account.
- */
-app.post("/api/auth/register", async (req: Request, res: Response) => {
-  await registerHandler(req, res);
-});
-
-/**
- * POST /api/auth/login
- * Authenticate and receive a JWT token.
- */
-app.post("/api/auth/login", async (req: Request, res: Response) => {
-  await loginHandler(req, res);
-});
-
-/**
- * GET /api/auth/me
- * Get current user profile from JWT token.
- */
-app.get("/api/auth/me", requireJwt, (req: Request, res: Response) => {
-  meHandler(req, res);
-});
-
-/**
- * PUT /api/auth/did
- * Link a DID to the authenticated user's account.
- */
-app.put("/api/auth/did", requireJwt, async (req: Request, res: Response) => {
-  await linkDIDHandler(req, res);
-});
-
 // ─── Health ──────────────────────────────────────────────────────────────────
 
 /**
