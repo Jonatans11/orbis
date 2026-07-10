@@ -21,9 +21,11 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 (function loadDotenv(): void {
+  // Resolve .env relative to THIS FILE (src/index.ts), not process.cwd().
+  // import.meta.dirname gives src/ dir; fileURLToPath gives src/index.ts path.
+  // Either way we need ".." twice to reach repo root from src/index.ts.
   const envPath = resolve(
-    import.meta.dirname || resolve(fileURLToPath(import.meta.url), "../.."),
-    ".env"
+    fileURLToPath(import.meta.url), "../..", ".env"
   );
   if (!existsSync(envPath)) {
     console.log("[INIT] No .env file found — using env vars or defaults");
