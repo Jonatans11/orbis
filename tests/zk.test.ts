@@ -565,11 +565,12 @@ describe("ZK Proof End-to-End Flow", () => {
       ],
     });
 
-    // The predicate field is not hidden, so verification should note this
+    // The predicate field is not hidden, so verification must reject the proof:
+    // derived predicates only make sense over hidden (committed) fields.
     const result = await verifyZKProof(proof);
-    // The predicate check will pass structure validation but note the field isn't hidden
-    // Actually it won't fail because the predicate is optional metadata
-    expect(result.verified).toBe(true);
+    expect(result.verified).toBe(false);
+    const predicateCheck = result.checks.find((c) => c.name === "derived-predicates");
+    expect(predicateCheck?.passed).toBe(false);
   });
 });
 

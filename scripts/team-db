@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""Local development shim for the `team-db` CLI used by the ORBIS SSI backend.
+
+The backend shells out to `team-db "<single-line SQL>"` and expects the
+result rows as a JSON array on stdout (Turso/SQLite semantics). This shim
+provides that contract against a local SQLite file so the backend and its
+tests run anywhere.
+
+Configuration:
+  TEAM_DB_PATH  path to the SQLite database file
+                (default: ./.data/team.db relative to the working directory)
+
+Install for development:
+  chmod +x scripts/team-db
+  ln -sf "$(pwd)/scripts/team-db" /usr/local/bin/team-db   # or add to PATH
+"""
+import json
+import os
+import sqlite3
+import sys
+
+DB_PATH = os.environ.get("TEAM_DB_PATH", os.path.join(os.getcwd(), ".data", "team.db"))
+parent = os.path.dirname(DB_PATH)
+if parent:
+    os.makedirs(parent, exist_ok=True)
+
+if len(sys.argv) < 2:
+    print('usage: team-db "SQL"', file=sys.stderr)
+    sys.exit(1)
+
+sql = sys.argv[1]
+
+conn = sqlite3.connect(DB_PATH, timeout=10)
+conn.row_factory = sqlite3.Row
+try:
+    cur = conn.execute(sql)
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.commit()
+    print(json.dumps(rows))
+except sqlite3.Error as e:
+    print(f"team-db error: {e}", file=sys.stderr)
+    sys.exit(1)
+finally:
+    conn.close()

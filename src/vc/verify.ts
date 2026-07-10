@@ -256,12 +256,7 @@ function checkTrustRegistryEntry(
 
   // Check if the issuer is authorized for the credential types
   if (requiredTypes && requiredTypes.length > 0) {
-    let authorizedTypes: string[] = [];
-    try {
-      authorizedTypes = JSON.parse(entry.authorized_credential_types || "[]") as string[];
-    } catch {
-      authorizedTypes = [];
-    }
+    const authorizedTypes: string[] = entry.authorizedCredentialTypes || [];
     const hasAllTypes = requiredTypes.every((t) => authorizedTypes.includes(t));
     if (!hasAllTypes) {
       return { name: "trust-registry", passed: false, message: `Issuer not authorized for required credential types: ${requiredTypes.join(", ")}` };

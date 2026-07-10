@@ -162,7 +162,7 @@ router.get("/keys", requireAuth(), (_req: Request, res: Response) => {
  */
 router.delete("/keys/:id", requireAuth(), (req: Request, res: Response) => {
   try {
-    revokeApiKey(req.params.id);
+    revokeApiKey(req.params.id as string);
     res.json({ success: true, message: "API key revoked" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
@@ -265,7 +265,7 @@ router.get("/webhooks", requireAuth(), (req: Request, res: Response) => {
 router.delete("/webhooks/:id", requireAuth(), (req: Request, res: Response) => {
   try {
     const apiKeyId = req.apiKey!.id;
-    deleteWebhook(req.params.id, apiKeyId);
+    deleteWebhook(req.params.id as string, apiKeyId);
 
     res.json({ success: true, message: "Webhook deleted" });
   } catch (err: any) {
@@ -279,7 +279,7 @@ router.delete("/webhooks/:id", requireAuth(), (req: Request, res: Response) => {
  */
 router.get("/webhooks/:id/deliveries", requireAuth(), (req: Request, res: Response) => {
   try {
-    const deliveries = getWebhookDeliveries(req.params.id);
+    const deliveries = getWebhookDeliveries(req.params.id as string);
 
     res.json({
       success: true,

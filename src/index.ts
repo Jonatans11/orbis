@@ -164,7 +164,7 @@ app.get("/api/did/list", (req: Request, res: Response) => {
  */
 app.put("/api/did/:id/revoke", (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     didRegistry.revokeDID(id);
     res.json({ success: true, message: "DID revoked" });
   } catch (err: any) {
@@ -305,7 +305,7 @@ app.get("/api/vc/credentials", (req: Request, res: Response) => {
  */
 app.get("/api/vc/credentials/:credentialId/verifications", (req: Request, res: Response) => {
   try {
-    const { credentialId } = req.params;
+    const credentialId = req.params.credentialId as string;
     const verifications = getVerificationsForCredential(credentialId);
 
     res.json({
@@ -533,7 +533,7 @@ app.get("/api/trust/check/:did", (req: Request, res: Response) => {
  */
 app.put("/api/trust/:id/suspend", (req: Request, res: Response) => {
   try {
-    trustRegistry.suspendEntity(req.params.id);
+    trustRegistry.suspendEntity(req.params.id as string);
     res.json({ success: true, message: "Entity suspended" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
@@ -546,7 +546,7 @@ app.put("/api/trust/:id/suspend", (req: Request, res: Response) => {
  */
 app.put("/api/trust/:id/reactivate", (req: Request, res: Response) => {
   try {
-    trustRegistry.reactivateEntity(req.params.id);
+    trustRegistry.reactivateEntity(req.params.id as string);
     res.json({ success: true, message: "Entity reactivated" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
@@ -559,7 +559,7 @@ app.put("/api/trust/:id/reactivate", (req: Request, res: Response) => {
  */
 app.delete("/api/trust/:id", (req: Request, res: Response) => {
   try {
-    trustRegistry.removeEntity(req.params.id);
+    trustRegistry.removeEntity(req.params.id as string);
     res.json({ success: true, message: "Entity removed from trust registry" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
