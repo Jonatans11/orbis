@@ -7,12 +7,52 @@
  * for the ORBIS.ID platform.
  */
 
+// ─── Inline .env Loader ─────────────────────────────────────────────────────
+// Loads .env before any other imports so process.env is populated at boot.
+// Reads .env from the repo root (adjacent to this file's project root).
+// No dotenv dependency needed — uses a minimal inline parser.
+// .env is gitignored (only secrets live there).
+// ─── Inline .env Loader ─────────────────────────────────────────────────────
+// Loads .env at boot so process.env is populated before any app code runs.
+// ESM hoists all imports, so readFileSync from the import block below is
+// available here. No dotenv dependency. .env is gitignored.
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+(function loadDotenv(): void {
+  const envPath = resolve(
+    import.meta.dirname || resolve(fileURLToPath(import.meta.url), "../.."),
+    ".env"
+  );
+  if (!existsSync(envPath)) return;
+  const raw = readFileSync(envPath, "utf-8");
+  let count = 0;
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let value = trimmed.slice(eqIdx + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!process.env[key]) {
+      process.env[key] = value;
+      count++;
+    }
+  }
+  if (count > 0) console.log(`[INIT] Loaded ${count} var(s) from .env`);
+})();
+// ─────────────────────────────────────────────────────────────────────────────
+
 import express, { type Request, type Response } from "express";
 import cors from "cors";
 import { randomBytes, createHash } from "node:crypto";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, extname, resolve as pathResolve } from "node:path";
 import { initDatabase, listCredentials, getVerificationsForCredential } from "./db/metadata.js";
 import * as didRegistry from "./did/index.js";
 import { issueCredential } from "./vc/issue.js";
@@ -760,8 +800,11 @@ app.post("/api/didcomm/send", async (req: Request, res: Response) => {
 
 /**
  * GET /api/didcomm/inbox
- * Retrieve inbox messages for a DID.
- * Query: did (required), status (optional filter: sent | delivered | read)
+ * Retrieve inbox messages for a DID (paginated, ciphertext-only).
+ * SECURITY: Returns encrypted_payload only — clients decrypt on-device.
+ * Body field is always empty.
+ * Query: did (required), status (optional filter: sent | delivered | read),
+ *        limit (optional, default 50), offset (optional, default 0)
  */
 app.get("/api/didcomm/inbox", (req: Request, res: Response) => {
   try {
@@ -771,23 +814,35 @@ app.get("/api/didcomm/inbox", (req: Request, res: Response) => {
       return;
     }
 
-    let messages = didcomm.getInbox(did);
+    const limit = parseInt(req.query.limit as string || "50", 10);
+    const offset = parseInt(req.query.offset as string || "0", 10);
+    const cl = Math.min(Math.max(1, limit), 100);
+    const co = Math.max(0, offset);
 
-    // Optional status filter
+    let messages: any[];
     const statusFilter = req.query.status as string | undefined;
     if (statusFilter && ["sent", "delivered", "read"].includes(statusFilter)) {
-      messages = messages.filter((m) => m.status === statusFilter);
+      // Use execSync for filtered queries with pagination
+      // (getDIDCommInboxPaginated and status filtering can be combined client-side)
+      messages = didcomm.getInbox(did).filter((m) => m.status === statusFilter).slice(co, co + cl);
+    } else {
+      // Import and use the paginated query
+      const { getDIDCommInboxPaginated } = require("./db/metadata.js");
+      messages = getDIDCommInboxPaginated(did, cl, co);
     }
 
     res.json({
       success: true,
       count: messages.length,
+      limit: cl,
+      offset: co,
       messages: messages.map((m) => ({
         id: m.id,
         msg_type: m.msg_type,
         from_did: m.from_did,
         to_did: m.to_did,
-        body: m.body,
+        // body is intentionally excluded — E2E encrypted
+        encrypted_payload: m.encrypted_payload,
         status: m.status,
         thread_id: m.thread_id,
         created_at: m.created_at,
@@ -801,6 +856,8 @@ app.get("/api/didcomm/inbox", (req: Request, res: Response) => {
 /**
  * GET /api/didcomm/messages/:id
  * Get a specific DIDComm message by its database ID.
+ * SECURITY: Returns encrypted_payload only — clients decrypt on-device.
+ * Body field is intentionally excluded.
  */
 app.get("/api/didcomm/messages/:id", (req: Request, res: Response) => {
   try {
@@ -822,7 +879,7 @@ app.get("/api/didcomm/messages/:id", (req: Request, res: Response) => {
         msg_type: message.msg_type,
         from_did: message.from_did,
         to_did: message.to_did,
-        body: message.body,
+        encrypted_payload: message.encrypted_payload,
         status: message.status,
         thread_id: message.thread_id,
         created_at: message.created_at,
@@ -1018,17 +1075,17 @@ app.put("/api/didcomm/oob/:id/consume", (req: Request, res: Response) => {
   }
 });
 
-// ─── Admin Routes ────────────────────────────────────────────────────────────
+// ─── Admin Routes ───────��────────────────────────────────────────────────────
 
 // Mount admin routes (requireAdmin middleware is applied per-route, not globally)
 app.use("/api/admin", adminRoutes);
 
-// ─── Wallet Routes ───────────────────────────────────────────────────────────
+// ─── Wallet Routes ──────────────────────────────────────────────────────��────
 
 // Mount wallet routes (JWT auth per-route via requireJwt middleware)
 app.use("/api/wallet", walletRoutes);
 
-// ─── Auth Routes ─────────────────────────────────────────────────────────────
+// ─── Auth Routes ──────────────────────���──────────────────────────────────────
 app.post("/api/auth/register", registerHandler);
 app.post("/api/auth/login", loginHandler);
 app.get("/api/auth/me", requireJwt, meHandler);
@@ -1038,9 +1095,6 @@ app.post("/api/auth/link-did", requireJwt, linkDIDHandler);
 // ─── Static File Serving (web/dist) ─────────────────────────────────────────
 // In production, serve the web UI SPA from web/dist on the same port.
 // This avoids needing a separate proxy process, saving ~100MB RAM.
-import { existsSync, readFileSync } from "fs";
-import { join, extname } from "path";
-import { fileURLToPath } from "url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = join(__dirname, "..", "web", "dist");
@@ -1074,58 +1128,60 @@ if (existsSync(webDist)) {
     next();
   });
 
-  // SPA fallback: serve index.html for all non-API, non-static routes
-  app.use((req, res, next) => {
-    if (req.path.startsWith("/api/")) return next();
-    const indexPath = join(webDist, "index.html");
-    if (existsSync(indexPath)) {
-      res.type("html").send(readFileSync(indexPath));
-      return;
-    }
-    next();
-  });
-}
+        // PWA wallet: serve /m/ from the mobile web PWA dist
+        const pwaDist = join(__dirname, "..", "..", "m", "web", "dist");
+        if (existsSync(pwaDist)) {
+          app.use((req, res, next) => {
+            if (!(req.path === "/m" || req.path.startsWith("/m/"))) return next();
 
-// PWA wallet: serve /m/ from the mobile web PWA dist (independent of main web dist)
-const pwaDist = join(__dirname, "..", "..", "m", "web", "dist");
-if (existsSync(pwaDist)) {
-  app.use((req, res, next) => {
-    if (!(req.path === "/m" || req.path.startsWith("/m/"))) return next();
+            // Strip /m prefix to get the relative path within pwaDist
+            let relPath = req.path.replace(/^\/m/, "");
+            if (!relPath || relPath === "/") relPath = "/index.html";
 
-    // Strip /m prefix to get the relative path within pwaDist
-    const relPath = req.path.replace(/^\/m/, "") || "/index.html";
+            // Serve static assets (only files with known extensions)
+            const filePath = join(pwaDist, relPath);
+            const ext = extname(filePath);
+            if (ext && STATIC_EXT.has(ext)) {
+              const content = readFileSync(filePath);
+              const contentTypes: Record<string, string> = {
+                ".js": "application/javascript",
+                ".css": "text/css",
+                ".svg": "image/svg+xml",
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".webp": "image/webp",
+                ".ico": "image/x-icon",
+                ".woff2": "font/woff2",
+                ".ttf": "font/ttf",
+                ".json": "application/json",
+              };
+              res.type(contentTypes[ext] || "application/octet-stream").send(content);
+              return;
+            }
 
-    // Serve static assets
-    const filePath = join(pwaDist, relPath);
-    if (existsSync(filePath) && !filePath.endsWith(".html")) {
-      const ext = extname(filePath);
-      const contentTypes: Record<string, string> = {
-        ".js": "application/javascript",
-        ".css": "text/css",
-        ".svg": "image/svg+xml",
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".webp": "image/webp",
-        ".ico": "image/x-icon",
-        ".woff2": "font/woff2",
-        ".ttf": "font/ttf",
-        ".json": "application/json",
-      };
-      res.type(contentTypes[ext] || "application/octet-stream").send(readFileSync(filePath));
-      return;
-    }
+            // SPA fallback: serve PWA index.html for all /m/ routes
+            const indexPath = join(pwaDist, "index.html");
+            if (existsSync(indexPath)) {
+              res.type("html").send(readFileSync(indexPath));
+              return;
+            }
+            next();
+          });
+        }
 
-    // SPA fallback: serve PWA index.html for all /m/ routes
-    const indexPath = join(pwaDist, "index.html");
-    if (existsSync(indexPath)) {
-      res.type("html").send(readFileSync(indexPath));
-      return;
-    }
-    next();
-  });
-}
+        // SPA fallback: serve index.html for all non-API, non-static routes
+        app.use((req, res, next) => {
+          if (req.path.startsWith("/api/")) return next();
+          const indexPath = join(webDist, "index.html");
+          if (existsSync(indexPath)) {
+            res.type("html").send(readFileSync(indexPath));
+            return;
+          }
+          next();
+        });
+      }
 
-// ─── Error Handling ──────────────────────────────────────────────────────────
+      // ─── Error Handling ──────────────────────────────────────────────────────────
 
 app.use(notFoundHandler);
 app.use(errorHandler);
