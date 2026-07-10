@@ -77,7 +77,11 @@ const styles = StyleSheet.create({
   hint: { color: colors.textSecondary, fontSize: fontSize.sm, textAlign: 'center', lineHeight: 20 },
   actions: { gap: spacing[2], marginTop: spacing[4] },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing[5],
