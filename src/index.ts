@@ -25,8 +25,17 @@ import { fileURLToPath } from "node:url";
     import.meta.dirname || resolve(fileURLToPath(import.meta.url), "../.."),
     ".env"
   );
-  if (!existsSync(envPath)) return;
-  const raw = readFileSync(envPath, "utf-8");
+  if (!existsSync(envPath)) {
+    console.log("[INIT] No .env file found — using env vars or defaults");
+    return;
+  }
+  let raw: string;
+  try {
+    raw = readFileSync(envPath, "utf-8");
+  } catch (err: any) {
+    console.error(`[INIT] ⚠️  WARNING: .env exists at ${envPath} but is NOT READABLE (${err.code || err.message}). JWT_SECRET and ENCRYPTION_KEY will fall back to auto-generated ephemeral values — every restart will invalidate existing sessions. Fix: sudo chgrp team .env && sudo chmod 640 .env`);
+    return;
+  }
   let count = 0;
   for (const line of raw.split("\n")) {
     const trimmed = line.trim();
@@ -44,7 +53,7 @@ import { fileURLToPath } from "node:url";
       count++;
     }
   }
-  if (count > 0) console.log(`[INIT] Loaded ${count} var(s) from .env`);
+  if (count > 0) console.log(`[INIT] Loaded ${count} var(s) from .env (group-readable)`);
 })();
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -73,6 +82,9 @@ import { ensureAdminColumns, ensureApiKeyColumns, ensureSystemWebhooksTable, see
 import walletRoutes from "./wallet/routes.js";
 import { initWalletTables } from "./wallet/db.js";
 import { initAuthTables, registerHandler, loginHandler, meHandler, changePasswordHandler, linkDIDHandler, requireJwt } from "./security/jwt.js";
+import * as didcommContacts from "./didcomm/contacts.js";
+import * as didcommPush from "./didcomm/push.js";
+import { purgePlaintextBodies, getDIDCommConversation, getDIDCommThreadMessages, getUnreadMessageCountFrom } from "./db/metadata.js";
 
 // ─── Server Setup ────────────────────────────────────────────────────────────
 
@@ -86,6 +98,9 @@ app.use(express.json({ limit: "1mb" }));
 initDatabase();
 try { initWalletTables(); } catch {}
 try { initAuthTables(); } catch {}
+
+// E2E encryption migration: purge any plaintext bodies from existing messages
+try { const r = purgePlaintextBodies(); if (r.cleared > 0 || r.deleted > 0) console.log(`[SECURITY] Purge migration: cleared ${r.cleared} bodies, deleted ${r.deleted} incomplete msgs`); } catch {}
 
 // Migration functions are no-ops — all columns verified present in existing schema.
 // (team-db's Turso sync layer rejects ALTER TABLE for existing columns.)
@@ -1075,7 +1090,145 @@ app.put("/api/didcomm/oob/:id/consume", (req: Request, res: Response) => {
   }
 });
 
-// ─── Admin Routes ───────��────────────────────────────────────────────────────
+// ─── DIDComm Contact Management ────────────────────────────────────────────
+
+app.post("/api/didcomm/contacts", (req: Request, res: Response) => {
+  try {
+    const { userDID, contactDID, label, avatarUrl } = req.body;
+    if (!userDID) { res.status(400).json({ error: true, message: "userDID is required" }); return; }
+    if (!contactDID) { res.status(400).json({ error: true, message: "contactDID is required" }); return; }
+    if (!label) { res.status(400).json({ error: true, message: "label is required" }); return; }
+    const contact = didcommContacts.addContact({ userDID, contactDID, label, avatarUrl });
+    res.status(201).json({ success: true, contact });
+  } catch (err: any) {
+    res.status(err.message.includes("already exists") ? 409 : 500).json({ error: true, message: err.message });
+  }
+});
+
+app.get("/api/didcomm/contacts", (req: Request, res: Response) => {
+  try {
+    const did = req.query.did as string;
+    if (!did) { res.status(400).json({ error: true, message: "did query required" }); return; }
+    const search = req.query.search as string | undefined;
+    const contacts = search ? didcommContacts.searchContacts(did, search) : didcommContacts.listContacts(did);
+    res.json({ success: true, count: contacts.length, contacts });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+app.put("/api/didcomm/contacts/:id", (req: Request, res: Response) => {
+  try {
+    const { label, avatarUrl } = req.body;
+    if (label === undefined && avatarUrl === undefined) { res.status(400).json({ error: true, message: "Provide label or avatarUrl" }); return; }
+    const contact = didcommContacts.updateContact(req.params.id as string, { label, avatarUrl });
+    if (!contact) { res.status(404).json({ error: true, message: "Contact not found" }); return; }
+    res.json({ success: true, contact });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+app.delete("/api/didcomm/contacts/:id", (req: Request, res: Response) => {
+  try {
+    const deleted = didcommContacts.deleteContact(req.params.id as string);
+    if (!deleted) { res.status(404).json({ error: true, message: "Contact not found" }); return; }
+    res.json({ success: true, message: "Contact removed" });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+// ─── DIDComm Conversation & Threads ─────────────────────────────────────────
+
+app.get("/api/didcomm/conversation", (req: Request, res: Response) => {
+  try {
+    const did = req.query.did as string; const peer = req.query.peer as string;
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string || "50", 10)), 100);
+    const offset = Math.max(0, parseInt(req.query.offset as string || "0", 10));
+    if (!did || !peer) { res.status(400).json({ error: true, message: "did and peer query params required" }); return; }
+    const messages = getDIDCommConversation(did, peer, limit, offset);
+    const unread = getUnreadMessageCountFrom(peer, did);
+    res.json({ success: true, count: messages.length, unreadFromPeer: unread, limit, offset, messages: messages.map(m => ({ id: m.id, msg_type: m.msg_type, from_did: m.from_did, to_did: m.to_did, encrypted_payload: m.encrypted_payload, status: m.status, thread_id: m.thread_id, created_at: m.created_at })) });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+app.get("/api/didcomm/threads/:threadId", (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string || "50", 10)), 100);
+    const offset = Math.max(0, parseInt(req.query.offset as string || "0", 10));
+    const messages = getDIDCommThreadMessages(req.params.threadId as string, limit, offset);
+    res.json({ success: true, count: messages.length, limit, offset, messages: messages.map(m => ({ id: m.id, msg_type: m.msg_type, from_did: m.from_did, to_did: m.to_did, encrypted_payload: m.encrypted_payload, status: m.status, thread_id: m.thread_id, created_at: m.created_at })) });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+// ─── Delivery/Read Receipts ─────────────────────────────────────────────────
+
+app.put("/api/didcomm/messages/:id/receipt", async (req: Request, res: Response) => {
+  try {
+    const { senderDID, senderSecretKey, status } = req.body;
+    if (!senderDID || !senderSecretKey || !["delivered", "read"].includes(status)) {
+      res.status(400).json({ error: true, message: "senderDID, senderSecretKey (hex), and status (delivered|read) required" }); return;
+    }
+    const originalMsg = didcomm.getMessageById(req.params.id as string);
+    if (!originalMsg) { res.status(404).json({ error: true, message: "Message not found" }); return; }
+    const secretKeyBytes = Buffer.from(senderSecretKey, "hex");
+    if (secretKeyBytes.length !== 32) { res.status(400).json({ error: true, message: "senderSecretKey must be 32-byte hex" }); return; }
+    const recipientPubKey = extractPublicKey(originalMsg.from_did);
+    if (!recipientPubKey) { res.status(400).json({ error: true, message: "Cannot resolve recipient key" }); return; }
+    const receiptMsg: didcommTypes.DIDCommMessage = {
+      from: senderDID, to: [originalMsg.from_did], type: didcommTypes.BASIC_MESSAGE_TYPE,
+      id: uuidv4(), thid: originalMsg.thread_id || originalMsg.id,
+      created_time: Math.floor(Date.now() / 1000),
+      body: { content: status === "read" ? "Message read" : "Message delivered", receiptFor: req.params.id, receiptStatus: status },
+    };
+    const stored = await didcomm.encryptAndStoreMessage(receiptMsg, secretKeyBytes, recipientPubKey, "authcrypt");
+    if (status === "delivered") didcomm.markAsDelivered(req.params.id); else didcomm.markAsRead(req.params.id);
+    res.status(201).json({ success: true, message: "Receipt sent", receiptMessageId: stored.id });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+// ─── Pre-packed Envelope Send (E2E Encrypted) ───────────────────────────────
+
+app.post("/api/didcomm/send-packed", async (req: Request, res: Response) => {
+  try {
+    const { fromDID, toDID, encryptedPayload, msgType, threadId } = req.body;
+    if (!fromDID) { res.status(400).json({ error: true, message: "fromDID is required" }); return; }
+    if (!toDID) { res.status(400).json({ error: true, message: "toDID is required" }); return; }
+    if (!encryptedPayload) { res.status(400).json({ error: true, message: "encryptedPayload is required (pre-packed DIDComm envelope)" }); return; }
+    const msgId = uuidv4();
+    const { insertDIDCommMessage } = await import("./db/metadata.js");
+    const stored = { id: msgId, msg_type: msgType || didcommTypes.BASIC_MESSAGE_TYPE, from_did: fromDID, to_did: toDID, body: "", encrypted_payload: encryptedPayload, status: "sent", thread_id: threadId || null };
+    insertDIDCommMessage(stored);
+    res.status(201).json({ success: true, messageId: msgId, storedMessage: { id: stored.id, msg_type: stored.msg_type, from_did: stored.from_did, to_did: stored.to_did, status: stored.status, created_at: new Date().toISOString() } });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+// ─── Push Notification Hints ────────────────────────────────────────────────
+
+app.post("/api/didcomm/push/register", (req: Request, res: Response) => {
+  try {
+    const { did, pushToken, platform, deviceId } = req.body;
+    if (!did || !pushToken || !deviceId || !["ios", "android", "web"].includes(platform)) {
+      res.status(400).json({ error: true, message: "did, pushToken, platform (ios|android|web), deviceId required" }); return;
+    }
+    const reg = didcommPush.registerPushToken({ did, pushToken, platform, deviceId });
+    res.status(201).json({ success: true, registration: { id: reg.id, did: reg.did, platform: reg.platform, device_id: reg.device_id, active: reg.active } });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+app.delete("/api/didcomm/push/register", (req: Request, res: Response) => {
+  try {
+    const deviceId = req.query.deviceId as string;
+    if (!deviceId) { res.status(400).json({ error: true, message: "deviceId query param required" }); return; }
+    didcommPush.unregisterPushToken(deviceId);
+    res.json({ success: true, message: "Push token unregistered" });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+app.get("/api/didcomm/push/hints", (req: Request, res: Response) => {
+  try {
+    const did = req.query.did as string;
+    if (!did) { res.status(400).json({ error: true, message: "did query param required" }); return; }
+    res.json({ success: true, hints: didcommPush.getPushHints(did) });
+  } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
+});
+
+// ─── Admin Routes ───────────────────────────────────────────────────────────
 
 // Mount admin routes (requireAdmin middleware is applied per-route, not globally)
 app.use("/api/admin", adminRoutes);
@@ -1128,60 +1281,60 @@ if (existsSync(webDist)) {
     next();
   });
 
-        // PWA wallet: serve /m/ from the mobile web PWA dist
-        const pwaDist = join(__dirname, "..", "..", "m", "web", "dist");
-        if (existsSync(pwaDist)) {
-          app.use((req, res, next) => {
-            if (!(req.path === "/m" || req.path.startsWith("/m/"))) return next();
+  // PWA wallet: serve /m/ from the mobile web PWA dist
+  const pwaDist = join(__dirname, "..", "..", "m", "web", "dist");
+  if (existsSync(pwaDist)) {
+    app.use((req, res, next) => {
+      if (!(req.path === "/m" || req.path.startsWith("/m/"))) return next();
 
-            // Strip /m prefix to get the relative path within pwaDist
-            let relPath = req.path.replace(/^\/m/, "");
-            if (!relPath || relPath === "/") relPath = "/index.html";
+      // Strip /m prefix to get the relative path within pwaDist
+      let relPath = req.path.replace(/^\/m/, "");
+      if (!relPath || relPath === "/") relPath = "/index.html";
 
-            // Serve static assets (only files with known extensions)
-            const filePath = join(pwaDist, relPath);
-            const ext = extname(filePath);
-            if (ext && STATIC_EXT.has(ext)) {
-              const content = readFileSync(filePath);
-              const contentTypes: Record<string, string> = {
-                ".js": "application/javascript",
-                ".css": "text/css",
-                ".svg": "image/svg+xml",
-                ".png": "image/png",
-                ".jpg": "image/jpeg",
-                ".webp": "image/webp",
-                ".ico": "image/x-icon",
-                ".woff2": "font/woff2",
-                ".ttf": "font/ttf",
-                ".json": "application/json",
-              };
-              res.type(contentTypes[ext] || "application/octet-stream").send(content);
-              return;
-            }
-
-            // SPA fallback: serve PWA index.html for all /m/ routes
-            const indexPath = join(pwaDist, "index.html");
-            if (existsSync(indexPath)) {
-              res.type("html").send(readFileSync(indexPath));
-              return;
-            }
-            next();
-          });
-        }
-
-        // SPA fallback: serve index.html for all non-API, non-static routes
-        app.use((req, res, next) => {
-          if (req.path.startsWith("/api/")) return next();
-          const indexPath = join(webDist, "index.html");
-          if (existsSync(indexPath)) {
-            res.type("html").send(readFileSync(indexPath));
-            return;
-          }
-          next();
-        });
+      // Serve static assets (only files with known extensions)
+      const filePath = join(pwaDist, relPath);
+      const ext = extname(filePath);
+      if (ext && STATIC_EXT.has(ext)) {
+        const content = readFileSync(filePath);
+        const contentTypes: Record<string, string> = {
+          ".js": "application/javascript",
+          ".css": "text/css",
+          ".svg": "image/svg+xml",
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".webp": "image/webp",
+          ".ico": "image/x-icon",
+          ".woff2": "font/woff2",
+          ".ttf": "font/ttf",
+          ".json": "application/json",
+        };
+        res.type(contentTypes[ext] || "application/octet-stream").send(content);
+        return;
       }
 
-      // ─── Error Handling ──────────────────────────────────────────────────────────
+      // SPA fallback: serve PWA index.html for all /m/ routes
+      const indexPath = join(pwaDist, "index.html");
+      if (existsSync(indexPath)) {
+        res.type("html").send(readFileSync(indexPath));
+        return;
+      }
+      next();
+    });
+  }
+
+  // SPA fallback: serve index.html for all non-API, non-static routes
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api/")) return next();
+    const indexPath = join(webDist, "index.html");
+    if (existsSync(indexPath)) {
+      res.type("html").send(readFileSync(indexPath));
+      return;
+    }
+    next();
+  });
+}
+
+// ─── Error Handling ──────────────────────────────────────────────────────────
 
 app.use(notFoundHandler);
 app.use(errorHandler);
