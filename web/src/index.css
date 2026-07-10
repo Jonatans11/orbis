@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* ORBIS design tokens */
+  --color-space-950: #060a13;
+  --color-space-900: #0a101d;
+  --color-space-800: #0e1626;
+  --color-space-700: #162034;
+  --color-ink-100: #eaf1fb;
+  --color-ink-300: #b6c2d6;
+  --color-ink-500: #7c8ba3;
+  --color-orbit-300: #7db4f0;
+  --color-orbit-400: #4f95e9;
+  --color-orbit-500: #3987e5;
+  --color-orbit-600: #2a78d6;
+  --color-aurora-400: #2dd4bf;
+  --color-nova-400: #9085e9;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-space-950);
+  color: var(--color-ink-100);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(57, 135, 229, 0.35);
+}
+
+/* Recessive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 139, 163, 0.25) transparent;
+}
+
+/* Slow orbital spin for hero rings */
+@keyframes orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes orbit-spin-rev {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+.animate-orbit { animation: orbit-spin 60s linear infinite; transform-origin: 50% 50%; }
+.animate-orbit-rev { animation: orbit-spin-rev 90s linear infinite; transform-origin: 50% 50%; }
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-in { animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.rise-in-1 { animation-delay: 0.08s; }
+.rise-in-2 { animation-delay: 0.16s; }
+.rise-in-3 { animation-delay: 0.24s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-orbit, .animate-orbit-rev { animation: none; }
+  .rise-in, .rise-in-1, .rise-in-2, .rise-in-3 { animation: none; }
+}
+
+/* Glass card */
+.glass {
+  background: linear-gradient(180deg, rgba(22, 32, 52, 0.55), rgba(14, 22, 38, 0.55));
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  backdrop-filter: blur(12px);
+}
+
+.card {
+  background: linear-gradient(180deg, #0e1626, #0b1220);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.glow-text {
+  background: linear-gradient(92deg, #7db4f0 0%, #3987e5 38%, #2dd4bf 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hairline {
+  background: linear-gradient(90deg, transparent, rgba(57, 135, 229, 0.5), transparent);
+  height: 1px;
+}

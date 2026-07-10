@@ -12,7 +12,7 @@
  * - https://identity.foundation/didcomm-messaging/spec/v2.0/
  */
 
-import { x25519 } from "@noble/curves/ed25519";
+import { x25519, edwardsToMontgomeryPub, edwardsToMontgomeryPriv } from "@noble/curves/ed25519";
 import * as ed from "@noble/ed25519";
 
 // ─── Key Agreement: Ed25519 ↔ X25519 Conversion ──────────────────────────────
@@ -25,7 +25,7 @@ export function ed25519PublicKeyToX25519(ed25519Pub: Uint8Array): Uint8Array {
   if (ed25519Pub.length !== 32) {
     throw new Error(`Invalid Ed25519 public key length: ${ed25519Pub.length}`);
   }
-  return x25519.getSharedSecret(new Uint8Array(32).fill(0), ed25519Pub);
+  return edwardsToMontgomeryPub(ed25519Pub);
 }
 
 /**
@@ -37,7 +37,7 @@ export function ed25519SecretKeyToX25519(ed25519Sec: Uint8Array): Uint8Array {
   if (ed25519Sec.length !== 32) {
     throw new Error(`Invalid Ed25519 secret key length: ${ed25519Sec.length}`);
   }
-  return x25519.getSecretKey(ed25519Sec);
+  return edwardsToMontgomeryPriv(ed25519Sec);
 }
 
 /**
@@ -63,7 +63,7 @@ export function computeSharedSecret(
 
 import { createHash } from "node:crypto";
 
-const _sha256 = (data: Uint8Array): Uint8Array => createHash("_sha256").update(data).digest();
+const _sha256 = (data: Uint8Array): Uint8Array => createHash("sha256").update(data).digest();
 
 const IV_LENGTH = 16;
 const KEY_LENGTH = 32;
