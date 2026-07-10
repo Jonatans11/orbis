@@ -43,6 +43,13 @@ export interface VaultStore {
   wipeAll(): Promise<void>;
 }
 
+/** Time source — injectable for tests (grant expiry, auto-lock, token refresh). */
+export interface Clock {
+  now(): Date;
+}
+
+export const defaultClock: Clock = { now: () => new Date() };
+
 /** Cryptographically secure randomness. */
 export interface RandomSource {
   getRandomBytes(n: number): Uint8Array;

@@ -72,16 +72,26 @@ export class OrbisApiClient {
     }
 
     const fetchFn = this.opts.fetchFn ?? globalThis.fetch;
-    let res: Response;
-    try {
-      res = await fetchFn(url.toString(), {
-        method,
-        headers,
-        body: body === undefined ? null : JSON.stringify(body),
-      });
-    } catch (cause) {
-      throw new NetworkError(`Network request failed: ${method} ${path}`, cause);
+    // Retry transient transport failures for idempotent requests only (GET), max 2 retries.
+    const maxAttempts = method === "GET" ? 3 : 1;
+    let res: Response | null = null;
+    let lastCause: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        res = await fetchFn(url.toString(), {
+          method,
+          headers,
+          body: body === undefined ? null : JSON.stringify(body),
+        });
+        break;
+      } catch (cause) {
+        lastCause = cause;
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 250 * attempt));
+        }
+      }
     }
+    if (!res) throw new NetworkError(`Network request failed: ${method} ${path}`, lastCause);
 
     if (!res.ok) {
       let code = `HTTP_${res.status}`;
@@ -254,6 +264,18 @@ export class OrbisApiClient {
       this.request<void>(`/api/wallet/data/grants/${encodeURIComponent(grantId)}`, {
         method: "DELETE",
       }),
+  };
+
+  // ---------------- admin (JWT-authed admin users only) ----------------
+  readonly admin = {
+    walletUsers: () => this.request<unknown>("/api/admin/wallet/users"),
+    walletStats: () => this.request<unknown>("/api/admin/wallet/stats"),
+    wipeWallet: (walletId: string, reason: string) =>
+      this.request<void>(`/api/admin/wallet/${encodeURIComponent(walletId)}/wipe`, {
+        method: "PUT",
+        body: { reason },
+      }),
+    grants: () => this.request<unknown>("/api/admin/wallet/grants"),
   };
 
   // ---------------- misc ----------------

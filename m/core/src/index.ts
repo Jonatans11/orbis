@@ -10,3 +10,7 @@ export * from "./did/didkey.js";
 export * from "./api/errors.js";
 export * from "./api/types.js";
 export * from "./api/client.js";
+export * from "./api/endpoints.js";
+export * from "./auth/session.js";
+export * from "./vc/store.js";
+export * from "./didcomm/client.js";
