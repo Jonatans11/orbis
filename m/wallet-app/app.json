@@ -19,7 +19,11 @@
     "android": {
       "package": "id.orbis.wallet",
       "edgeToEdgeEnabled": true,
-      "permissions": ["CAMERA", "USE_BIOMETRIC", "USE_FINGERPRINT"]
+      "permissions": [
+        "CAMERA",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -52,7 +56,8 @@
         {
           "color": "#4F46E5"
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "apiBaseUrl": "https://orbis.ctonew.app"

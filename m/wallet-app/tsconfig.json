@@ -3,7 +3,9 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@orbis/wallet-core": ["../core/src/index.ts"],
+      "@orbis/wallet-core/*": ["../core/src/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
