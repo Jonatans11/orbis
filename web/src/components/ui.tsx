@@ -1,103 +1,147 @@
-import { useEffect, useState, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from "react";
-import { CheckCircle2, XCircle, AlertTriangle, Copy, Check, Loader2 } from "lucide-react";
+import {
+  useEffect, useState, type ReactNode, type ButtonHTMLAttributes,
+  type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes,
+} from "react";
+import { Check, Copy, CheckCircle2, XCircle, AlertTriangle, Loader2 } from "lucide-react";
 
-// ─── Primitives ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Surfaces
+// ─────────────────────────────────────────────────────────────────────────────
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`card rounded-2xl ${className}`}>{children}</div>;
+export function Card({ children, className = "", seam = false }: { children: ReactNode; className?: string; seam?: boolean }) {
+  return (
+    <div className={`panel ${seam ? "seam" : ""} rounded-xl ${className}`}>{children}</div>
+  );
 }
 
-export function CardHeader({ title, subtitle, action }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode }) {
+export function CardHeader({ title, subtitle, action, icon }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-3">
-      <div>
-        <h3 className="font-display text-[15px] font-semibold text-ink-100">{title}</h3>
-        {subtitle && <p className="mt-0.5 text-[13px] leading-5 text-ink-500">{subtitle}</p>}
+    <div className="flex items-start justify-between gap-4 border-b border-[var(--color-line)] px-5 py-4">
+      <div className="flex items-start gap-3">
+        {icon && <div className="mt-0.5 text-ink-3">{icon}</div>}
+        <div>
+          <h3 className="text-[13.5px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
+          {subtitle && <p className="mt-1 text-[12.5px] leading-5 text-ink-3">{subtitle}</p>}
+        </div>
       </div>
       {action}
     </div>
   );
 }
 
+export function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-3">{children}</span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Buttons
+// ─────────────────────────────────────────────────────────────────────────────
+
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "ghost" | "danger" | "outline";
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+  size?: "sm" | "md";
   loading?: boolean;
 };
 
-export function Button({ variant = "primary", loading, className = "", children, disabled, ...rest }: ButtonProps) {
+export function Button({ variant = "primary", size = "md", loading, className = "", children, disabled, ...rest }: ButtonProps) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold transition-all duration-150 disabled:opacity-45 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-orbit-400";
+    "focus-ring relative inline-flex items-center justify-center gap-2 rounded-lg font-medium tracking-[-0.01em] transition-all duration-150 disabled:opacity-45 disabled:pointer-events-none select-none";
+  const sizes = {
+    sm: "px-3 py-1.5 text-[12.5px]",
+    md: "px-4 py-2 text-[13px]",
+  };
   const variants: Record<string, string> = {
     primary:
-      "bg-orbit-500 text-white hover:bg-orbit-400 active:scale-[0.98] shadow-[0_0_20px_rgba(57,135,229,0.25)]",
-    ghost: "text-ink-300 hover:text-ink-100 hover:bg-white/5",
-    outline: "border border-white/15 text-ink-100 hover:border-orbit-400/60 hover:bg-orbit-500/10",
-    danger: "bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25",
+      "text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hi)] border border-[rgba(122,160,255,0.3)] shadow-[0_1px_0_rgba(255,255,255,0.14)_inset,0_6px_20px_-6px_rgba(77,124,255,0.6)] active:translate-y-px",
+    secondary:
+      "text-ink bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] border border-[var(--color-line-2)]",
+    ghost: "text-ink-2 hover:text-ink hover:bg-white/[0.05] border border-transparent",
+    danger:
+      "text-[#ffb4b1] bg-[rgba(229,100,95,0.1)] hover:bg-[rgba(229,100,95,0.18)] border border-[rgba(229,100,95,0.28)]",
   };
   return (
-    <button className={`${base} ${variants[variant]} ${className}`} disabled={disabled || loading} {...rest}>
+    <button className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} disabled={disabled || loading} {...rest}>
       {loading && <Loader2 size={14} className="animate-spin" />}
       {children}
     </button>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Form controls
+// ─────────────────────────────────────────────────────────────────────────────
+
+const fieldBase =
+  "focusable w-full rounded-lg border border-[var(--color-line-2)] bg-[var(--color-surface-3)] px-3 py-2 text-[13px] text-ink placeholder:text-ink-4 transition-colors focus:border-[rgba(77,124,255,0.55)]";
+
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={`w-full rounded-lg border border-white/10 bg-space-900 px-3 py-2 text-[13px] text-ink-100 placeholder:text-ink-500/60 focus:border-orbit-400/70 focus:outline-none focus:ring-2 focus:ring-orbit-500/20 ${props.className || ""}`}
-    />
-  );
+  return <input {...props} className={`${fieldBase} ${props.className || ""}`} />;
 }
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      {...props}
-      className={`w-full rounded-lg border border-white/10 bg-space-900 px-3 py-2 font-mono text-[12px] leading-5 text-ink-100 placeholder:text-ink-500/60 focus:border-orbit-400/70 focus:outline-none focus:ring-2 focus:ring-orbit-500/20 ${props.className || ""}`}
-    />
-  );
+  return <textarea {...props} className={`${fieldBase} font-mono !text-[12px] leading-5 resize-y ${props.className || ""}`} />;
 }
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select
-      {...props}
-      className={`w-full rounded-lg border border-white/10 bg-space-900 px-3 py-2 text-[13px] text-ink-100 focus:border-orbit-400/70 focus:outline-none ${props.className || ""}`}
-    />
+    <div className="relative">
+      <select {...props} className={`${fieldBase} appearance-none pr-9 ${props.className || ""}`} />
+      <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-3" width="11" height="11" viewBox="0 0 12 12" fill="none">
+        <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
   );
 }
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[12px] font-medium tracking-wide text-ink-300">{label}</span>
+      <span className="mb-1.5 block text-[12px] font-medium text-ink-2">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[11px] text-ink-500">{hint}</span>}
+      {hint && <span className="mt-1 block text-[11px] leading-4 text-ink-3">{hint}</span>}
     </label>
   );
 }
 
-// ─── Status ──────────────────────────────────────────────────────────────────
+export function Checkbox({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-ink-2 select-none">
+      <span
+        onClick={() => onChange(!checked)}
+        className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border transition-all ${
+          checked ? "border-[var(--color-accent)] bg-[var(--color-accent)]" : "border-[var(--color-line-2)] bg-[var(--color-surface-3)]"
+        }`}
+      >
+        {checked && <Check size={12} strokeWidth={3} className="text-white" />}
+      </span>
+      {label}
+    </label>
+  );
+}
 
-const STATUS_STYLES: Record<string, string> = {
-  active: "bg-emerald-500/12 text-emerald-300 border-emerald-500/25",
-  ok: "bg-emerald-500/12 text-emerald-300 border-emerald-500/25",
-  revoked: "bg-red-500/12 text-red-300 border-red-500/25",
-  expired: "bg-amber-500/12 text-amber-300 border-amber-500/25",
-  suspended: "bg-amber-500/12 text-amber-300 border-amber-500/25",
-  deactivated: "bg-slate-500/12 text-slate-300 border-slate-500/25",
-  sent: "bg-orbit-500/12 text-orbit-300 border-orbit-500/25",
-  delivered: "bg-aurora-400/12 text-aurora-400 border-aurora-400/25",
-  read: "bg-slate-500/12 text-slate-300 border-slate-500/25",
+// ─────────────────────────────────────────────────────────────────────────────
+// Status + verification
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STATUS: Record<string, { dot: string; text: string; bg: string }> = {
+  active: { dot: "bg-[var(--color-pos)]", text: "text-[#7fe0ac]", bg: "bg-[rgba(53,192,122,0.1)] border-[rgba(53,192,122,0.22)]" },
+  ok: { dot: "bg-[var(--color-pos)]", text: "text-[#7fe0ac]", bg: "bg-[rgba(53,192,122,0.1)] border-[rgba(53,192,122,0.22)]" },
+  revoked: { dot: "bg-[var(--color-neg)]", text: "text-[#ffb0ad]", bg: "bg-[rgba(229,100,95,0.1)] border-[rgba(229,100,95,0.22)]" },
+  expired: { dot: "bg-[var(--color-warn)]", text: "text-[#f0cd8a]", bg: "bg-[rgba(224,168,58,0.1)] border-[rgba(224,168,58,0.22)]" },
+  suspended: { dot: "bg-[var(--color-warn)]", text: "text-[#f0cd8a]", bg: "bg-[rgba(224,168,58,0.1)] border-[rgba(224,168,58,0.22)]" },
+  deactivated: { dot: "bg-ink-3", text: "text-ink-2", bg: "bg-white/[0.04] border-[var(--color-line-2)]" },
+  sent: { dot: "bg-[var(--color-accent)]", text: "text-[#a9c2ff]", bg: "bg-[rgba(77,124,255,0.1)] border-[rgba(77,124,255,0.22)]" },
+  delivered: { dot: "bg-[var(--color-aqua)]", text: "text-[#8fe6da]", bg: "bg-[rgba(53,208,192,0.1)] border-[rgba(53,208,192,0.22)]" },
+  read: { dot: "bg-ink-3", text: "text-ink-2", bg: "bg-white/[0.04] border-[var(--color-line-2)]" },
 };
 
 export function StatusPill({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] || "bg-slate-500/12 text-slate-300 border-slate-500/25";
+  const s = STATUS[status] || STATUS.deactivated;
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium capitalize ${style}`}>
-      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${s.bg} ${s.text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
       {status}
     </span>
   );
@@ -105,44 +149,36 @@ export function StatusPill({ status }: { status: string }) {
 
 export function CheckRow({ check }: { check: { name: string; passed: boolean; message: string } }) {
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-white/8 bg-space-900/60 px-3.5 py-2.5">
-      {check.passed ? (
-        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-      ) : (
-        <XCircle size={16} className="mt-0.5 shrink-0 text-red-400" />
-      )}
+    <div className="flex items-start gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-3)]/60 px-3.5 py-2.5">
+      {check.passed
+        ? <CheckCircle2 size={15} className="mt-px shrink-0 text-[var(--color-pos)]" />
+        : <XCircle size={15} className="mt-px shrink-0 text-[var(--color-neg)]" />}
       <div className="min-w-0">
-        <p className="text-[12.5px] font-semibold capitalize text-ink-100">{check.name.replace(/-/g, " ")}</p>
-        <p className="text-[12px] leading-5 text-ink-500">{check.message}</p>
+        <p className="text-[12.5px] font-medium capitalize text-ink">{check.name.replace(/-/g, " ")}</p>
+        <p className="text-[12px] leading-5 text-ink-3">{check.message}</p>
       </div>
     </div>
   );
 }
 
-// ─── Mono / code display ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Mono / code
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function Mono({ value, className = "" }: { value: string; className?: string }) {
-  return (
-    <span className={`font-mono text-[11.5px] text-ink-300 ${className}`} title={value}>
-      {value.length > 42 ? `${value.slice(0, 26)}…${value.slice(-10)}` : value}
-    </span>
-  );
+  const display = value.length > 40 ? `${value.slice(0, 24)}…${value.slice(-9)}` : value;
+  return <span className={`font-mono text-[11.5px] text-ink-2 ${className}`} title={value}>{display}</span>;
 }
 
-export function CopyButton({ value }: { value: string }) {
+export function CopyButton({ value, className = "" }: { value: string; className?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
-      onClick={() => {
-        navigator.clipboard.writeText(value).catch(() => {});
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1400);
-      }}
-      className="rounded-md p-1.5 text-ink-500 transition-colors hover:bg-white/8 hover:text-ink-100"
-      title="Copy"
-      aria-label="Copy to clipboard"
+      onClick={() => { navigator.clipboard.writeText(value).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1300); }}
+      className={`focusable rounded-md p-1.5 text-ink-3 transition-colors hover:bg-white/[0.06] hover:text-ink ${className}`}
+      title="Copy" aria-label="Copy"
     >
-      {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+      {copied ? <Check size={13} className="text-[var(--color-pos)]" /> : <Copy size={13} />}
     </button>
   );
 }
@@ -150,50 +186,82 @@ export function CopyButton({ value }: { value: string }) {
 export function CodeBlock({ data, maxHeight = "22rem" }: { data: unknown; maxHeight?: string }) {
   const text = typeof data === "string" ? data : JSON.stringify(data, null, 2);
   return (
-    <div className="relative rounded-xl border border-white/10 bg-[#080d18]">
-      <div className="absolute right-1.5 top-1.5 z-10">
-        <CopyButton value={text} />
-      </div>
-      <pre className="overflow-auto p-4 font-mono text-[11.5px] leading-[1.65] text-[#9fc1ea]" style={{ maxHeight }}>
-        {text}
-      </pre>
+    <div className="relative overflow-hidden rounded-lg border border-[var(--color-line)] bg-[#06070a]">
+      <div className="absolute right-2 top-2 z-10"><CopyButton value={text} /></div>
+      <pre className="overflow-auto p-4 font-mono text-[11.5px] leading-[1.7] text-[#aebfe0]" style={{ maxHeight }}>{text}</pre>
     </div>
   );
 }
 
-// ─── Feedback ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Feedback
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function ErrorNote({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-red-500/25 bg-red-500/10 px-3.5 py-2.5 text-[12.5px] text-red-200">
-      <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+    <div className="flex items-start gap-2.5 rounded-lg border border-[rgba(229,100,95,0.28)] bg-[rgba(229,100,95,0.08)] px-3.5 py-2.5 text-[12.5px] leading-5 text-[#ffb0ad]">
+      <AlertTriangle size={14} className="mt-px shrink-0" />
       <span>{message}</span>
     </div>
   );
 }
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+export function SuccessNote({ message }: { message: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-white/10 py-10 text-center">
-      <p className="text-[13px] font-medium text-ink-300">{title}</p>
-      {hint && <p className="text-[12px] text-ink-500">{hint}</p>}
+    <div className="flex items-start gap-2.5 rounded-lg border border-[rgba(53,192,122,0.26)] bg-[rgba(53,192,122,0.08)] px-3.5 py-2.5 text-[12.5px] leading-5 text-[#7fe0ac]">
+      <CheckCircle2 size={14} className="mt-px shrink-0" />
+      <span>{message}</span>
     </div>
   );
 }
 
-// ─── Stat tile (dataviz: hero-number form) ───────────────────────────────────
-
-export function StatTile({ label, value, detail, accent = "text-ink-100" }: { label: string; value: ReactNode; detail?: string; accent?: string }) {
+export function EmptyState({ title, hint, icon }: { title: string; hint?: string; icon?: ReactNode }) {
   return (
-    <Card className="px-5 py-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500">{label}</p>
-      <p className={`mt-1.5 font-display text-[28px] font-bold leading-none tabular-nums ${accent}`}>{value}</p>
-      {detail && <p className="mt-1.5 text-[12px] text-ink-500">{detail}</p>}
+    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--color-line-2)] py-10 text-center">
+      {icon && <div className="text-ink-4">{icon}</div>}
+      <p className="text-[13px] font-medium text-ink-2">{title}</p>
+      {hint && <p className="max-w-xs text-[12px] leading-5 text-ink-3">{hint}</p>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stat tile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function StatTile({ label, value, detail, accent = "text-ink", icon }: { label: string; value: ReactNode; detail?: ReactNode; accent?: string; icon?: ReactNode }) {
+  return (
+    <Card seam className="px-5 py-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink-3">{label}</p>
+        {icon && <span className="text-ink-3">{icon}</span>}
+      </div>
+      <p className={`mt-2 font-mono text-[26px] font-semibold leading-none tracking-[-0.02em] tabular-nums ${accent}`}>{value}</p>
+      {detail && <p className="mt-2 text-[12px] text-ink-3">{detail}</p>}
     </Card>
   );
 }
 
-// ─── Async data hook ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Table primitives
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function Table({ head, children }: { head: ReactNode; children: ReactNode }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left">
+        <thead>
+          <tr className="border-b border-[var(--color-line)] text-[11px] font-medium uppercase tracking-[0.1em] text-ink-3">{head}</tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--color-line)]">{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Async hook
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
@@ -203,17 +271,11 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    setError(null);
-    fn()
-      .then((d) => alive && setData(d))
-      .catch((e: Error) => alive && setError(e.message))
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
+    setLoading(true); setError(null);
+    fn().then(d => alive && setData(d)).catch((e: Error) => alive && setError(e.message)).finally(() => alive && setLoading(false));
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
 
-  return { data, error, loading, reload: () => setTick((t) => t + 1) };
+  return { data, error, loading, reload: () => setTick(t => t + 1) };
 }

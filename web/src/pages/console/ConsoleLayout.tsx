@@ -1,12 +1,13 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
 import {
-  LayoutDashboard, KeyRound, FileBadge2, ShieldCheck, MessagesSquare, Code2, ArrowLeft,
+  LayoutGrid, KeyRound, FileBadge2, ShieldCheck, MessagesSquare, Code2, ArrowLeft,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { useAsync } from "../../components/ui";
+import { Mark } from "../../components/brand";
 
 const NAV = [
-  { to: "/app", label: "Overview", icon: LayoutDashboard, end: true },
+  { to: "/app", label: "Overview", icon: LayoutGrid, end: true },
   { to: "/app/dids", label: "Identifiers", icon: KeyRound },
   { to: "/app/credentials", label: "Credentials", icon: FileBadge2 },
   { to: "/app/trust", label: "Trust Registry", icon: ShieldCheck },
@@ -14,12 +15,12 @@ const NAV = [
   { to: "/app/developer", label: "Developer", icon: Code2 },
 ];
 
-function HealthDot() {
+function ApiStatus() {
   const { data, error } = useAsync(() => api.health(), []);
   const up = !!data && !error;
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-space-900 px-3 py-1.5 text-[11.5px] font-medium text-ink-300">
-      <span className={`h-2 w-2 rounded-full ${up ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-red-400"}`} />
+    <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-line-2)] bg-[var(--color-surface-2)] px-3 py-1.5 text-[11.5px] font-medium text-ink-2">
+      <span className={`h-1.5 w-1.5 rounded-full ${up ? "bg-[var(--color-pos)] pulse-dot" : "bg-[var(--color-neg)]"}`} />
       {up ? `API v${data.version}` : "API offline"}
     </span>
   );
@@ -27,56 +28,55 @@ function HealthDot() {
 
 export default function ConsoleLayout() {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-base">
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-white/6 bg-space-900/60 backdrop-blur-xl">
-        <div className="flex h-16 items-center border-b border-white/6 px-5">
-          <Link to="/" className="inline-flex items-center gap-2.5" aria-label="Back to site">
-            <img src="/orbis.svg" width={26} height={26} alt="" />
-            <span className="font-display text-[15px] font-bold tracking-tight text-ink-100">
-              ORBIS<span className="text-orbit-400">.ID</span>
-            </span>
+      <aside className="fixed inset-y-0 left-0 z-30 flex w-[236px] flex-col border-r border-[var(--color-line)] bg-[var(--color-surface)]/50 backdrop-blur-xl">
+        <div className="flex items-center px-5 py-4">
+          <Link to="/" className="focusable inline-flex items-center gap-2.5 rounded-md" aria-label="ORBIS.ID">
+            <Mark size={24} />
+            <span className="text-[14.5px] font-semibold tracking-[-0.02em] text-ink">ORBIS<span className="font-normal text-ink-3">.ID</span></span>
           </Link>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          <p className="px-3 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-ink-500">
-            Identity Console
-          </p>
+
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
+          <p className="px-3 pb-1.5 pt-3 text-[10.5px] font-medium uppercase tracking-[0.16em] text-ink-4">Console</p>
           {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
-                  isActive
-                    ? "bg-orbit-500/15 text-orbit-300 shadow-[inset_2px_0_0_0_#3987e5]"
-                    : "text-ink-300 hover:bg-white/5 hover:text-ink-100"
+                `focusable group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                  isActive ? "bg-[var(--color-surface-3)] text-ink" : "text-ink-2 hover:bg-white/[0.04] hover:text-ink"
                 }`
               }
             >
-              <item.icon size={16} strokeWidth={1.9} />
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  {isActive && <span className="absolute left-0 top-1/2 h-4 w-[2.5px] -translate-y-1/2 rounded-full bg-[var(--color-accent)]" />}
+                  <item.icon size={16} strokeWidth={1.9} className={isActive ? "text-[var(--color-accent-hi)]" : "text-ink-3 group-hover:text-ink-2"} />
+                  {item.label}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
-        <div className="border-t border-white/6 p-3">
-          <Link
-            to="/"
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-ink-500 transition-colors hover:bg-white/5 hover:text-ink-100"
-          >
+
+        <div className="border-t border-[var(--color-line)] p-3">
+          <Link to="/" className="focusable flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-ink-3 transition-colors hover:bg-white/[0.04] hover:text-ink">
             <ArrowLeft size={14} /> Back to site
           </Link>
         </div>
       </aside>
 
       {/* Main */}
-      <div className="ml-60 flex-1">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/6 bg-space-950/75 px-8 backdrop-blur-xl">
-          <p className="text-[13px] text-ink-500">
-            Self-Sovereign Identity · <span className="text-ink-300">W3C DIDs & Verifiable Credentials</span>
+      <div className="ml-[236px] flex-1">
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--color-line)] bg-[rgba(8,9,11,0.7)] px-8 py-3.5 backdrop-blur-xl">
+          <p className="text-[13px] text-ink-3">
+            Self-Sovereign Identity <span className="mx-1.5 text-ink-4">/</span>
+            <span className="text-ink-2">W3C DIDs & Verifiable Credentials</span>
           </p>
-          <HealthDot />
+          <ApiStatus />
         </header>
         <main className="mx-auto max-w-6xl px-8 py-8">
           <Outlet />

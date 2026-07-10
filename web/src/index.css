@@ -1,93 +1,174 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+/*
+  ORBIS.ID — Refined dark design system
+  A restrained, fintech-grade dark aesthetic (Linear / Stripe school):
+  near-black neutral surfaces, layered elevation, hairline borders,
+  crisp type, and a disciplined blue→aqua accent used sparingly.
+*/
 
-  /* ORBIS design tokens */
-  --color-space-950: #060a13;
-  --color-space-900: #0a101d;
-  --color-space-800: #0e1626;
-  --color-space-700: #162034;
-  --color-ink-100: #eaf1fb;
-  --color-ink-300: #b6c2d6;
-  --color-ink-500: #7c8ba3;
-  --color-orbit-300: #7db4f0;
-  --color-orbit-400: #4f95e9;
-  --color-orbit-500: #3987e5;
-  --color-orbit-600: #2a78d6;
-  --color-aurora-400: #2dd4bf;
-  --color-nova-400: #9085e9;
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* ── Neutral surfaces (warm-cool near-black ramp) ── */
+  --color-base: #08090b;        /* app background */
+  --color-surface: #0d0e11;     /* cards */
+  --color-surface-2: #131519;   /* elevated / hover */
+  --color-surface-3: #1a1d22;   /* inputs, wells */
+
+  /* ── Ink ── */
+  --color-ink: #f4f5f7;         /* primary text */
+  --color-ink-2: #a9afba;       /* secondary text */
+  --color-ink-3: #6b727e;       /* muted text */
+  --color-ink-4: #454b55;       /* faint / disabled */
+
+  /* ── Hairlines ── */
+  --color-line: rgba(255, 255, 255, 0.07);
+  --color-line-2: rgba(255, 255, 255, 0.11);
+
+  /* ── Accent: refined blue, aqua as the positive signal ── */
+  --color-accent: #4d7cff;
+  --color-accent-hi: #7aa0ff;
+  --color-accent-lo: #3b63e6;
+  --color-aqua: #35d0c0;
+  --color-aqua-hi: #5fe0d2;
+  --color-iris: #8b7bff;
+
+  /* ── Status ── */
+  --color-pos: #35c07a;
+  --color-warn: #e0a83a;
+  --color-neg: #e5645f;
+}
+
+/* ── Base ── */
+* {
+  border-color: var(--color-line);
 }
 
 html {
   scroll-behavior: smooth;
+  background: var(--color-base);
 }
 
 body {
-  background-color: var(--color-space-950);
-  color: var(--color-ink-100);
+  background: var(--color-base);
+  color: var(--color-ink);
   font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: rgba(57, 135, 229, 0.35);
+  background: rgba(77, 124, 255, 0.28);
+  color: #fff;
 }
 
 /* Recessive scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(124, 139, 163, 0.25) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); background-clip: content-box; }
+
+/* ── Utility surfaces ── */
+.surface {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+}
+.panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 40%),
+    var(--color-surface);
+  border: 1px solid var(--color-line);
 }
 
-/* Slow orbital spin for hero rings */
-@keyframes orbit-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* Fine top-highlight seam used on elevated cards */
+.seam {
+  position: relative;
 }
-@keyframes orbit-spin-rev {
-  from { transform: rotate(360deg); }
-  to { transform: rotate(0deg); }
-}
-.animate-orbit { animation: orbit-spin 60s linear infinite; transform-origin: 50% 50%; }
-.animate-orbit-rev { animation: orbit-spin-rev 90s linear infinite; transform-origin: 50% 50%; }
-
-@keyframes rise-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.rise-in { animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.rise-in-1 { animation-delay: 0.08s; }
-.rise-in-2 { animation-delay: 0.16s; }
-.rise-in-3 { animation-delay: 0.24s; }
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-orbit, .animate-orbit-rev { animation: none; }
-  .rise-in, .rise-in-1, .rise-in-2, .rise-in-3 { animation: none; }
+.seam::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  opacity: 0.7;
+  pointer-events: none;
 }
 
-/* Glass card */
-.glass {
-  background: linear-gradient(180deg, rgba(22, 32, 52, 0.55), rgba(14, 22, 38, 0.55));
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  backdrop-filter: blur(12px);
-}
-
-.card {
-  background: linear-gradient(180deg, #0e1626, #0b1220);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-}
-
-.glow-text {
-  background: linear-gradient(92deg, #7db4f0 0%, #3987e5 38%, #2dd4bf 100%);
+/* Accent text gradient — used sparingly */
+.accent-text {
+  background: linear-gradient(96deg, #cdd9ff 0%, var(--color-accent-hi) 45%, var(--color-aqua-hi) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-.hairline {
-  background: linear-gradient(90deg, transparent, rgba(57, 135, 229, 0.5), transparent);
-  height: 1px;
+/* Grid background for hero */
+.grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 40%, transparent 80%);
+  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 40%, transparent 80%);
 }
+
+/* Soft focus ring */
+.focusable:focus-visible,
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-base), 0 0 0 4px rgba(77, 124, 255, 0.55);
+}
+
+/* ── Motion ── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.d1 { animation-delay: 0.06s; }
+.d2 { animation-delay: 0.12s; }
+.d3 { animation-delay: 0.18s; }
+.d4 { animation-delay: 0.24s; }
+
+@keyframes sheen {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse-dot { animation: pulse-dot 2.4s ease-in-out infinite; }
+
+@keyframes drift {
+  0% { transform: translate3d(0,0,0); }
+  50% { transform: translate3d(0,-14px,0); }
+  100% { transform: translate3d(0,0,0); }
+}
+.drift { animation: drift 9s ease-in-out infinite; }
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.spin-slow { animation: spin-slow 80s linear infinite; transform-origin: 50% 50%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up, .drift, .spin-slow, .pulse-dot { animation: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* Glow helpers */
+.glow-accent { box-shadow: 0 0 0 1px rgba(77,124,255,0.35), 0 8px 40px -8px rgba(77,124,255,0.45); }
+.ring-hairline { box-shadow: inset 0 0 0 1px var(--color-line); }
