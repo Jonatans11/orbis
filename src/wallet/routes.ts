@@ -13,6 +13,7 @@ import { execSync } from "node:child_process";
 import { v4 as uuidv4 } from "uuid";
 import { randomBytes } from "node:crypto";
 import { initWalletTables } from "./db.js";
+import { logAudit, getClientIp } from "../security/audit.js";
 
 const router = Router();
 const TEAM_DB = "team-db";
@@ -512,12 +513,16 @@ router.post("/vc/present", async (req: Request, res: Response) => {
 // ===========================================================================
 /**
  * GET /api/wallet/admin/users
- * List all wallet users with vault/grant counts. Admin only.
+ * List all wallet users with vault/grant counts and quota bytes. Admin only.
  */
 router.get("/admin/users", (req: Request, res: Response) => {
   try {
     if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-    const items = query("SELECT w.id, w.user_id, w.wallet_id, w.device_name, w.platform, w.wiped, w.created_at, w.last_seen_at, (SELECT COUNT(*) FROM vault_records WHERE user_id = w.user_id) as vault_count, (SELECT COUNT(*) FROM vault_grants WHERE owner_user_id = w.user_id) as grant_count FROM wallet_devices w ORDER BY w.created_at DESC");
+    const items = query(`SELECT w.id, w.user_id, w.wallet_id, w.device_name, w.platform, w.wiped, w.created_at, w.last_seen_at,
+       (SELECT COUNT(*) FROM vault_records WHERE user_id = w.user_id) as vault_count,
+       (SELECT COUNT(*) FROM vault_grants WHERE owner_user_id = w.user_id) as grant_count,
+       (SELECT COALESCE(SUM(size), 0) FROM vault_records WHERE user_id = w.user_id) as quota_used_bytes
+       FROM wallet_devices w ORDER BY w.created_at DESC`);
     res.json({ success: true, count: items.length, items });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
@@ -526,19 +531,27 @@ router.get("/admin/users", (req: Request, res: Response) => {
 /**
  * GET /api/wallet/admin/credentials
  * List wallet credentials (backup items). Admin only.
+ * Query: ?userId= — filter by user (optional)
  */
 router.get("/admin/credentials", (req: Request, res: Response) => {
   try {
     if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-    const items = query("SELECT b.local_id, b.user_id, b.category, b.size, b.updated_at FROM wallet_backup_items b ORDER BY b.updated_at DESC LIMIT 100");
-    res.json({ success: true, count: items.length, items });
+    const userId = req.query.userId as string | undefined;
+    let sql = "SELECT b.local_id, b.user_id, b.category, b.size, b.updated_at FROM wallet_backup_items b";
+    const params: string[] = [];
+    if (userId) {
+      sql += ` WHERE b.user_id = ${quote(userId)}`;
+    }
+    sql += " ORDER BY b.updated_at DESC LIMIT 100";
+    const items = query(sql);
+    res.json({ success: true, count: items.length, items, filteredByUserId: userId || null });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
 /**
  * DELETE /api/wallet/admin/remote-wipe/:walletId
- * Remote wipe a wallet (sets wiped flag, reason required).
+ * Remote wipe a wallet (sets wiped flag, reason required). Audit-logged.
  * Body: { reason }
  */
 router.delete("/admin/remote-wipe/:walletId", (req: Request, res: Response) => {
@@ -548,7 +561,59 @@ router.delete("/admin/remote-wipe/:walletId", (req: Request, res: Response) => {
     const { reason } = req.body;
     if (!reason) { res.status(400).json({ error: true, message: "reason is required" }); return; }
     query(`UPDATE wallet_devices SET wiped = 1, wipe_reason = ${quote(reason)} WHERE wallet_id = ${quote(walletId)}`);
+    // Audit-log the wipe action
+    logAudit({
+      actorType: "user",
+      actorId: req.user?.sub || undefined,
+      action: "admin.wallet.wipe",
+      entityType: "wallet_device",
+      entityId: walletId,
+      result: "success",
+      message: `Remote wipe: ${reason}`,
+      ipAddress: getClientIp(req),
+    });
     res.json({ success: true, message: "Remote wipe initiated" });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+/**
+ * GET /api/wallet/admin/grants
+ * List all data-sharing grants across users. Admin only. Metadata only.
+ * Returns grantor, grantee, scope, expiry, revoked state, price, and access count.
+ */
+router.get("/admin/grants", (req: Request, res: Response) => {
+  try {
+    if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
+    const grants = query(`SELECT g.grant_id, g.record_id, g.owner_user_id, g.grantee_did, g.scope, g.price_amount, g.price_currency, g.expires_at, g.revoked, g.created_at,
+       (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count
+       FROM vault_grants g ORDER BY g.created_at DESC`);
+    // Audit-log the view
+    logAudit({
+      actorType: "user",
+      actorId: req.user?.sub || undefined,
+      action: "admin.wallet.grants.view",
+      entityType: "vault_grant",
+      entityId: "list",
+      result: "success",
+      message: `Listed ${grants.length} grants`,
+      ipAddress: getClientIp(req),
+    });
+    res.json({ success: true, count: grants.length, grants });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+/**
+ * GET /api/wallet/admin/grants/:grantId/access-log
+ * View access log entries for a specific grant. Admin only.
+ */
+router.get("/admin/grants/:grantId/access-log", (req: Request, res: Response) => {
+  try {
+    if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
+    const { grantId } = req.params;
+    const logs = query(`SELECT l.id, l.accessed_by_did, l.accessed_at FROM grant_access_log l WHERE l.grant_id = ${quote(grantId)} ORDER BY l.accessed_at DESC LIMIT 50`);
+    res.json({ success: true, count: logs.length, grantId, logs });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }

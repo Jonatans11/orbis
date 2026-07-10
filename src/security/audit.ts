@@ -77,7 +77,9 @@ export type ActionType =
   | "auth.password_change"
   | "compliance.export"
   | "compliance.delete"
-  | "encryption.key_rotation";
+  | "encryption.key_rotation"
+  | "admin.wallet.wipe"
+  | "admin.wallet.grants.view";
 
 export type EntityType =
   | "did"
@@ -85,7 +87,9 @@ export type EntityType =
   | "zk_proof"
   | "trust_entry"
   | "user"
-  | "compliance_data";
+  | "compliance_data"
+  | "wallet_device"
+  | "vault_grant";
 
 export interface AuditEntry {
   id: string;
