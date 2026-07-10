@@ -61,6 +61,7 @@ export const ENDPOINTS = {
     redeemGrant: { method: "GET", path: "/api/wallet/share/:grantId", status: "live" },
     listGrants: { method: "GET", path: "/api/wallet/data/grants", status: "live" },
     revokeGrant: { method: "DELETE", path: "/api/wallet/data/grants/:grantId", status: "live" },
+    presentVc: { method: "POST", path: "/api/wallet/vc/present", status: "live" },
     messagesWaiting: { method: "GET", path: "/api/wallet/messages/waiting", status: "live" },
     ackMessages: { method: "PUT", path: "/api/wallet/messages/waiting", status: "live" },
   },

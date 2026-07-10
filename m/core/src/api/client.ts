@@ -324,6 +324,24 @@ export class OrbisApiClient {
         method: "DELETE",
       }),
 
+    // --- ZK presentation (proof generated ON-DEVICE via m/core/vc/zk) ---
+    /**
+     * Submit an on-device-generated ZK presentation for server verification.
+     * Never send secret keys — build the proof with createZKPresentation() first.
+     */
+    presentVc: (proof: Record<string, unknown>, challenge?: string, checkTrustRegistry = false) =>
+      this.request<{
+        success: boolean;
+        verified: boolean;
+        proofId: string;
+        holderDID: string;
+        timestamp: string;
+        checks: Array<{ name: string; passed: boolean; message: string }>;
+      }>("/api/wallet/vc/present", {
+        method: "POST",
+        body: { proof, challenge, checkTrustRegistry },
+      }),
+
     // --- didcomm push hints ---
     messagesWaiting: () => this.request<MessagesWaiting>("/api/wallet/messages/waiting"),
     /** Acknowledge receipt — marks the given messages 'delivered'. */

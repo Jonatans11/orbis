@@ -13,4 +13,5 @@ export * from "./api/client.js";
 export * from "./api/endpoints.js";
 export * from "./auth/session.js";
 export * from "./vc/store.js";
+export * from "./vc/zk.js";
 export * from "./didcomm/client.js";
