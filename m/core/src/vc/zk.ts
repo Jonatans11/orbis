@@ -62,7 +62,7 @@ export interface ZKPresentation {
   revealedFields: string[];
   hiddenFields: string[];
   hiddenCommitments: HiddenCommitment[];
-  derivedPredicates?: DerivedPredicate[];
+  derivedPredicates?: DerivedPredicate[] | undefined;
   proof: ZKPresentationSignature;
 }
 
