@@ -17,6 +17,7 @@ import { issueCredential } from "./vc/issue.js";
 import { verifyCredential } from "./vc/verify.js";
 import { createZKProof, verifyZKProof } from "./vc/zk.js";
 import { verifyZK } from "./vc/verify-zk.js";
+import * as statusList from "./vc/statuslist.js";
 import * as trustRegistry from "./trust/registry.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import * as didcomm from "./didcomm/index.js";
@@ -204,7 +205,7 @@ app.put("/api/did/:id/revoke", (req: Request, res: Response) => {
 /**
  * POST /api/vc/issue
  * Issue a Verifiable Credential.
- * Body: { issuerDID, issuerSecretKey (hex), subjectDID, claims, type?, schemaUrl?, expirationDate? }
+ * Body: { issuerDID, issuerSecretKey (hex), subjectDID, claims, type?, schemaUrl?, expirationDate?, credentialStatus? }
  */
 app.post("/api/vc/issue", async (req: Request, res: Response) => {
   try {
@@ -216,6 +217,7 @@ app.post("/api/vc/issue", async (req: Request, res: Response) => {
       type,
       schemaUrl,
       expirationDate,
+      credentialStatus,
     } = req.body;
 
     if (!issuerDID) {
@@ -252,8 +254,12 @@ app.post("/api/vc/issue", async (req: Request, res: Response) => {
       expirationDate,
     });
 
+    // Support W3C credentialStatus injection on creation for backward compatibility
+    if (credentialStatus) {
+      result.credential.credentialStatus = credentialStatus;
+    }
+
     const startTime = Date.now();
-    // The credential is already issued at this point
     const elapsed = Date.now() - startTime;
 
     res.status(201).json({
@@ -384,7 +390,7 @@ app.post("/api/vc/verify-zk", (req: Request, res: Response) => {
  * POST /api/vc/zk/prove
  * Create a ZK selective disclosure proof from a Verifiable Credential.
  * Body: { credential, holderDID, holderSecretKey, revealFields?, hideFields?, 
- *         derivedPredicates?, challenge?, domain? }
+ *         derivedPredicates?, challenge?, domain?, cryptosuite? }
  */
 app.post("/api/vc/zk/prove", async (req: Request, res: Response) => {
   try {
@@ -397,6 +403,7 @@ app.post("/api/vc/zk/prove", async (req: Request, res: Response) => {
       derivedPredicates,
       challenge,
       domain,
+      cryptosuite,
     } = req.body;
 
     if (!credential) {
@@ -427,6 +434,7 @@ app.post("/api/vc/zk/prove", async (req: Request, res: Response) => {
       derivedPredicates,
       challenge,
       domain,
+      cryptosuite,
     });
 
     res.status(201).json({
@@ -482,6 +490,140 @@ app.post("/api/vc/zk/challenge", (_req: Request, res: Response) => {
     challenge,
     expiresIn: 300, // 5 minutes
   });
+});
+
+// ─── StatusList2021 Endpoints ────────────────────────────────────────────────
+
+/**
+ * POST /api/status/create
+ * Create a new W3C StatusList2021 record.
+ * Body: { name, issuerDid, statusPurpose?, numBits? }
+ */
+app.post("/api/status/create", (req: Request, res: Response) => {
+  try {
+    const { name, issuerDid, statusPurpose, numBits } = req.body;
+
+    if (!name || !name.trim()) {
+      res.status(400).json({ error: true, message: "name is required" });
+      return;
+    }
+    if (!issuerDid || !issuerDid.trim()) {
+      res.status(400).json({ error: true, message: "issuerDid is required" });
+      return;
+    }
+
+    const record = statusList.createStatusList({
+      name: name.trim(),
+      issuerDid: issuerDid.trim(),
+      statusPurpose,
+      numBits,
+    });
+
+    res.status(201).json({
+      success: true,
+      statusList: record,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * GET /api/status/list/:listId
+ * Resolve the StatusList2021 and optionally generate a signed credential if issuerSecretKey is provided.
+ * Query: ?key=issuerSecretKey (optional)
+ */
+app.get("/api/status/list/:listId", async (req: Request, res: Response) => {
+  try {
+    const listId = req.params.listId as string;
+    const secretKeyHex = req.query.key as string | undefined;
+
+    const record = statusList.getStatusList(listId);
+    if (!record) {
+      res.status(404).json({ error: true, message: `StatusList not found: ${listId}` });
+      return;
+    }
+
+    if (secretKeyHex) {
+      const secretKeyBytes = Buffer.from(secretKeyHex, "hex");
+      if (secretKeyBytes.length !== 32) {
+        res.status(400).json({ error: true, message: "key must be a 32-byte hex string" });
+        return;
+      }
+      const credential = await statusList.generateStatusListVC(listId, secretKeyBytes);
+      res.json({
+        success: true,
+        credential,
+      });
+    } else {
+      res.json({
+        success: true,
+        statusList: record,
+      });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * POST /api/status/update
+ * Update the status of a specific bit index in a stored StatusList.
+ * Body: { listId, index, status }
+ */
+app.post("/api/status/update", (req: Request, res: Response) => {
+  try {
+    const { listId, index, status } = req.body;
+
+    if (!listId) {
+      res.status(400).json({ error: true, message: "listId is required" });
+      return;
+    }
+    if (index === undefined || typeof index !== "number" || index < 0) {
+      res.status(400).json({ error: true, message: "index must be a non-negative number" });
+      return;
+    }
+    if (status === undefined || typeof status !== "boolean") {
+      res.status(400).json({ error: true, message: "status must be a boolean" });
+      return;
+    }
+
+    const record = statusList.updateStatusBit(listId, index, status);
+
+    res.json({
+      success: true,
+      statusList: record,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * GET /api/status/check/:listId/:index
+ * Check the status of a specific bit index in a stored StatusList.
+ */
+app.get("/api/status/check/:listId/:index", (req: Request, res: Response) => {
+  try {
+    const listId = req.params.listId as string;
+    const index = parseInt(req.params.index as string, 10);
+
+    if (isNaN(index) || index < 0) {
+      res.status(400).json({ error: true, message: "index must be a non-negative integer" });
+      return;
+    }
+
+    const statusValue = statusList.checkStatusBit(listId, index);
+
+    res.json({
+      success: true,
+      listId,
+      index,
+      status: statusValue,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
 });
 
 // ─── Trust Registry Endpoints ────────────────────────────────────────────────

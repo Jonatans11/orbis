@@ -4,17 +4,23 @@
  * - API key creation and management
  * - Developer dashboard stats
  * - Webhook registration and management
+ * - Webhook retry delivery orchestration
+ * - Security & compliance audit log retrieval
  */
 
 import { Router, type Request, type Response } from "express";
 import { generateApiKey, revokeApiKey, listApiKeys, VALID_SCOPES, type Scope } from "./apikey.js";
 import { getRateLimitState } from "./ratelimit.js";
 import { getUsageStats } from "./usage.js";
-import { registerWebhook, listWebhooks, deleteWebhook, getWebhookDeliveries, type WebhookEvent, VALID_EVENTS } from "./webhooks.js";
+import { registerWebhook, listWebhooks, deleteWebhook, getWebhookDeliveries, retryWebhookDelivery, type WebhookEvent, VALID_EVENTS } from "./webhooks.js";
 import { requireAuth } from "./middleware.js";
+import { listAuditLogs, getAuditLogsForEntity, getAuditLogsByDateRange, countAuditLogs, initAuditTable } from "../security/audit.js";
 import { execSync } from "node:child_process";
 
 const router = Router();
+
+// Ensure audit tables are initialized on startup
+initAuditTable();
 
 function db(query: string): any[] {
   const out = execSync(`team-db "${query.replace(/"/g, '\\"')}"`, {
@@ -28,8 +34,8 @@ function db(query: string): any[] {
 
 /**
  * GET /api/developer/dashboard
- * Server-rendered HTML developer dashboard for API key management and usage stats.
- * No auth required (the registration form is public).
+ * Server-rendered HTML developer dashboard for API key management, usage stats,
+ * webhook delivery retries, and compliance audit trails.
  */
 router.get("/dashboard", (_req: Request, res: Response) => {
   try {
@@ -52,7 +58,13 @@ router.get("/dashboard", (_req: Request, res: Response) => {
     // Get last 10 requests
     const lastRequests = db("SELECT method, path, status_code, response_time_ms, timestamp FROM usage_logs ORDER BY timestamp DESC LIMIT 10") as any[];
 
-    const html = buildDashboardHtml(keys, todayCalls, monthCalls, activeKeys, lastRequests);
+    // Retrieve last 15 security audit log entries
+    const auditLogs = listAuditLogs(15, 0);
+
+    // Retrieve last 15 webhook deliveries with joining webhook URLs
+    const webhookDeliveries = db("SELECT d.id, d.event_type, d.response_status, d.success, d.delivered_at, w.url FROM webhook_deliveries d JOIN webhooks w ON d.webhook_id = w.id ORDER BY d.delivered_at DESC LIMIT 15") as any[];
+
+    const html = buildDashboardHtml(keys, todayCalls, monthCalls, activeKeys, lastRequests, auditLogs, webhookDeliveries);
     res.type("html").send(html);
   } catch (err: any) {
     res.status(500).type("html").send(`<h1>Error</h1><p>${err.message}</p>`);
@@ -292,6 +304,26 @@ router.get("/webhooks/:id/deliveries", requireAuth(), (req: Request, res: Respon
 });
 
 /**
+ * POST /api/gateway/webhooks/deliveries/:id/retry
+ * Retry a failed webhook delivery record.
+ */
+router.post("/webhooks/deliveries/:id/retry", requireAuth(), async (req: Request, res: Response) => {
+  try {
+    const deliveryId = req.params.id as string;
+    const success = await retryWebhookDelivery(deliveryId);
+
+    res.json({
+      success,
+      message: success
+        ? "Webhook delivery retried successfully (2xx response)"
+        : "Webhook delivery retry failed (non-2xx response)",
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
  * GET /api/gateway/scopes
  * List available API key scopes.
  */
@@ -313,6 +345,61 @@ router.get("/events", (_req: Request, res: Response) => {
   });
 });
 
+// ─── Audit Log Endpoints ─────────────────────────────────────────────────────
+
+/**
+ * GET /api/gateway/audit
+ * Retrieve paginated secure audit logs.
+ * Query: ?limit=100&offset=0&from=ISO8601&to=ISO8601
+ */
+router.get("/audit", requireAuth(["did:read"]), (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string, 10) || 50;
+    const offset = parseInt(req.query.offset as string, 10) || 0;
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
+
+    let logs;
+    if (from && to) {
+      logs = getAuditLogsByDateRange(from, to, limit);
+    } else {
+      logs = listAuditLogs(limit, offset);
+    }
+
+    res.json({
+      success: true,
+      count: logs.length,
+      total: countAuditLogs(),
+      limit,
+      offset,
+      logs,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * GET /api/gateway/audit/entity/:type/:id
+ * Retrieve audit logs filtered by entity type and ID.
+ */
+router.get("/audit/entity/:type/:id", requireAuth(["did:read"]), (req: Request, res: Response) => {
+  try {
+    const entityType = req.params.type as any;
+    const entityId = req.params.id as string;
+
+    const logs = getAuditLogsForEntity(entityType, entityId);
+
+    res.json({
+      success: true,
+      count: logs.length,
+      logs,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
 export default router;
 
 // ─── HTML Dashboard Builder ──────────────────────────────────────────────────
@@ -322,7 +409,9 @@ function buildDashboardHtml(
   todayCalls: number,
   monthCalls: number,
   activeKeys: number,
-  lastRequests: any[]
+  lastRequests: any[],
+  auditLogs: any[],
+  webhookDeliveries: any[]
 ): string {
   const keyRows = keys.map((k) => {
     const isRevoked = k.revoked_at !== null;
@@ -358,6 +447,35 @@ function buildDashboardHtml(
       <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-400">${r.status_code}</td>
       <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-400">${r.response_time_ms}ms</td>
       <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-500">${r.timestamp ? new Date(r.timestamp).toLocaleString() : ""}</td>
+    </tr>
+  `).join("");
+
+  const auditRows = auditLogs.map((log) => `
+    <tr>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs font-mono text-gray-400"><code class="font-mono text-gray-200">${log.id.slice(0, 8)}...</code></td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs">
+        <span class="inline-block rounded px-1.5 py-0.5 font-mono text-[10px] font-bold ${log.result === "success" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"} uppercase">${log.result}</span>
+      </td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-300 font-medium">${escHtml(log.action)}</td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-indigo-300 font-mono">${escHtml(log.entity_type)}</td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-400 truncate max-w-[120px]" title="${escHtml(log.message || "")}">${escHtml(log.message || "—")}</td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-500">${log.timestamp ? new Date(log.timestamp).toLocaleString() : ""}</td>
+    </tr>
+  `).join("");
+
+  const deliveryRows = webhookDeliveries.map((d) => `
+    <tr>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs font-mono text-gray-400"><code class="font-mono text-gray-200">${d.id.slice(0, 8)}...</code></td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-indigo-300 font-mono">${escHtml(d.event_type)}</td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-400 truncate max-w-[150px]" title="${escHtml(d.url)}">${escHtml(d.url)}</td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs font-mono font-bold ${d.success ? "text-emerald-400" : "text-red-400"}">${d.response_status || "TIMEOUT/FAIL"}</td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-500">${d.delivered_at ? new Date(d.delivered_at).toLocaleTimeString() : ""}</td>
+      <td class="px-4 py-2 border-b border-gray-700/50 text-right">
+        ${!d.success
+          ? `<button onclick="retryDelivery('${d.id}')" class="rounded bg-indigo-600/20 px-2 py-1 text-[11px] font-semibold text-indigo-400 hover:bg-indigo-600/40 transition-colors">Retry</button>`
+          : `<span class="text-[11px] text-emerald-500/80 font-semibold">✓ OK</span>`
+        }
+      </td>
     </tr>
   `).join("");
 
@@ -455,6 +573,32 @@ function buildDashboardHtml(
       </div>
     </div>
 
+    <!-- Webhook Delivery & Retry Console -->
+    <div class="card">
+      <div class="card-title">Webhook Delivery & Retry Console</div>
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr><th>Delivery ID</th><th>Event Type</th><th>Target URL</th><th>Status Code</th><th>Delivered At</th><th class="text-right">Actions</th></tr>
+          </thead>
+          <tbody>${deliveryRows || '<tr><td colspan="6" class="text-center text-gray-500 py-8">No webhook deliveries recorded yet.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Security & Compliance Audit Trail -->
+    <div class="card">
+      <div class="card-title">Security & Compliance Audit Trail</div>
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr><th>Audit ID</th><th>Result</th><th>Action</th><th>Target Entity</th><th>Details</th><th>Timestamp</th></tr>
+          </thead>
+          <tbody>${auditRows || '<tr><td colspan="6" class="text-center text-gray-500 py-8">No audit logs recorded yet.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Last 10 Requests -->
     <div class="card">
       <div class="card-title">Last 10 API Requests</div>
@@ -528,6 +672,22 @@ function buildDashboardHtml(
           setTimeout(() => location.reload(), 1000);
         } else {
           showToast("Failed to revoke key", "error");
+        }
+      } catch (err) {
+        showToast("Network error", "error");
+      }
+    }
+
+    async function retryDelivery(id) {
+      showToast("Retrying webhook delivery...", "info");
+      try {
+        const res = await fetch("/api/gateway/webhooks/deliveries/" + id + "/retry", { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Webhook retried successfully!", "success");
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          showToast(data.message || "Retry failed", "error");
         }
       } catch (err) {
         showToast("Network error", "error");

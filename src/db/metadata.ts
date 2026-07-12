@@ -8,7 +8,7 @@
  * NOTE: team-db CLI requires single-line SQL statements (no newlines).
  */
 
-import { execSync } from "node:child_process";
+import { execSync, exec } from "node:child_process";
 
 const TEAM_DB = "team-db";
 
@@ -24,13 +24,42 @@ function query(sql: string): any[] {
       encoding: "utf-8",
       timeout: 10_000,
     });
-    return JSON.parse(output.trim());
+    return JSON.parse(output.trim() || "[]");
   } catch (err: any) {
     if (err.stderr?.includes("no such table")) {
       return [];
     }
     throw new Error(`DB query failed: ${err.message}`);
   }
+}
+
+/**
+ * Execute a SQL write statement asynchronously in the background.
+ * This prevents slow file writes from blocking Node's main event loop,
+ * offering immense performance benefits on logging, compliance audit trails,
+ * and analytics.
+ */
+function queryAsync(sql: string): void {
+  const normalized = sql.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+  exec(`${TEAM_DB} ${JSON.stringify(normalized)}`, { timeout: 15000 }, (err) => {
+    if (err) {
+      console.error(`[DB:ASYNC-WRITE] Background write query failed: ${err.message}. Query: ${normalized}`);
+    }
+  });
+}
+
+/**
+ * Public export for executing SQL statements safely and consistently across the app.
+ */
+export function executeSQL(sql: string): any[] {
+  return query(sql);
+}
+
+/**
+ * Public export for executing SQL write statements asynchronously in the background.
+ */
+export function executeSQLAsync(sql: string): void {
+  queryAsync(sql);
 }
 
 /**
@@ -60,7 +89,7 @@ export function initDatabase(): void {
   query("CREATE TABLE IF NOT EXISTS didcomm_key_agreement (id TEXT PRIMARY KEY, did TEXT NOT NULL UNIQUE, x25519_public_key TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
 
   // Gateway API keys table
-  query("CREATE TABLE IF NOT EXISTS api_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL, member_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), revoked_at TEXT, last_used_at TEXT)");
+  query("CREATE TABLE IF NOT EXISTS api_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL, member_id TEXT, plan TEXT NOT NULL DEFAULT 'free' CHECK(plan IN ('free', 'developer', 'enterprise')), created_at TEXT NOT NULL DEFAULT (datetime('now')), revoked_at TEXT, last_used_at TEXT)");
 
   // Gateway usage logs table
   query("CREATE TABLE IF NOT EXISTS usage_logs (id TEXT PRIMARY KEY, api_key_id TEXT NOT NULL, method TEXT NOT NULL, path TEXT NOT NULL, status_code INTEGER NOT NULL, response_time_ms INTEGER NOT NULL DEFAULT 0, timestamp TEXT NOT NULL DEFAULT (datetime('now')))");
@@ -73,6 +102,16 @@ export function initDatabase(): void {
 
   // Webhook delivery log table
   query("CREATE TABLE IF NOT EXISTS webhook_deliveries (id TEXT PRIMARY KEY, webhook_id TEXT NOT NULL, event TEXT NOT NULL, payload TEXT NOT NULL, status_code INTEGER, response_body TEXT, success INTEGER NOT NULL DEFAULT 0, delivered_at TEXT NOT NULL DEFAULT (datetime('now')))");
+
+  // Status List 2021 table
+  query("CREATE TABLE IF NOT EXISTS ssi_status_lists (id TEXT PRIMARY KEY, name TEXT NOT NULL, issuer_did TEXT NOT NULL, status_purpose TEXT NOT NULL CHECK(status_purpose IN ('revocation', 'suspension')), encoded_list TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
+
+  // Run dynamic schema migrations synchronously
+  try {
+    query("ALTER TABLE api_keys ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'");
+  } catch {
+    // Column already exists
+  }
 }
 
 // ─── DID Metadata ────────────────────────────────────────────────────────────
@@ -203,8 +242,11 @@ export interface VerificationLog {
   timestamp: string;
 }
 
+/**
+ * Log verification events asynchronously in the background.
+ */
 export function insertVerification(record: Omit<VerificationLog, "timestamp">): void {
-  query(`INSERT INTO ssi_verifications (id, credential_id, verifier_did, verified, reason) VALUES (${quote(record.id)}, ${quote(record.credential_id)}, ${quote(record.verifier_did || "")}, ${record.verified ? 1 : 0}, ${quote(record.reason || "")})`);
+  queryAsync(`INSERT INTO ssi_verifications (id, credential_id, verifier_did, verified, reason) VALUES (${quote(record.id)}, ${quote(record.credential_id)}, ${quote(record.verifier_did || "")}, ${record.verified ? 1 : 0}, ${quote(record.reason || "")})`);
 }
 
 export function getVerificationsForCredential(credentialId: string): VerificationLog[] {
@@ -233,8 +275,11 @@ export interface DIDCommMessage {
   thread_id: string | null;
 }
 
+/**
+ * Log DIDComm messages asynchronously.
+ */
 export function insertDIDCommMessage(record: Omit<DIDCommMessage, "created_at">): void {
-  query(`INSERT INTO didcomm_messages (id, msg_type, from_did, to_did, body, encrypted_payload, status, thread_id) VALUES (${quote(record.id)}, ${quote(record.msg_type)}, ${quote(record.from_did)}, ${quote(record.to_did)}, ${quote(record.body)}, ${quote(record.encrypted_payload)}, ${quote(record.status)}, ${quote(record.thread_id)})`);
+  queryAsync(`INSERT INTO didcomm_messages (id, msg_type, from_did, to_did, body, encrypted_payload, status, thread_id) VALUES (${quote(record.id)}, ${quote(record.msg_type)}, ${quote(record.from_did)}, ${quote(record.to_did)}, ${quote(record.body)}, ${quote(record.encrypted_payload)}, ${quote(record.status)}, ${quote(record.thread_id)})`);
 }
 
 export function getDIDCommMessage(id: string): DIDCommMessage | null {
@@ -252,7 +297,7 @@ export function getDIDCommInbox(did: string): DIDCommMessage[] {
 }
 
 export function updateDIDCommMessageStatus(id: string, status: "sent" | "delivered" | "read"): void {
-  query(`UPDATE didcomm_messages SET status = ${quote(status)} WHERE id = ${quote(id)}`);
+  queryAsync(`UPDATE didcomm_messages SET status = ${quote(status)} WHERE id = ${quote(id)}`);
 }
 
 // ─── DIDComm Out-of-Band Invitation Storage ───────────────────────────────────
@@ -283,7 +328,7 @@ export function listActiveOOBInvitations(did: string): OOBInvitation[] {
 }
 
 export function consumeOOBInvitation(id: string): void {
-  query(`UPDATE didcomm_oob_invitations SET status = 'consumed' WHERE id = ${quote(id)}`);
+  queryAsync(`UPDATE didcomm_oob_invitations SET status = 'consumed' WHERE id = ${quote(id)}`);
 }
 
 // ─── DIDComm Key Agreement Storage ────────────────────────────────────────────
@@ -296,11 +341,41 @@ export interface KeyAgreementRecord {
 }
 
 export function insertKeyAgreement(record: Omit<KeyAgreementRecord, "created_at">): void {
-  query(`INSERT INTO didcomm_key_agreement (id, did, x25519_public_key) VALUES (${quote(record.id)}, ${quote(record.did)}, ${quote(record.x25519_public_key)})`);
+  queryAsync(`INSERT INTO didcomm_key_agreement (id, did, x25519_public_key) VALUES (${quote(record.id)}, ${quote(record.did)}, ${quote(record.x25519_public_key)})`);
 }
 
 export function getKeyAgreement(did: string): KeyAgreementRecord | null {
   const rows = query(`SELECT * FROM didcomm_key_agreement WHERE did = ${quote(did)}`);
   if (rows.length === 0) return null;
   return rows[0] as KeyAgreementRecord;
+}
+
+// ─── Status List 2021 Metadata ───────────────────────────────────────────────
+
+export interface StatusListRecord {
+  id: string;
+  name: string;
+  issuer_did: string;
+  status_purpose: "revocation" | "suspension";
+  encoded_list: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function insertStatusList(record: Omit<StatusListRecord, "created_at" | "updated_at">): void {
+  query(`INSERT INTO ssi_status_lists (id, name, issuer_did, status_purpose, encoded_list) VALUES (${quote(record.id)}, ${quote(record.name)}, ${quote(record.issuer_did)}, ${quote(record.status_purpose)}, ${quote(record.encoded_list)})`);
+}
+
+export function getStatusListById(id: string): StatusListRecord | null {
+  const rows = query(`SELECT * FROM ssi_status_lists WHERE id = ${quote(id)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as StatusListRecord;
+}
+
+export function updateStatusListEncoded(id: string, encodedList: string): void {
+  query(`UPDATE ssi_status_lists SET encoded_list = ${quote(encodedList)}, updated_at = datetime('now') WHERE id = ${quote(id)}`);
+}
+
+export function listStatusListsByIssuer(issuerDid: string): StatusListRecord[] {
+  return query(`SELECT * FROM ssi_status_lists WHERE issuer_did = ${quote(issuerDid)} ORDER BY created_at DESC`) as StatusListRecord[];
 }

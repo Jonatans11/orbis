@@ -6,12 +6,15 @@
  * The DID Document is served at:
  * - https://<domain>/.well-known/did.json (for did:web:<domain>)
  * - https://<domain>/<path>/did.json (for did:web:<domain>:<path>)
+ *
+ * Includes high-performance TTL caching and fallback resolution.
  */
 
 import { v4 as uuidv4 } from "uuid";
 import * as ed from "@noble/ed25519";
 import { base58btc } from "multiformats/bases/base58";
 import type { DIDDocument, VerificationMethod, KeyPair } from "./key.js";
+import * as db from "../db/metadata.js";
 
 const ED25519_PUBLIC_KEY_PREFIX = new Uint8Array([0xed, 0x01]);
 
@@ -28,6 +31,19 @@ export interface DIDWebResult {
   didDocument: DIDDocument;
   didJsonUrl: string;
 }
+
+// ─── Caching Layer ───────────────────────────────────────────────────────────
+
+interface CacheEntry {
+  didDocument: DIDDocument | null;
+  didJsonUrl: string | null;
+  expiresAt: number;
+}
+
+const resolveCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache TTL
+
+// ─── Generation ──────────────────────────────────────────────────────────────
 
 /**
  * Generate a new Ed25519 key pair and create a did:web identifier.
@@ -110,23 +126,32 @@ function buildDIDWebResult(
   };
 }
 
+// ─── Resolution ──────────────────────────────────────────────────────────────
+
 /**
- * Resolve a did:web to generate the expected DID Document.
- * Note: This constructs the document from the DID identifier itself.
- * Production use would fetch from the actual URL.
+ * Resolve a did:web to its W3C DID Document.
+ *
+ * 1. Checks memory cache for non-expired documents.
+ * 2. Fetches did.json over HTTPS from domain/.well-known or path.
+ * 3. Falls back to metadata database lookup if remote is unreachable or local.
  */
-export function resolveDIDWeb(did: string): {
+export async function resolveDIDWeb(did: string): Promise<{
   didDocument: DIDDocument | null;
   didJsonUrl: string | null;
-} {
+}> {
   if (!did.startsWith("did:web:")) {
     return { didDocument: null, didJsonUrl: null };
+  }
+
+  const now = Date.now();
+  const cached = resolveCache.get(did);
+  if (cached && cached.expiresAt > now) {
+    return { didDocument: cached.didDocument, didJsonUrl: cached.didJsonUrl };
   }
 
   const identifier = did.slice("did:web:".length);
   const parts = identifier.split(":");
 
-  // The first part is the domain
   const domain = parts[0]!;
   const path = parts.slice(1).join("/");
 
@@ -137,8 +162,52 @@ export function resolveDIDWeb(did: string): {
     didJsonUrl = `https://${domain}/.well-known/did.json`;
   }
 
-  // Return a basic document structure (keys would come from the hosted file)
-  const doc: DIDDocument = {
+  try {
+    // Perform standard HTTPS fetch with 5-second abort timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(didJsonUrl, {
+      signal: controller.signal,
+      headers: { "Accept": "application/json" }
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const doc = await response.json() as DIDDocument;
+      if (doc && doc.id === did) {
+        resolveCache.set(did, {
+          didDocument: doc,
+          didJsonUrl,
+          expiresAt: now + CACHE_TTL_MS
+        });
+        return { didDocument: doc, didJsonUrl };
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[DID:WEB] Remote HTTPS resolution failed for ${did}: ${err.message}. Resolving locally.`);
+  }
+
+  // Fallback: Check if we have a locally created and registered did:web in the ssi_dids table
+  const rows = db.listDIDs() as any[];
+  const record = rows.find((r) => r.did === did);
+  if (record) {
+    try {
+      const doc = JSON.parse(record.document) as DIDDocument;
+      resolveCache.set(did, {
+        didDocument: doc,
+        didJsonUrl,
+        expiresAt: now + CACHE_TTL_MS
+      });
+      return { didDocument: doc, didJsonUrl };
+    } catch {
+      // JSON corrupt
+    }
+  }
+
+  // Default Mock Document Fallback (retains standard keys structure)
+  const mockDoc: DIDDocument = {
     "@context": [
       "https://www.w3.org/ns/did/v1",
     ],
@@ -148,5 +217,11 @@ export function resolveDIDWeb(did: string): {
     assertionMethod: [],
   };
 
-  return { didDocument: doc, didJsonUrl };
+  resolveCache.set(did, {
+    didDocument: mockDoc,
+    didJsonUrl,
+    expiresAt: now + CACHE_TTL_MS
+  });
+
+  return { didDocument: mockDoc, didJsonUrl };
 }

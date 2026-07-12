@@ -117,22 +117,22 @@ describe("DID:web Module", () => {
     expect(result.didJsonUrl).toBe("https://example.com/issuer/abc/did.json");
   });
 
-  it("should resolve did:web to DID document URL", () => {
-    const { didDocument, didJsonUrl } = webModule.resolveDIDWeb("did:web:example.com");
+  it("should resolve did:web to DID document URL", async () => {
+    const { didDocument, didJsonUrl } = await webModule.resolveDIDWeb("did:web:example.com");
 
     expect(didJsonUrl).toBe("https://example.com/.well-known/did.json");
     expect(didDocument).not.toBeNull();
     expect(didDocument!.id).toBe("did:web:example.com");
   });
 
-  it("should return null for invalid did:web", () => {
-    const result = webModule.resolveDIDWeb("invalid");
+  it("should return null for invalid did:web", async () => {
+    const result = await webModule.resolveDIDWeb("invalid");
     expect(result.didDocument).toBeNull();
     expect(result.didJsonUrl).toBeNull();
   });
 
-  it("should resolve did:web with path to correct URL", () => {
-    const { didJsonUrl } = webModule.resolveDIDWeb("did:web:example.com:issuer:abc");
+  it("should resolve did:web with path to correct URL", async () => {
+    const { didJsonUrl } = await webModule.resolveDIDWeb("did:web:example.com:issuer:abc");
     expect(didJsonUrl).toBe("https://example.com/issuer/abc/did.json");
   });
 });
@@ -176,20 +176,20 @@ describe("DID Registry", () => {
   it("should resolve a did:key to its DID document", async () => {
     // Use a dynamically generated DID instead of a hardcoded one
     const generated = await didRegistry.createDIDKey();
-    const keyDoc = didRegistry.resolveDID(generated.did);
+    const keyDoc = await didRegistry.resolveDID(generated.did);
     expect(keyDoc).not.toBeNull();
     expect(keyDoc!.id).toBe(generated.did);
     expect(keyDoc!.verificationMethod).toHaveLength(1);
   });
 
-  it("should resolve a did:web identifier", () => {
-    const webDoc = didRegistry.resolveDID("did:web:orbis.id");
+  it("should resolve a did:web identifier", async () => {
+    const webDoc = await didRegistry.resolveDID("did:web:orbis.id");
     expect(webDoc).not.toBeNull();
     expect(webDoc!.id).toBe("did:web:orbis.id");
   });
 
-  it("should return null for invalid DID", () => {
-    expect(didRegistry.resolveDID("invalid")).toBeNull();
+  it("should return null for invalid DID", async () => {
+    expect(await didRegistry.resolveDID("invalid")).toBeNull();
   });
 
   it("should revoke a DID", async () => {

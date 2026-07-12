@@ -107,6 +107,29 @@ export interface ApiKeyInfo {
   last_used_at: string | null;
 }
 
+export interface AuditLogEntry {
+  id: string;
+  actor_type: string;
+  actor_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  result: "success" | "failure";
+  message: string | null;
+  ip_address: string | null;
+  timestamp: string;
+}
+
+export interface StatusListRecord {
+  id: string;
+  name: string;
+  issuer_did: string;
+  status_purpose: "revocation" | "suspension";
+  encoded_list: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─── API surface ─────────────────────────────────────────────────────────────
 
 export const api = {
@@ -196,6 +219,17 @@ export const api = {
       ),
   },
 
+  status: {
+    create: (body: { name: string; issuerDid: string; statusPurpose?: "revocation" | "suspension"; numBits?: number }) =>
+      post<{ success: boolean; statusList: StatusListRecord }>("/api/status/create", body),
+    get: (listId: string) =>
+      get<{ success: boolean; statusList: StatusListRecord }>(`/api/status/list/${encodeURIComponent(listId)}`),
+    update: (body: { listId: string; index: number; status: boolean }) =>
+      post<{ success: boolean; statusList: StatusListRecord }>("/api/status/update", body),
+    check: (listId: string, index: number) =>
+      get<{ success: boolean; listId: string; index: number; status: boolean }>(`/api/status/check/${encodeURIComponent(listId)}/${index}`),
+  },
+
   gateway: {
     register: (body: { name: string; email: string }) =>
       post<{
@@ -224,5 +258,12 @@ export const api = {
       }>("/api/gateway/stats", {
         headers: { Authorization: `Bearer ${apiKey}` },
       }),
+    listAuditLogs: (apiKey?: string) => {
+      // Intelligently fallback to localStorage saved dev keys if none passed
+      const key = apiKey || localStorage.getItem("orb_dev_key") || "orb_admin_stub";
+      return request<{ success: boolean; count: number; total: number; logs: AuditLogEntry[] }>("/api/gateway/audit", {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+    }
   },
 };
