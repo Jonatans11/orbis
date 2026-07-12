@@ -8,7 +8,7 @@
  * NOTE: team-db CLI requires single-line SQL statements (no newlines).
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 const TEAM_DB = "team-db";
 
@@ -20,7 +20,7 @@ function query(sql: string): any[] {
   // Normalize whitespace: collapse newlines and multiple spaces
   const normalized = sql.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
   try {
-    const output = execSync(`${TEAM_DB} ${JSON.stringify(normalized)}`, {
+    const output = execFileSync(TEAM_DB, [normalized], {
       encoding: "utf-8",
       timeout: 10_000,
     });
@@ -39,10 +39,10 @@ function query(sql: string): any[] {
  */
 export function initDatabase(): void {
   // DID metadata table
-  query("CREATE TABLE IF NOT EXISTS ssi_dids (id TEXT PRIMARY KEY, did TEXT NOT NULL UNIQUE, method TEXT NOT NULL CHECK(method IN ('key', 'web')), public_key_multibase TEXT NOT NULL, verification_method_id TEXT NOT NULL, document TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'revoked', 'deactivated')), created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
+  query("CREATE TABLE IF NOT EXISTS ssi_dids (id TEXT PRIMARY KEY, did TEXT NOT NULL UNIQUE, method TEXT NOT NULL CHECK(method IN ('key', 'web')), public_key_multibase TEXT NOT NULL, verification_method_id TEXT NOT NULL, document TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'revoked', 'deactivated')), owner_user_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
 
   // Verifiable Credential metadata table
-  query("CREATE TABLE IF NOT EXISTS ssi_credentials (id TEXT PRIMARY KEY, credential_id TEXT NOT NULL UNIQUE, issuer_did TEXT NOT NULL, subject_did TEXT NOT NULL, type TEXT NOT NULL, schema_url TEXT, issuance_date TEXT NOT NULL, expiration_date TEXT, status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'revoked', 'expired')), proof_type TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
+  query("CREATE TABLE IF NOT EXISTS ssi_credentials (id TEXT PRIMARY KEY, credential_id TEXT NOT NULL UNIQUE, issuer_did TEXT NOT NULL, subject_did TEXT NOT NULL, type TEXT NOT NULL, schema_url TEXT, issuance_date TEXT NOT NULL, expiration_date TEXT, status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'revoked', 'expired')), proof_type TEXT NOT NULL, owner_user_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
 
   // Trust registry table
   query("CREATE TABLE IF NOT EXISTS ssi_trust_registry (id TEXT PRIMARY KEY, did TEXT NOT NULL UNIQUE, name TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'issuer' CHECK(category IN ('issuer', 'verifier', 'both')), authorized_credential_types TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'suspended', 'revoked')), added_by TEXT, added_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
@@ -81,6 +81,19 @@ export function initDatabase(): void {
   query("CREATE TABLE IF NOT EXISTS didcomm_push_registrations (id TEXT PRIMARY KEY, did TEXT NOT NULL, push_token TEXT NOT NULL, platform TEXT NOT NULL CHECK(platform IN ('ios', 'android', 'web')), device_id TEXT NOT NULL UNIQUE, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
 }
 
+/**
+ * Safe migration: add owner_user_id column to existing tables.
+ * Catches errors silently if column already exists (Turso throws Parse error).
+ */
+export function migrateOwnerColumns(): void {
+  try {
+    query("ALTER TABLE ssi_dids ADD COLUMN owner_user_id TEXT");
+  } catch (_) { /* column likely exists */ }
+  try {
+    query("ALTER TABLE ssi_credentials ADD COLUMN owner_user_id TEXT");
+  } catch (_) { /* column likely exists */ }
+}
+
 // ─── DID Metadata ────────────────────────────────────────────────────────────
 
 export interface DIDRecord {
@@ -91,12 +104,13 @@ export interface DIDRecord {
   verification_method_id: string;
   document: string;
   status: "active" | "revoked" | "deactivated";
+  owner_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export function insertDID(record: Omit<DIDRecord, "created_at" | "updated_at">): void {
-  query(`INSERT INTO ssi_dids (id, did, method, public_key_multibase, verification_method_id, document, status) VALUES (${quote(record.id)}, ${quote(record.did)}, ${quote(record.method)}, ${quote(record.public_key_multibase)}, ${quote(record.verification_method_id)}, ${quote(record.document)}, ${quote(record.status)})`);
+  query(`INSERT INTO ssi_dids (id, did, method, public_key_multibase, verification_method_id, document, status, owner_user_id) VALUES (${quote(record.id)}, ${quote(record.did)}, ${quote(record.method)}, ${quote(record.public_key_multibase)}, ${quote(record.verification_method_id)}, ${quote(record.document)}, ${quote(record.status)}, ${quote(record.owner_user_id)})`);
 }
 
 export function getDIDByMethod(method: string, did: string): DIDRecord | null {
@@ -111,11 +125,14 @@ export function getDIDById(id: string): DIDRecord | null {
   return rows[0] as DIDRecord;
 }
 
-export function listDIDs(method?: string): DIDRecord[] {
-  if (method) {
-    return query(`SELECT * FROM ssi_dids WHERE method = ${quote(method)} ORDER BY created_at DESC`) as DIDRecord[];
-  }
-  return query("SELECT * FROM ssi_dids ORDER BY created_at DESC") as DIDRecord[];
+export function listDIDs(method?: string, ownerUserId?: string): DIDRecord[] {
+  let sql = "SELECT * FROM ssi_dids";
+  const clauses: string[] = [];
+  if (method) clauses.push(`method = ${quote(method)}`);
+  if (ownerUserId) clauses.push(`owner_user_id = ${quote(ownerUserId)}`);
+  if (clauses.length > 0) sql += " WHERE " + clauses.join(" AND ");
+  sql += " ORDER BY created_at DESC";
+  return query(sql) as DIDRecord[];
 }
 
 export function updateDIDStatus(id: string, status: "active" | "revoked" | "deactivated"): void {
@@ -135,11 +152,12 @@ export interface CredentialRecord {
   expiration_date: string | null;
   status: "active" | "revoked" | "expired";
   proof_type: string;
+  owner_user_id: string | null;
   created_at: string;
 }
 
 export function insertCredential(record: Omit<CredentialRecord, "created_at">): void {
-  query(`INSERT INTO ssi_credentials (id, credential_id, issuer_did, subject_did, type, schema_url, issuance_date, expiration_date, status, proof_type) VALUES (${quote(record.id)}, ${quote(record.credential_id)}, ${quote(record.issuer_did)}, ${quote(record.subject_did)}, ${quote(record.type)}, ${quote(record.schema_url || "")}, ${quote(record.issuance_date)}, ${quote(record.expiration_date || "")}, ${quote(record.status)}, ${quote(record.proof_type)})`);
+  query(`INSERT INTO ssi_credentials (id, credential_id, issuer_did, subject_did, type, schema_url, issuance_date, expiration_date, status, proof_type, owner_user_id) VALUES (${quote(record.id)}, ${quote(record.credential_id)}, ${quote(record.issuer_did)}, ${quote(record.subject_did)}, ${quote(record.type)}, ${quote(record.schema_url || "")}, ${quote(record.issuance_date)}, ${quote(record.expiration_date || "")}, ${quote(record.status)}, ${quote(record.proof_type)}, ${quote(record.owner_user_id)})`);
 }
 
 export function getCredentialByCredentialId(credentialId: string): CredentialRecord | null {
@@ -148,11 +166,14 @@ export function getCredentialByCredentialId(credentialId: string): CredentialRec
   return rows[0] as CredentialRecord;
 }
 
-export function listCredentials(issuerDid?: string): CredentialRecord[] {
-  if (issuerDid) {
-    return query(`SELECT * FROM ssi_credentials WHERE issuer_did = ${quote(issuerDid)} ORDER BY created_at DESC`) as CredentialRecord[];
-  }
-  return query("SELECT * FROM ssi_credentials ORDER BY created_at DESC") as CredentialRecord[];
+export function listCredentials(issuerDid?: string, ownerUserId?: string): CredentialRecord[] {
+  let sql = "SELECT * FROM ssi_credentials";
+  const clauses: string[] = [];
+  if (issuerDid) clauses.push(`issuer_did = ${quote(issuerDid)}`);
+  if (ownerUserId) clauses.push(`owner_user_id = ${quote(ownerUserId)}`);
+  if (clauses.length > 0) sql += " WHERE " + clauses.join(" AND ");
+  sql += " ORDER BY created_at DESC";
+  return query(sql) as CredentialRecord[];
 }
 
 export function updateCredentialStatus(id: string, status: "active" | "revoked" | "expired"): void {

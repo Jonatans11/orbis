@@ -64,7 +64,7 @@ import cors from "cors";
 import { randomBytes, createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 import { join, extname, resolve as pathResolve } from "node:path";
-import { initDatabase, listCredentials, getVerificationsForCredential } from "./db/metadata.js";
+import { initDatabase, listDIDs, listCredentials, getVerificationsForCredential } from "./db/metadata.js";
 import * as didRegistry from "./did/index.js";
 import { issueCredential } from "./vc/issue.js";
 import { verifyCredential } from "./vc/verify.js";
@@ -170,11 +170,13 @@ app.get("/api/openapi.json", (_req: Request, res: Response) => {
 
 /**
  * POST /api/did/create
- * Create a new DID (did:key or did:web).
+ * Create a new DID (did:key or did:web). Requires JWT auth. Owner stamped from authenticated user.
  * Body: { method: "key" | "web", domain?: string, path?: string }
  */
-app.post("/api/did/create", async (req: Request, res: Response) => {
+app.post("/api/did/create", requireJwt, async (req: Request, res: Response) => {
   try {
+    const userId = req.user?.sub;
+    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
     const { method, domain, path } = req.body;
 
     if (!method || !["key", "web"].includes(method)) {
@@ -192,6 +194,13 @@ app.post("/api/did/create", async (req: Request, res: Response) => {
       }
       result = await didRegistry.createDIDWeb({ domain, path });
     }
+
+    // Stamp owner on the DID record
+    const quote = (s: string) => `'${s.replace(/'/g, "''")}'`;
+    execSync(
+      `team-db ${JSON.stringify(`UPDATE ssi_dids SET owner_user_id = ${quote(userId)} WHERE did = ${quote(result.did)}`)}`,
+      { encoding: "utf-8", timeout: 10_000 }
+    );
 
     res.status(201).json({
       success: true,
@@ -252,25 +261,35 @@ app.get("/api/did/resolve/:did", (req: Request, res: Response) => {
 
 /**
  * GET /api/did/list
- * List all DIDs, optionally filtered by method.
+ * List DIDs scoped to the authenticated user via ssi_users.did lookup.
+ * Admins see all. Anonymous callers get 401 via requireJwt.
  */
-app.get("/api/did/list", (req: Request, res: Response) => {
+app.get("/api/did/list", requireJwt, (req: Request, res: Response) => {
   try {
+    const userId = req.user?.sub;
+    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
     const method = req.query.method as string | undefined;
-    const methods = method ? [method as didRegistry.DIDMethod] : undefined;
-    const records = methods ? didRegistry.listDIDs(methods[0]) : didRegistry.listDIDs();
+    const isAdmin = req.user?.admin === true;
 
-    res.json({
-      success: true,
-      count: records.length,
-      dids: records.map((r) => ({
-        id: r.id,
-        did: r.did,
-        method: r.method,
-        status: r.status,
-        created_at: r.created_at,
-      })),
-    });
+    if (isAdmin) {
+      const items = didRegistry.listDIDs(method as didRegistry.DIDMethod | undefined);
+      res.json({ success: true, count: items.length, dids: items.map(r => ({ id: r.id, did: r.did, method: r.method, status: r.status, created_at: r.created_at })) });
+      return;
+    }
+
+    // Non-admin: look up the user's linked DID, return only that DID record
+    const userRows = execSync(`team-db ${JSON.stringify(`SELECT did FROM ssi_users WHERE id = '${userId}'`)}`, { encoding: "utf-8", timeout: 10_000 });
+    const userRecords = JSON.parse(userRows.trim());
+    const userDID = userRecords.length > 0 ? userRecords[0].did : null;
+
+    if (!userDID) {
+      res.json({ success: true, count: 0, dids: [] });
+      return;
+    }
+
+    const items = didRegistry.listDIDs(method as didRegistry.DIDMethod | undefined);
+    const owned = items.filter(r => r.did === userDID);
+    res.json({ success: true, count: owned.length, dids: owned.map(r => ({ id: r.id, did: r.did, method: r.method, status: r.status, created_at: r.created_at })) });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
@@ -391,27 +410,36 @@ app.post("/api/vc/verify", async (req: Request, res: Response) => {
 
 /**
  * GET /api/vc/credentials
- * List issued credentials, optionally filtered by issuer.
+ * List credentials scoped to the authenticated user via ssi_users.did lookup.
+ * Non-admins see only credentials where subject_did or issuer_did matches their linked DID.
+ * Admins see all. Anonymous callers get 401 via requireJwt.
  */
-app.get("/api/vc/credentials", (req: Request, res: Response) => {
+app.get("/api/vc/credentials", requireJwt, (req: Request, res: Response) => {
   try {
+    const userId = req.user?.sub;
+    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
     const issuer = req.query.issuer as string | undefined;
-    const records = issuer
-      ? listCredentials(issuer)
-      : listCredentials();
+    const isAdmin = req.user?.admin === true;
 
-    res.json({
-      success: true,
-      count: records.length,
-      credentials: records.map((r) => ({
-        credential_id: r.credential_id,
-        issuer_did: r.issuer_did,
-        subject_did: r.subject_did,
-        type: r.type,
-        status: r.status,
-        issuance_date: r.issuance_date,
-      })),
-    });
+    const allRecords = listCredentials(issuer);
+
+    if (isAdmin) {
+      res.json({ success: true, count: allRecords.length, credentials: allRecords.map(r => ({ credential_id: r.credential_id, issuer_did: r.issuer_did, subject_did: r.subject_did, type: r.type, status: r.status, issuance_date: r.issuance_date })) });
+      return;
+    }
+
+    // Non-admin: look up the user's linked DID, filter to their credentials
+    const userRows = execSync(`team-db ${JSON.stringify(`SELECT did FROM ssi_users WHERE id = '${userId}'`)}`, { encoding: "utf-8", timeout: 10_000 });
+    const userRecords = JSON.parse(userRows.trim());
+    const userDID = userRecords.length > 0 ? userRecords[0].did : null;
+
+    if (!userDID) {
+      res.json({ success: true, count: 0, credentials: [] });
+      return;
+    }
+
+    const owned = allRecords.filter(r => r.subject_did === userDID || r.issuer_did === userDID);
+    res.json({ success: true, count: owned.length, credentials: owned.map(r => ({ credential_id: r.credential_id, issuer_did: r.issuer_did, subject_did: r.subject_did, type: r.type, status: r.status, issuance_date: r.issuance_date })) });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }

@@ -12,7 +12,7 @@
  * - a timestamp
  */
 
-import { execSync, exec } from "node:child_process";
+import { execFileSync, exec } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
 const TEAM_DB = "team-db";
@@ -20,7 +20,7 @@ const TEAM_DB = "team-db";
 function query(sql: string): any[] {
   const normalized = sql.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
   try {
-    const output = execSync(`${TEAM_DB} ${JSON.stringify(normalized)}`, {
+    const output = execFileSync(TEAM_DB, [normalized], {
       encoding: "utf-8",
       timeout: 10_000,
     });
@@ -80,7 +80,21 @@ export type ActionType =
   | "encryption.key_rotation"
   | "admin.wallet.wipe"
   | "admin.wallet.grants.view"
-  | "vault.consent.update";
+  | "vault.consent.update"
+  | "admin.users.list"
+  | "admin.user.suspend"
+  | "admin.user.activate"
+  | "admin.audit.view"
+  | "admin.stats.view"
+  | "admin.credentials.view"
+  | "admin.dids.view"
+  | "admin.apikeys.create"
+  | "admin.apikeys.view"
+  | "admin.apikeys.revoke"
+  | "admin.apikeys.update"
+  | "admin.integrations.docs"
+  | "admin.integrations.webhook"
+  | "admin.health.view";
 
 export type EntityType =
   | "did"
