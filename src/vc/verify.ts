@@ -2,7 +2,8 @@
  * Verifiable Credential verification module.
  * Verifies W3C Verifiable Credentials with Ed25519 Signature 2020 proofs.
  * 
- * Also checks trust registry for issuer authorization.
+ * Also checks trust registry for issuer authorization and resolves
+ * W3C StatusList2021 revocation and suspension lists.
  */
 
 import * as ed from "@noble/ed25519";
@@ -11,6 +12,7 @@ import { base58btc } from "multiformats/bases/base58";
 import * as didRegistry from "../did/index.js";
 import * as trustRegistry from "../trust/registry.js";
 import * as db from "../db/metadata.js";
+import { checkStatusBit } from "./statuslist.js";
 import type { VerifiableCredentialWithProof, Proof } from "./issue.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -41,7 +43,7 @@ export interface VerifyOptions {
 /**
  * Verify a Verifiable Credential.
  * Runs multiple checks: proof signature, issuer DID resolution, 
- * expiration, and optionally trust registry authorization.
+ * expiration, trust registry authorization, and status list revocation.
  */
 export async function verifyCredential(
   credential: VerifiableCredentialWithProof,
@@ -83,6 +85,9 @@ export async function verifyCredential(
     const typeCheck = checkRequiredTypes(credential, requiredCredentialTypes);
     checks.push(typeCheck);
   }
+
+  // 7. Revocation StatusList2021 check (automatic if credentialStatus is present)
+  checks.push(checkRevocationStatusList(credential));
 
   const verified = checks.every((c) => c.passed);
 
@@ -156,7 +161,7 @@ function checkExpiration(credential: VerifiableCredentialWithProof): Verificatio
 }
 
 async function resolveIssuerDID(credential: VerifiableCredentialWithProof): Promise<VerificationCheck> {
-  const didDoc = didRegistry.resolveDID(credential.issuer);
+  const didDoc = await didRegistry.resolveDID(credential.issuer);
 
   if (!didDoc) {
     return { name: "issuer-did", passed: false, message: `Unable to resolve issuer DID: ${credential.issuer}` };
@@ -174,7 +179,7 @@ async function verifyProof(credential: VerifiableCredentialWithProof): Promise<V
     const { proof } = credential;
 
     // Extract the public key from the issuer's DID document
-    const didDoc = didRegistry.resolveDID(credential.issuer);
+    const didDoc = await didRegistry.resolveDID(credential.issuer);
     if (!didDoc || !didDoc.verificationMethod || didDoc.verificationMethod.length === 0) {
       return { name: "proof-signature", passed: false, message: "Cannot verify proof: no verification method found" };
     }
@@ -185,10 +190,10 @@ async function verifyProof(credential: VerifiableCredentialWithProof): Promise<V
       return { name: "proof-signature", passed: false, message: `Verification method ${proof.verificationMethod} not found in DID document` };
     }
 
-    // Decode the public key
-    const publicKey = didRegistry.extractPublicKey(credential.issuer);
+    // Decode the public key directly from the matching verification method
+    const publicKey = didRegistry.getPublicKeyFromVerificationMethod(vm);
     if (!publicKey || publicKey.length !== 32) {
-      return { name: "proof-signature", passed: false, message: "Could not extract valid public key from issuer DID" };
+      return { name: "proof-signature", passed: false, message: `Could not extract valid public key from verification method: ${proof.verificationMethod}` };
     }
 
     // Decode the proof value (already has 'z' multibase prefix from base58btc.encode)
@@ -256,12 +261,7 @@ function checkTrustRegistryEntry(
 
   // Check if the issuer is authorized for the credential types
   if (requiredTypes && requiredTypes.length > 0) {
-    let authorizedTypes: string[] = [];
-    try {
-      authorizedTypes = JSON.parse(entry.authorized_credential_types || "[]") as string[];
-    } catch {
-      authorizedTypes = [];
-    }
+    const authorizedTypes: string[] = entry.authorizedCredentialTypes || [];
     const hasAllTypes = requiredTypes.every((t) => authorizedTypes.includes(t));
     if (!hasAllTypes) {
       return { name: "trust-registry", passed: false, message: `Issuer not authorized for required credential types: ${requiredTypes.join(", ")}` };
@@ -280,6 +280,43 @@ function checkRequiredTypes(
     return { name: "required-types", passed: true, message: `Credential includes all required types: ${requiredTypes.join(", ")}` };
   }
   return { name: "required-types", passed: false, message: `Credential is missing required types. Has: ${credential.type.join(", ")}. Needs: ${requiredTypes.join(", ")}` };
+}
+
+function checkRevocationStatusList(credential: VerifiableCredentialWithProof): VerificationCheck {
+  const status = credential.credentialStatus as any;
+  if (!status) {
+    return { name: "revocation-statuslist", passed: true, message: "No credentialStatus field present (not tracked via StatusList)" };
+  }
+
+  if (status.type !== "StatusList2021Entry") {
+    return { name: "revocation-statuslist", passed: true, message: `Status tracked via unsupported type: ${status.type}` };
+  }
+
+  try {
+    const listCredentialUrl = status.statusListCredential;
+    const index = parseInt(status.statusListIndex, 10);
+
+    if (isNaN(index)) {
+      return { name: "revocation-statuslist", passed: false, message: `Invalid statusListIndex: ${status.statusListIndex}` };
+    }
+
+    // Extract listId from statusListCredential URL (the last segment of the path)
+    const urlParts = listCredentialUrl.split("/");
+    const listId = urlParts[urlParts.length - 1];
+
+    if (!listId) {
+      return { name: "revocation-statuslist", passed: false, message: `Could not parse listId from statusListCredential URL: ${listCredentialUrl}` };
+    }
+
+    const isRevoked = checkStatusBit(listId, index);
+    if (isRevoked) {
+      return { name: "revocation-statuslist", passed: false, message: `Credential has been revoked (StatusList index ${index} is 1)` };
+    }
+
+    return { name: "revocation-statuslist", passed: true, message: `Credential status is active (StatusList index ${index} is 0)` };
+  } catch (err: any) {
+    return { name: "revocation-statuslist", passed: false, message: `Failed to verify status list revocation: ${err.message}` };
+  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

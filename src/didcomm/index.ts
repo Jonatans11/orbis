@@ -6,6 +6,7 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
+import * as ed from "@noble/ed25519";
 import * as types from "./types.js";
 import * as envelope from "./envelope.js";
 import * as oob from "./outofband.js";

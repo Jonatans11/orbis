@@ -3,11 +3,13 @@
  * Logs each API call to team-db.
  */
 
-import { execSync } from "node:child_process";
+import { execSync, exec } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
+const TEAM_DB = "team-db";
+
 function db(query: string): any[] {
-  const out = execSync(`team-db "${query.replace(/"/g, '\\"')}"`, {
+  const out = execSync(`${TEAM_DB} "${query.replace(/"/g, '\\"')}"`, {
     encoding: "utf-8",
     timeout: 10_000,
   });
@@ -29,7 +31,8 @@ export interface UsageLog {
 }
 
 /**
- * Log a single API usage event.
+ * Log a single API usage event asynchronously in the background.
+ * Prevents metrics logging from slowing down response dispatching.
  */
 export function logUsage(
   apiKeyId: string,
@@ -42,9 +45,13 @@ export function logUsage(
   const now = new Date().toISOString();
   const escapedPath = path.replace(/'/g, "''");
 
-  db(
-    `INSERT INTO ssi_api_usage (id, api_key_id, method, path, status_code, response_time_ms, timestamp) VALUES ('${id}', '${apiKeyId}', '${method}', '${escapedPath}', ${statusCode}, ${responseTimeMs}, '${now}')`
-  );
+  const sql = `INSERT INTO usage_logs (id, api_key_id, method, path, status_code, response_time_ms, timestamp) VALUES ('${id}', '${apiKeyId}', '${method}', '${escapedPath}', ${statusCode}, ${responseTimeMs}, '${now}')`;
+
+  exec(`${TEAM_DB} "${sql.replace(/"/g, '\\"')}"`, { timeout: 15000 }, (err) => {
+    if (err) {
+      console.error("[GATEWAY:USAGE] Background usage logging failed:", err.message);
+    }
+  });
 }
 
 /**
@@ -67,7 +74,7 @@ export function getUsageStats(
   }
 
   const rows = db(
-    `SELECT method, path, status_code, response_time_ms FROM ssi_api_usage ${whereClause}`
+    `SELECT method, path, status_code, response_time_ms FROM usage_logs ${whereClause}`
   ) as any[];
 
   if (rows.length === 0) {
@@ -123,11 +130,11 @@ export function getAggregateStats(since?: string): {
   }
 
   const countRows = db(
-    `SELECT COUNT(*) as cnt FROM ssi_api_usage ${whereClause}`
+    `SELECT COUNT(*) as cnt FROM usage_logs ${whereClause}`
   ) as any[];
 
   const activeRows = db(
-    `SELECT COUNT(DISTINCT api_key_id) as cnt FROM ssi_api_usage ${whereClause}`
+    `SELECT COUNT(DISTINCT api_key_id) as cnt FROM usage_logs ${whereClause}`
   ) as any[];
 
   return {

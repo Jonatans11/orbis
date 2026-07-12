@@ -3,7 +3,7 @@
  * Supports credential.issued and credential.verified events.
  */
 
-import { execSync } from "node:child_process";
+import { execSync, exec } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -15,7 +15,7 @@ export const VALID_EVENTS: WebhookEvent[] = ["credential.issued", "credential.ve
 export interface WebhookRecord {
   id: string;
   url: string;
-  events: string;
+  events: string; // comma-separated
   api_key_id: string;
   created_at: string;
   active: number;
@@ -33,12 +33,25 @@ export interface WebhookDelivery {
 
 // ─── DB helpers ─────────────────────────────────────────────────────────────
 
+const TEAM_DB = "team-db";
+
 function db(query: string): any[] {
-  const out = execSync(`team-db "${query.replace(/"/g, '\\"')}"`, {
+  const out = execSync(`${TEAM_DB} "${query.replace(/"/g, '\\"')}"`, {
     encoding: "utf-8",
     timeout: 10_000,
   });
   return JSON.parse(out.trim() || "[]") as any[];
+}
+
+/**
+ * Execute a SQL write statement asynchronously in the background.
+ */
+function dbAsync(query: string): void {
+  exec(`${TEAM_DB} "${query.replace(/"/g, '\\"')}"`, { timeout: 15000 }, (err) => {
+    if (err) {
+      console.error("[GATEWAY:WEBHOOK] Background DB write failed:", err.message);
+    }
+  });
 }
 
 function generateId(): string {
@@ -72,7 +85,7 @@ export function registerWebhook(
   const eventsStr = events.join(",");
 
   db(
-    `INSERT INTO ssi_webhooks (id, url, events, api_key_id, created_at, active) VALUES ('${id}', '${url.replace(/'/g, "''")}', '${eventsStr}', '${apiKeyId}', '${now}', 1)`
+    `INSERT INTO webhooks (id, url, events, api_key_id, created_at, active) VALUES ('${id}', '${url.replace(/'/g, "''")}', '${eventsStr}', '${apiKeyId}', '${now}', 1)`
   );
 
   return { id, url, events: eventsStr, api_key_id: apiKeyId, created_at: now, active: 1 };
@@ -82,7 +95,7 @@ export function registerWebhook(
  * List webhooks for an API key.
  */
 export function listWebhooks(apiKeyId?: string): WebhookRecord[] {
-  let query = "SELECT id, url, events, api_key_id, created_at, active FROM ssi_webhooks";
+  let query = "SELECT id, url, events, api_key_id, created_at, active FROM webhooks";
   if (apiKeyId) {
     query += ` WHERE api_key_id = '${apiKeyId}'`;
   }
@@ -95,7 +108,7 @@ export function listWebhooks(apiKeyId?: string): WebhookRecord[] {
  * Delete a webhook by ID (scoped to API key).
  */
 export function deleteWebhook(id: string, apiKeyId?: string): boolean {
-  let query = `DELETE FROM ssi_webhooks WHERE id = '${id}'`;
+  let query = `DELETE FROM webhooks WHERE id = '${id}'`;
   if (apiKeyId) {
     query += ` AND api_key_id = '${apiKeyId}'`;
   }
@@ -114,7 +127,7 @@ export async function deliverWebhookEvent(
   const results: { webhookId: string; url: string; success: boolean; statusCode: number | null }[] = [];
 
   const webhooks = db(
-    `SELECT id, url, events FROM ssi_webhooks WHERE active = 1 AND events LIKE '%${eventType}%'`
+    `SELECT id, url, events FROM webhooks WHERE active = 1 AND events LIKE '%${eventType}%'`
   ) as any[];
 
   if (webhooks.length === 0) {
@@ -146,14 +159,14 @@ export async function deliverWebhookEvent(
       const statusCode = response.status;
       const success = statusCode >= 200 && statusCode < 300;
 
-      db(
-        `INSERT INTO ssi_webhook_deliveries (id, webhook_id, event_type, payload, response_status, delivered_at, success) VALUES ('${deliveryId}', '${wh.id}', '${eventType}', '${body.replace(/'/g, "''")}', ${statusCode}, '${now}', ${success ? 1 : 0})`
+      dbAsync(
+        `INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, response_status, delivered_at, success) VALUES ('${deliveryId}', '${wh.id}', '${eventType}', '${body.replace(/'/g, "''")}', ${statusCode}, '${now}', ${success ? 1 : 0})`
       );
 
       results.push({ webhookId: wh.id, url: wh.url, success, statusCode });
     } catch (err: any) {
-      db(
-        `INSERT INTO ssi_webhook_deliveries (id, webhook_id, event_type, payload, response_status, delivered_at, success) VALUES ('${deliveryId}', '${wh.id}', '${eventType}', '${body.replace(/'/g, "''")}', NULL, '${now}', 0)`
+      dbAsync(
+        `INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, response_status, delivered_at, success) VALUES ('${deliveryId}', '${wh.id}', '${eventType}', '${body.replace(/'/g, "''")}', NULL, '${now}', 0)`
       );
 
       results.push({ webhookId: wh.id, url: wh.url, success: false, statusCode: null });
@@ -171,6 +184,61 @@ export function getWebhookDeliveries(
   limit: number = 20
 ): WebhookDelivery[] {
   return db(
-    `SELECT id, webhook_id, event_type, payload, response_status, delivered_at, success FROM ssi_webhook_deliveries WHERE webhook_id = '${webhookId}' ORDER BY delivered_at DESC LIMIT ${limit}`
+    `SELECT id, webhook_id, event_type, payload, response_status, delivered_at, success FROM webhook_deliveries WHERE webhook_id = '${webhookId}' ORDER BY delivered_at DESC LIMIT ${limit}`
   ) as WebhookDelivery[];
+}
+
+/**
+ * Retry a failed webhook delivery by its delivery record ID.
+ */
+export async function retryWebhookDelivery(deliveryId: string): Promise<boolean> {
+  const rows = db(
+    `SELECT * FROM webhook_deliveries WHERE id = '${deliveryId}'`
+  ) as any[];
+
+  if (rows.length === 0) {
+    throw new Error(`Delivery record not found: ${deliveryId}`);
+  }
+
+  const delivery = rows[0];
+  const webhookRows = db(
+    `SELECT * FROM webhooks WHERE id = '${delivery.webhook_id}'`
+  ) as any[];
+
+  if (webhookRows.length === 0) {
+    throw new Error(`Associated webhook not found for delivery: ${delivery.webhook_id}`);
+  }
+
+  const wh = webhookRows[0];
+  const payload = JSON.parse(delivery.payload);
+  const now = new Date().toISOString();
+  const retryId = generateId();
+
+  try {
+    const response = await fetch(wh.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Webhook-Event": delivery.event_type,
+        "X-Webhook-Delivery": retryId,
+        "X-Webhook-Retry": "true"
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    const statusCode = response.status;
+    const success = statusCode >= 200 && statusCode < 300;
+
+    dbAsync(
+      `INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, response_status, delivered_at, success) VALUES ('${retryId}', '${wh.id}', '${delivery.event_type}', '${JSON.stringify(payload).replace(/'/g, "''")}', ${statusCode}, '${now}', ${success ? 1 : 0})`
+    );
+
+    return success;
+  } catch (err) {
+    dbAsync(
+      `INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, response_status, delivered_at, success) VALUES ('${retryId}', '${wh.id}', '${delivery.event_type}', '${JSON.stringify(payload).replace(/'/g, "''")}', NULL, '${now}', 0)`
+    );
+    return false;
+  }
 }

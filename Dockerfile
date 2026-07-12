@@ -1,22 +1,13 @@
 # ─── ORBIS.ID SSI Backend Dockerfile ─────────────────────────────
-# Multi-stage build: build with Bun, run with Bun (distroless-like runtime)
+# Multi-stage build: build with Bun, run with Bun
 
-# Stage 1: Build
-FROM oven/bun:1.3 AS build
+# Stage 1: Install dependencies
+FROM oven/bun:1.3 AS deps
 
 WORKDIR /app
 
-# Copy dependency manifests first (leveraging layer caching)
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --production
-
-# Copy source code
-COPY tsconfig.json ./
-COPY src/ ./src/
-COPY tests/ ./tests/
-
-# Type-check and verify the build compiles
-RUN bun run build || echo "Type check skipped (non-blocking for build stage)"
+COPY package.json package-lock.json ./
+RUN bun install --production
 
 # Stage 2: Production runtime
 FROM oven/bun:1.3 AS runtime
@@ -28,15 +19,14 @@ RUN apt-get update -qq && apt-get install -y -qq curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy production dependencies from build stage
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/src ./src
-COPY --from=build /app/tsconfig.json ./
+COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
+COPY src/ ./src/
 
 # Expose the SSI backend port
 EXPOSE 3001
 
-# Health check — ensures the server responds
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -sf http://localhost:3001/api/health || exit 1
 

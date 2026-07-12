@@ -1,6 +1,6 @@
 /**
  * Token Bucket Rate Limiter for ORBIS.ID API Gateway.
- * Uses in-memory cache with team-db persistence as fallback.
+ * Uses team-db for persistence with dynamic tiered subscription quotas.
  */
 
 import { execSync } from "node:child_process";
@@ -11,14 +11,23 @@ export interface RateLimitConfig {
   refillIntervalMs: number; // how often to refill (ms)
 }
 
-const DEFAULT_CONFIG: RateLimitConfig = {
-  maxTokens: 100,
-  refillRate: 100 / 60, // 100 tokens per minute ≈ 1.67 tokens/sec
-  refillIntervalMs: 1000, // refill every second
+const PLAN_CONFIGS: Record<string, RateLimitConfig> = {
+  free: {
+    maxTokens: 100,
+    refillRate: 100 / 60, // 100 tokens per minute ≈ 1.67 tokens/sec
+    refillIntervalMs: 1000,
+  },
+  developer: {
+    maxTokens: 1000,
+    refillRate: 1000 / 60, // 1000 tokens per minute ≈ 16.67 tokens/sec
+    refillIntervalMs: 1000,
+  },
+  enterprise: {
+    maxTokens: 10000,
+    refillRate: 10000 / 60, // 10000 tokens per minute ≈ 166.67 tokens/sec
+    refillIntervalMs: 1000,
+  }
 };
-
-// In-memory cache for rate limit state to avoid hitting DB on every request
-const bucketCache = new Map<string, { tokens: number; lastRefill: number }>();
 
 function db(query: string): any[] {
   const out = execSync(`team-db "${query.replace(/"/g, '\\"')}"`, {
@@ -29,34 +38,27 @@ function db(query: string): any[] {
 }
 
 /**
+ * Helper to fetch the subscription plan assigned to an API key.
+ */
+function getApiKeyPlan(apiKeyId: string): "free" | "developer" | "enterprise" {
+  const rows = db(`SELECT plan FROM api_keys WHERE id = '${apiKeyId}'`) as any[];
+  if (rows.length === 0) return "free";
+  return (rows[0].plan || "free") as "free" | "developer" | "enterprise";
+}
+
+/**
  * Ensure a rate limit bucket exists for an API key.
  */
-function ensureBucket(apiKeyId: string): void {
+function ensureBucket(apiKeyId: string, maxTokens: number): void {
   const rows = db(
-    `SELECT api_key_id, tokens, last_refill FROM ssi_rate_limits WHERE api_key_id = '${apiKeyId}'`
+    `SELECT api_key_id, tokens, last_refill FROM rate_limits WHERE api_key_id = '${apiKeyId}'`
   ) as any[];
 
   if (rows.length === 0) {
     const now = new Date().toISOString();
     db(
-      `INSERT INTO ssi_rate_limits (api_key_id, tokens, last_refill) VALUES ('${apiKeyId}', ${DEFAULT_CONFIG.maxTokens}, '${now}')`
+      `INSERT INTO rate_limits (api_key_id, tokens, last_refill) VALUES ('${apiKeyId}', ${maxTokens}, '${now}')`
     );
-  }
-}
-
-/**
- * Load bucket state from DB into memory cache.
- */
-function loadBucket(apiKeyId: string): void {
-  const rows = db(
-    `SELECT api_key_id, tokens, last_refill FROM ssi_rate_limits WHERE api_key_id = '${apiKeyId}'`
-  ) as any[];
-
-  if (rows.length > 0) {
-    bucketCache.set(apiKeyId, {
-      tokens: rows[0].tokens,
-      lastRefill: new Date(rows[0].last_refill).getTime(),
-    });
   }
 }
 
@@ -66,7 +68,7 @@ function loadBucket(apiKeyId: string): void {
 function saveBucket(apiKeyId: string, tokens: number, lastRefill: number): void {
   const lastRefillStr = new Date(lastRefill).toISOString();
   db(
-    `UPDATE ssi_rate_limits SET tokens = ${tokens}, last_refill = '${lastRefillStr}' WHERE api_key_id = '${apiKeyId}'`
+    `UPDATE rate_limits SET tokens = ${tokens}, last_refill = '${lastRefillStr}' WHERE api_key_id = '${apiKeyId}'`
   );
 }
 
@@ -78,23 +80,37 @@ export function checkRateLimit(
   apiKeyId: string,
   cost: number = 1
 ): { allowed: boolean; remaining: number; resetMs: number } {
-  ensureBucket(apiKeyId);
+  const plan = getApiKeyPlan(apiKeyId);
+  const config = PLAN_CONFIGS[plan] || PLAN_CONFIGS.free!;
 
-  if (!bucketCache.has(apiKeyId)) {
-    loadBucket(apiKeyId);
+  // Ensure bucket exists in DB
+  ensureBucket(apiKeyId, config.maxTokens);
+
+  // Load from DB every time to ensure perfect multi-process consistency
+  const rows = db(
+    `SELECT api_key_id, tokens, last_refill FROM rate_limits WHERE api_key_id = '${apiKeyId}'`
+  ) as any[];
+
+  if (rows.length === 0) {
+    return {
+      allowed: true,
+      remaining: config.maxTokens,
+      resetMs: 0,
+    };
   }
 
-  const state = bucketCache.get(apiKeyId)!;
+  const tokens = rows[0].tokens;
+  const lastRefill = new Date(rows[0].last_refill).getTime();
   const now = Date.now();
-  const elapsed = now - state.lastRefill;
+  const elapsed = now - lastRefill;
 
-  // Refill tokens based on elapsed time
-  const tokensToAdd = (elapsed / DEFAULT_CONFIG.refillIntervalMs) * DEFAULT_CONFIG.refillRate;
-  const newTokens = Math.min(DEFAULT_CONFIG.maxTokens, state.tokens + tokensToAdd);
+  // Refill tokens
+  const tokensToAdd = (elapsed / config.refillIntervalMs) * config.refillRate;
+  const newTokens = Math.min(config.maxTokens, tokens + tokensToAdd);
 
+  // Determine if request is allowed
   if (newTokens >= cost) {
     const remaining = newTokens - cost;
-    bucketCache.set(apiKeyId, { tokens: remaining, lastRefill: now });
     saveBucket(apiKeyId, remaining, now);
     return {
       allowed: true,
@@ -103,10 +119,11 @@ export function checkRateLimit(
     };
   }
 
+  // Not enough tokens — calculate when bucket will have enough
   const tokensNeeded = cost - newTokens;
-  const resetMs = Math.ceil((tokensNeeded / DEFAULT_CONFIG.refillRate) * 1000);
+  const resetMs = Math.ceil((tokensNeeded / config.refillRate) * 1000);
 
-  bucketCache.set(apiKeyId, { tokens: newTokens, lastRefill: state.lastRefill });
+  saveBucket(apiKeyId, newTokens, now);
 
   return {
     allowed: false,
@@ -121,30 +138,34 @@ export function checkRateLimit(
 export function getRateLimitState(
   apiKeyId: string
 ): { maxTokens: number; remaining: number; resetMs: number } {
-  if (!bucketCache.has(apiKeyId)) {
-    loadBucket(apiKeyId);
+  const plan = getApiKeyPlan(apiKeyId);
+  const config = PLAN_CONFIGS[plan] || PLAN_CONFIGS.free!;
+
+  const rows = db(
+    `SELECT api_key_id, tokens, last_refill FROM rate_limits WHERE api_key_id = '${apiKeyId}'`
+  ) as any[];
+
+  if (rows.length === 0) {
+    return { maxTokens: config.maxTokens, remaining: config.maxTokens, resetMs: 0 };
   }
 
-  const state = bucketCache.get(apiKeyId);
-  if (!state) {
-    return { maxTokens: DEFAULT_CONFIG.maxTokens, remaining: DEFAULT_CONFIG.maxTokens, resetMs: 0 };
-  }
-
+  const tokens = rows[0].tokens;
+  const lastRefill = new Date(rows[0].last_refill).getTime();
   const now = Date.now();
-  const elapsed = now - state.lastRefill;
-  const tokensToAdd = (elapsed / DEFAULT_CONFIG.refillIntervalMs) * DEFAULT_CONFIG.refillRate;
-  const effectiveTokens = Math.min(DEFAULT_CONFIG.maxTokens, state.tokens + tokensToAdd);
+  const elapsed = now - lastRefill;
+  const tokensToAdd = (elapsed / config.refillIntervalMs) * config.refillRate;
+  const effectiveTokens = Math.min(config.maxTokens, tokens + tokensToAdd);
 
   return {
-    maxTokens: DEFAULT_CONFIG.maxTokens,
+    maxTokens: config.maxTokens,
     remaining: Math.floor(effectiveTokens),
     resetMs: 0,
   };
 }
 
 /**
- * Reset all in-memory rate limit state (useful for testing).
+ * Reset all rate limit states is a no-op now that there is no in-memory cache.
  */
 export function resetCache(): void {
-  bucketCache.clear();
+  // No-op
 }

@@ -14,7 +14,6 @@ import bcrypt from "bcryptjs";
 import { execSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
-import { logAudit, getClientIp } from "./audit.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -219,18 +218,6 @@ export async function registerHandler(req: Request, res: Response): Promise<void
 
     const user = await createUser(email, password, displayName);
     const token = generateToken(user);
-
-    // Audit log: user registration
-    logAudit({
-      actorType: "user",
-      actorId: user.id,
-      action: "auth.register",
-      entityType: "user",
-      entityId: user.id,
-      result: "success",
-      message: `User registered: ${user.email}`,
-      ipAddress: getClientIp(req),
-    });
 
     res.status(201).json({
       success: true,

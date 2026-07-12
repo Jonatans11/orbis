@@ -14,21 +14,19 @@ export const VALID_SCOPES = [
   "vc:verify",
   "trust:read",
   "trust:write",
-  "admin:manage",
 ] as const;
 
 export type Scope = (typeof VALID_SCOPES)[number];
-
-export type ApiKeyStatus = "active" | "revoked";
 
 export interface ApiKeyRecord {
   id: string;
   name: string;
   key_hash: string;
   scopes: string;
-  status: ApiKeyStatus;
   member_id: string | null;
+  plan: "free" | "developer" | "enterprise";
   created_at: string;
+  revoked_at: string | null;
   last_used_at: string | null;
 }
 
@@ -53,14 +51,15 @@ function generateId(): string {
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
- * Generate a new API key with the given name and scopes.
+ * Generate a new API key with the given name, scopes, and subscription plan.
  * Returns the raw key (shown once) and the stored record info.
  */
 export function generateApiKey(
   name: string,
   scopes: Scope[],
-  memberId?: string
-): { rawKey: string; id: string; name: string; scopes: string; created_at: string } {
+  memberId?: string,
+  plan: "free" | "developer" | "enterprise" = "free"
+): { rawKey: string; id: string; name: string; scopes: string; plan: string; created_at: string } {
   if (!name || name.trim().length === 0) {
     throw new Error("API key name is required");
   }
@@ -80,10 +79,10 @@ export function generateApiKey(
   const scopesStr = scopes.join(",");
 
   db(
-    `INSERT INTO ssi_api_keys (id, name, key_hash, scopes, status, member_id, created_at) VALUES ('${id}', '${name.replace(/'/g, "''")}', '${keyHash}', '${scopesStr}', 'active', ${memberId ? `'${memberId}'` : "NULL"}, '${now}')`
+    `INSERT INTO api_keys (id, name, key_hash, scopes, member_id, plan, created_at) VALUES ('${id}', '${name.replace(/'/g, "''")}', '${keyHash}', '${scopesStr}', ${memberId ? `'${memberId}'` : "NULL"}, '${plan}', '${now}')`
   );
 
-  return { rawKey, id, name, scopes: scopesStr, created_at: now };
+  return { rawKey, id, name, scopes: scopesStr, plan, created_at: now };
 }
 
 /**
@@ -93,31 +92,37 @@ export function generateApiKey(
 export function findApiKey(rawKey: string): ApiKeyRecord | null {
   const keyHash = hashKey(rawKey);
   const rows = db(
-    `SELECT id, name, key_hash, scopes, status, member_id, created_at, last_used_at FROM ssi_api_keys WHERE key_hash = '${keyHash}'`
+    `SELECT id, name, key_hash, scopes, member_id, plan, created_at, revoked_at, last_used_at FROM api_keys WHERE key_hash = '${keyHash}'`
   ) as any[];
 
   if (rows.length === 0) return null;
-  const row = rows[0];
-  if (row.status === "revoked") return null;
 
-  return {
+  const row = rows[0];
+  const record: ApiKeyRecord = {
     id: row.id,
     name: row.name,
     key_hash: row.key_hash,
     scopes: row.scopes,
-    status: row.status,
     member_id: row.member_id,
+    plan: row.plan || "free",
     created_at: row.created_at,
+    revoked_at: row.revoked_at,
     last_used_at: row.last_used_at,
   };
+
+  // If revoked, return null
+  if (record.revoked_at) return null;
+
+  return record;
 }
 
 /**
  * Revoke an API key by its database ID.
  */
 export function revokeApiKey(id: string): boolean {
+  const now = new Date().toISOString();
   db(
-    `UPDATE ssi_api_keys SET status = 'revoked' WHERE id = '${id}' AND status = 'active'`
+    `UPDATE api_keys SET revoked_at = '${now}' WHERE id = '${id}' AND revoked_at IS NULL`
   );
   return true;
 }
@@ -127,16 +132,17 @@ export function revokeApiKey(id: string): boolean {
  */
 export function listApiKeys(): Omit<ApiKeyRecord, "key_hash">[] {
   const rows = db(
-    "SELECT id, name, scopes, status, member_id, created_at, last_used_at FROM ssi_api_keys ORDER BY created_at DESC"
+    "SELECT id, name, scopes, member_id, plan, created_at, revoked_at, last_used_at FROM api_keys ORDER BY created_at DESC"
   ) as any[];
 
   return rows.map((r: any) => ({
     id: r.id,
     name: r.name,
     scopes: r.scopes,
-    status: r.status,
     member_id: r.member_id,
+    plan: r.plan || "free",
     created_at: r.created_at,
+    revoked_at: r.revoked_at,
     last_used_at: r.last_used_at,
   }));
 }
@@ -146,7 +152,9 @@ export function listApiKeys(): Omit<ApiKeyRecord, "key_hash">[] {
  */
 export function touchApiKey(id: string): void {
   const now = new Date().toISOString();
-  db(`UPDATE ssi_api_keys SET last_used_at = '${now}' WHERE id = '${id}'`);
+  db(
+    `UPDATE api_keys SET last_used_at = '${now}' WHERE id = '${id}'`
+  );
 }
 
 /**
