@@ -197,10 +197,10 @@ app.post("/api/did/create", requireJwt, async (req: Request, res: Response) => {
 
     // Stamp owner on the DID record
     const quote = (s: string) => `'${s.replace(/'/g, "''")}'`;
-    execSync(
-      `team-db ${JSON.stringify(`UPDATE ssi_dids SET owner_user_id = ${quote(userId)} WHERE did = ${quote(result.did)}`)}`,
-      { encoding: "utf-8", timeout: 10_000 }
-    );
+    execFileSync("team-db", [`UPDATE ssi_dids SET owner_user_id = ${quote(userId)} WHERE did = ${quote(result.did)}`], {
+      encoding: "utf-8",
+      timeout: 10_000,
+    });
 
     res.status(201).json({
       success: true,
@@ -277,19 +277,12 @@ app.get("/api/did/list", requireJwt, (req: Request, res: Response) => {
       return;
     }
 
-    // Non-admin: look up the user's linked DID, return only that DID record
-    const userRows = execSync(`team-db ${JSON.stringify(`SELECT did FROM ssi_users WHERE id = '${userId}'`)}`, { encoding: "utf-8", timeout: 10_000 });
-    const userRecords = JSON.parse(userRows.trim());
-    const userDID = userRecords.length > 0 ? userRecords[0].did : null;
+    // Non-admin: filter DIDs by owner_user_id matching the authenticated user
+    const q = (s) => "'" + s.replace(/'/g, "''") + "'";
+    const rows = execFileSync("team-db", [`SELECT * FROM ssi_dids WHERE owner_user_id = ${q(userId)}` + (method ? ` AND method = ${q(method)}` : "") + ` ORDER BY created_at DESC`], { encoding: "utf-8", timeout: 10_000 });
+    const records = JSON.parse(rows.toString().trim());
+    res.json({ success: true, count: records.length, dids: records.map(r => ({ id: r.id, did: r.did, method: r.method, status: r.status, created_at: r.created_at })) });
 
-    if (!userDID) {
-      res.json({ success: true, count: 0, dids: [] });
-      return;
-    }
-
-    const items = didRegistry.listDIDs(method as didRegistry.DIDMethod | undefined);
-    const owned = items.filter(r => r.did === userDID);
-    res.json({ success: true, count: owned.length, dids: owned.map(r => ({ id: r.id, did: r.did, method: r.method, status: r.status, created_at: r.created_at })) });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
