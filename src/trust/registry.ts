@@ -157,6 +157,28 @@ export function isTrustedIssuer(did: string, credentialTypes?: string[]): boolea
   return true;
 }
 
+// ─── eIDAS Interoperability ──────────────────────────────────────────────────
+
+export type EidasServiceType = "QTSP" | "Non-QTSP" | "Unknown";
+export type EidasServiceStatus = "granted" | "withdrawn" | "deprecated";
+
+/**
+ * Verifies if a given DID is registered in the Trust Registry and matches
+ * eIDAS Qualified Trust Service Provider (QTSP) criteria.
+ */
+export function verifyEidasTrust(did: string, serviceType: string = "QTSP"): boolean {
+  const entry = getTrustedIssuer(did);
+  if (!entry) return false;
+  if (entry.status !== "active") return false;
+
+  // QTSPs must be trusted issuers or both
+  if (serviceType === "QTSP") {
+    return entry.category === "issuer" || entry.category === "both";
+  }
+
+  return true;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function mapToTrustEntry(record: db.TrustRegistryEntry): TrustEntry {

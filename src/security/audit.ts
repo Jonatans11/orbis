@@ -12,7 +12,7 @@
  * - a timestamp
  */
 
-import { execSync } from "node:child_process";
+import { execSync, exec } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
 const TEAM_DB = "team-db";
@@ -114,16 +114,20 @@ export interface AuditOptions {
 }
 
 /**
- * Log an audit event to ssi_audit_log.
- * This is intentionally synchronous to ensure it completes before the response.
+ * Log an audit event asynchronously in the background.
+ * Prevents compliance reporting from blocking critical operations.
  */
 export function logAudit(options: AuditOptions): void {
   try {
     const id = randomBytes(16).toString("hex");
+    const sql = `INSERT INTO ssi_audit_log (id, actor_type, actor_id, action, entity_type, entity_id, result, message, ip_address) VALUES (${quote(id)}, ${quote(options.actorType || "unknown")}, ${quote(options.actorId || null)}, ${quote(options.action)}, ${quote(options.entityType)}, ${quote(options.entityId || null)}, ${quote(options.result)}, ${quote(options.message || null)}, ${quote(options.ipAddress || null)})`;
 
-    query(
-      `INSERT INTO ssi_audit_log (id, actor_type, actor_id, action, entity_type, entity_id, result, message, ip_address) VALUES (${quote(id)}, ${quote(options.actorType || "unknown")}, ${quote(options.actorId || null)}, ${quote(options.action)}, ${quote(options.entityType)}, ${quote(options.entityId || null)}, ${quote(options.result)}, ${quote(options.message || null)}, ${quote(options.ipAddress || null)})`
-    );
+    const normalized = sql.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    exec(`${TEAM_DB} ${JSON.stringify(normalized)}`, { timeout: 15000 }, (err) => {
+      if (err) {
+        console.error(`[AUDIT] Background audit log write failed: ${err.message}`);
+      }
+    });
   } catch (err) {
     // Audit logging should never crash the caller
     console.error("[AUDIT] Failed to write audit log:", err);

@@ -7,6 +7,8 @@ import Credentials from "./pages/console/Credentials";
 import TrustRegistry from "./pages/console/TrustRegistry";
 import Messages from "./pages/console/Messages";
 import Developer from "./pages/console/Developer";
+import AuditLogs from "./pages/console/AuditLogs";
+import StatusLists from "./pages/console/StatusLists";
 
 export default function App() {
   return (
@@ -20,6 +22,8 @@ export default function App() {
           <Route path="trust" element={<TrustRegistry />} />
           <Route path="messages" element={<Messages />} />
           <Route path="developer" element={<Developer />} />
+          <Route path="audit" element={<AuditLogs />} />
+          <Route path="status-lists" element={<StatusLists />} />
         </Route>
       </Routes>
     </BrowserRouter>

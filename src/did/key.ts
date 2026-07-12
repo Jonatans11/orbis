@@ -9,6 +9,7 @@
 
 import * as ed from "@noble/ed25519";
 import { base58btc } from "multiformats/bases/base58";
+import crypto from "node:crypto";
 
 // Multicodec prefix for Ed25519 public key (varint encoding of 0xed)
 const ED25519_PUBLIC_KEY_PREFIX = new Uint8Array([0xed, 0x01]);
@@ -183,4 +184,63 @@ export function getPublicKeyFromDocument(doc: DIDDocument): Uint8Array | null {
   } catch {
     return null;
   }
+}
+
+// ─── KMS Envelope Encryption ─────────────────────────────────────────────────
+
+/**
+ * Encapsulate a raw private key using envelope encryption (AES-256-GCM) with a master key.
+ */
+export function envelopeEncryptKey(
+  rawKey: Uint8Array,
+  masterKeyHex: string
+): { ciphertext: string; iv: string; tag: string } {
+  const masterKey = Buffer.from(masterKeyHex, "hex");
+  if (masterKey.length !== 32) {
+    throw new Error("Master key must be a 32-byte hex string (64 characters)");
+  }
+
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", masterKey, iv);
+
+  const ciphertext = Buffer.concat([
+    cipher.update(Buffer.from(rawKey)),
+    cipher.final()
+  ]);
+  const tag = cipher.getAuthTag();
+
+  return {
+    ciphertext: ciphertext.toString("hex"),
+    iv: iv.toString("hex"),
+    tag: tag.toString("hex")
+  };
+}
+
+/**
+ * Decrypt an envelope-encrypted private key (AES-256-GCM) using a master key.
+ */
+export function envelopeDecryptKey(
+  ciphertextHex: string,
+  ivHex: string,
+  tagHex: string,
+  masterKeyHex: string
+): Uint8Array {
+  const masterKey = Buffer.from(masterKeyHex, "hex");
+  if (masterKey.length !== 32) {
+    throw new Error("Master key must be a 32-byte hex string (64 characters)");
+  }
+
+  const iv = Buffer.from(ivHex, "hex");
+  const tag = Buffer.from(tagHex, "hex");
+  const ciphertext = Buffer.from(ciphertextHex, "hex");
+
+  const decipher = crypto.createDecipheriv("aes-256-gcm", masterKey, iv);
+  decipher.setAuthTag(tag);
+
+  const decrypted = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final()
+  ]);
+
+  return new Uint8Array(decrypted);
 }
