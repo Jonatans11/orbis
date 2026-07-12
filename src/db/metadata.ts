@@ -8,7 +8,7 @@
  * NOTE: team-db CLI requires single-line SQL statements (no newlines).
  */
 
-import { execSync, exec } from "node:child_process";
+import { execSync } from "node:child_process";
 
 const TEAM_DB = "team-db";
 
@@ -24,42 +24,13 @@ function query(sql: string): any[] {
       encoding: "utf-8",
       timeout: 10_000,
     });
-    return JSON.parse(output.trim() || "[]");
+    return JSON.parse(output.trim());
   } catch (err: any) {
     if (err.stderr?.includes("no such table")) {
       return [];
     }
     throw new Error(`DB query failed: ${err.message}`);
   }
-}
-
-/**
- * Execute a SQL write statement asynchronously in the background.
- * This prevents slow file writes from blocking Node's main event loop,
- * offering immense performance benefits on logging, compliance audit trails,
- * and analytics.
- */
-function queryAsync(sql: string): void {
-  const normalized = sql.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-  exec(`${TEAM_DB} ${JSON.stringify(normalized)}`, { timeout: 15000 }, (err) => {
-    if (err) {
-      console.error(`[DB:ASYNC-WRITE] Background write query failed: ${err.message}. Query: ${normalized}`);
-    }
-  });
-}
-
-/**
- * Public export for executing SQL statements safely and consistently across the app.
- */
-export function executeSQL(sql: string): any[] {
-  return query(sql);
-}
-
-/**
- * Public export for executing SQL write statements asynchronously in the background.
- */
-export function executeSQLAsync(sql: string): void {
-  queryAsync(sql);
 }
 
 /**
@@ -89,7 +60,7 @@ export function initDatabase(): void {
   query("CREATE TABLE IF NOT EXISTS didcomm_key_agreement (id TEXT PRIMARY KEY, did TEXT NOT NULL UNIQUE, x25519_public_key TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
 
   // Gateway API keys table
-  query("CREATE TABLE IF NOT EXISTS api_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL, member_id TEXT, plan TEXT NOT NULL DEFAULT 'free' CHECK(plan IN ('free', 'developer', 'enterprise')), created_at TEXT NOT NULL DEFAULT (datetime('now')), revoked_at TEXT, last_used_at TEXT)");
+  query("CREATE TABLE IF NOT EXISTS api_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL, member_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), revoked_at TEXT, last_used_at TEXT)");
 
   // Gateway usage logs table
   query("CREATE TABLE IF NOT EXISTS usage_logs (id TEXT PRIMARY KEY, api_key_id TEXT NOT NULL, method TEXT NOT NULL, path TEXT NOT NULL, status_code INTEGER NOT NULL, response_time_ms INTEGER NOT NULL DEFAULT 0, timestamp TEXT NOT NULL DEFAULT (datetime('now')))");
@@ -103,15 +74,11 @@ export function initDatabase(): void {
   // Webhook delivery log table
   query("CREATE TABLE IF NOT EXISTS webhook_deliveries (id TEXT PRIMARY KEY, webhook_id TEXT NOT NULL, event TEXT NOT NULL, payload TEXT NOT NULL, status_code INTEGER, response_body TEXT, success INTEGER NOT NULL DEFAULT 0, delivered_at TEXT NOT NULL DEFAULT (datetime('now')))");
 
-  // Status List 2021 table
-  query("CREATE TABLE IF NOT EXISTS ssi_status_lists (id TEXT PRIMARY KEY, name TEXT NOT NULL, issuer_did TEXT NOT NULL, status_purpose TEXT NOT NULL CHECK(status_purpose IN ('revocation', 'suspension')), encoded_list TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
+  // DIDComm contacts table (per-user contact list for mobile wallet)
+  query("CREATE TABLE IF NOT EXISTS didcomm_contacts (id TEXT PRIMARY KEY, user_did TEXT NOT NULL, contact_did TEXT NOT NULL, label TEXT NOT NULL, avatar_url TEXT, last_interaction_at TEXT, unread_count INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
 
-  // Run dynamic schema migrations synchronously
-  try {
-    query("ALTER TABLE api_keys ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'");
-  } catch {
-    // Column already exists
-  }
+  // DIDComm push registration table (maps DIDs to device push tokens)
+  query("CREATE TABLE IF NOT EXISTS didcomm_push_registrations (id TEXT PRIMARY KEY, did TEXT NOT NULL, push_token TEXT NOT NULL, platform TEXT NOT NULL CHECK(platform IN ('ios', 'android', 'web')), device_id TEXT NOT NULL UNIQUE, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
 }
 
 // ─── DID Metadata ────────────────────────────────────────────────────────────
@@ -242,11 +209,8 @@ export interface VerificationLog {
   timestamp: string;
 }
 
-/**
- * Log verification events asynchronously in the background.
- */
 export function insertVerification(record: Omit<VerificationLog, "timestamp">): void {
-  queryAsync(`INSERT INTO ssi_verifications (id, credential_id, verifier_did, verified, reason) VALUES (${quote(record.id)}, ${quote(record.credential_id)}, ${quote(record.verifier_did || "")}, ${record.verified ? 1 : 0}, ${quote(record.reason || "")})`);
+  query(`INSERT INTO ssi_verifications (id, credential_id, verifier_did, verified, reason) VALUES (${quote(record.id)}, ${quote(record.credential_id)}, ${quote(record.verifier_did || "")}, ${record.verified ? 1 : 0}, ${quote(record.reason || "")})`);
 }
 
 export function getVerificationsForCredential(credentialId: string): VerificationLog[] {
@@ -255,7 +219,7 @@ export function getVerificationsForCredential(credentialId: string): Verificatio
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function quote(val: string | null | undefined): string {
+export function quote(val: string | null | undefined): string {
   if (val === null || val === undefined) return "NULL";
   // Escape single quotes by doubling them (SQLite escape)
   return `'${val.replace(/'/g, "''")}'`;
@@ -275,11 +239,8 @@ export interface DIDCommMessage {
   thread_id: string | null;
 }
 
-/**
- * Log DIDComm messages asynchronously.
- */
 export function insertDIDCommMessage(record: Omit<DIDCommMessage, "created_at">): void {
-  queryAsync(`INSERT INTO didcomm_messages (id, msg_type, from_did, to_did, body, encrypted_payload, status, thread_id) VALUES (${quote(record.id)}, ${quote(record.msg_type)}, ${quote(record.from_did)}, ${quote(record.to_did)}, ${quote(record.body)}, ${quote(record.encrypted_payload)}, ${quote(record.status)}, ${quote(record.thread_id)})`);
+  query(`INSERT INTO didcomm_messages (id, msg_type, from_did, to_did, body, encrypted_payload, status, thread_id) VALUES (${quote(record.id)}, ${quote(record.msg_type)}, ${quote(record.from_did)}, ${quote(record.to_did)}, ${quote(record.body)}, ${quote(record.encrypted_payload)}, ${quote(record.status)}, ${quote(record.thread_id)})`);
 }
 
 export function getDIDCommMessage(id: string): DIDCommMessage | null {
@@ -297,7 +258,7 @@ export function getDIDCommInbox(did: string): DIDCommMessage[] {
 }
 
 export function updateDIDCommMessageStatus(id: string, status: "sent" | "delivered" | "read"): void {
-  queryAsync(`UPDATE didcomm_messages SET status = ${quote(status)} WHERE id = ${quote(id)}`);
+  query(`UPDATE didcomm_messages SET status = ${quote(status)} WHERE id = ${quote(id)}`);
 }
 
 // ─── DIDComm Out-of-Band Invitation Storage ───────────────────────────────────
@@ -328,7 +289,7 @@ export function listActiveOOBInvitations(did: string): OOBInvitation[] {
 }
 
 export function consumeOOBInvitation(id: string): void {
-  queryAsync(`UPDATE didcomm_oob_invitations SET status = 'consumed' WHERE id = ${quote(id)}`);
+  query(`UPDATE didcomm_oob_invitations SET status = 'consumed' WHERE id = ${quote(id)}`);
 }
 
 // ─── DIDComm Key Agreement Storage ────────────────────────────────────────────
@@ -341,7 +302,7 @@ export interface KeyAgreementRecord {
 }
 
 export function insertKeyAgreement(record: Omit<KeyAgreementRecord, "created_at">): void {
-  queryAsync(`INSERT INTO didcomm_key_agreement (id, did, x25519_public_key) VALUES (${quote(record.id)}, ${quote(record.did)}, ${quote(record.x25519_public_key)})`);
+  query(`INSERT INTO didcomm_key_agreement (id, did, x25519_public_key) VALUES (${quote(record.id)}, ${quote(record.did)}, ${quote(record.x25519_public_key)})`);
 }
 
 export function getKeyAgreement(did: string): KeyAgreementRecord | null {
@@ -350,32 +311,142 @@ export function getKeyAgreement(did: string): KeyAgreementRecord | null {
   return rows[0] as KeyAgreementRecord;
 }
 
-// ─── Status List 2021 Metadata ───────────────────────────────────────────────
+// ─── DIDComm Paginated Message Queries ──────────────────────────────────────
 
-export interface StatusListRecord {
+export function getDIDCommInboxPaginated(did: string, limit: number, offset: number): DIDCommMessage[] {
+  const l = Math.min(Math.max(1, limit), 100);
+  const o = Math.max(0, offset);
+  return query(`SELECT * FROM didcomm_messages WHERE to_did = ${quote(did)} ORDER BY created_at DESC LIMIT ${l} OFFSET ${o}`) as DIDCommMessage[];
+}
+
+export function getDIDCommConversation(did: string, peerDID: string, limit: number, offset: number): DIDCommMessage[] {
+  const l = Math.min(Math.max(1, limit), 100);
+  const o = Math.max(0, offset);
+  return query(`SELECT * FROM didcomm_messages WHERE (from_did = ${quote(did)} AND to_did = ${quote(peerDID)}) OR (from_did = ${quote(peerDID)} AND to_did = ${quote(did)}) ORDER BY created_at DESC LIMIT ${l} OFFSET ${o}`) as DIDCommMessage[];
+}
+
+export function getDIDCommThreadMessages(threadId: string, limit: number, offset: number): DIDCommMessage[] {
+  const l = Math.min(Math.max(1, limit), 100);
+  const o = Math.max(0, offset);
+  return query(`SELECT * FROM didcomm_messages WHERE thread_id = ${quote(threadId)} ORDER BY created_at ASC LIMIT ${l} OFFSET ${o}`) as DIDCommMessage[];
+}
+
+export function getUnreadMessageCount(did: string): number {
+  const rows = query(`SELECT COUNT(*) as cnt FROM didcomm_messages WHERE to_did = ${quote(did)} AND status = 'sent'`);
+  return (rows[0] as any)?.cnt || 0;
+}
+
+export function getUnreadMessageCountFrom(fromDID: string, toDID: string): number {
+  const rows = query(`SELECT COUNT(*) as cnt FROM didcomm_messages WHERE from_did = ${quote(fromDID)} AND to_did = ${quote(toDID)} AND status = 'sent'`);
+  return (rows[0] as any)?.cnt || 0;
+}
+
+// ─── DIDComm E2E Encryption Purge Migration ─────────────────────────────────
+
+/**
+ * Purge plaintext bodies from didcomm_messages.
+ * SECURITY: Existing messages may have stored plaintext in the `body` column.
+ * This migration clears those bodies so the server can no longer read them.
+ * Messages without encrypted_payload are deleted entirely.
+ */
+export function purgePlaintextBodies(): { cleared: number; deleted: number } {
+  // Clear body field on all messages that have an encrypted_payload
+  query("UPDATE didcomm_messages SET body = '.' WHERE encrypted_payload IS NOT NULL AND body != '.' AND body != ''");
+  const cleared: any = query("SELECT changes() as cnt")[0];
+  // Delete messages that have no encrypted_payload (incomplete/old format messages)
+  query("DELETE FROM didcomm_messages WHERE encrypted_payload IS NULL OR encrypted_payload = ''");
+  const deleted: any = query("SELECT changes() as cnt")[0];
+  return { cleared: cleared?.cnt || 0, deleted: deleted?.cnt || 0 };
+}
+
+// ─── DIDComm Contact Storage ────────────────────────────────────────────────
+
+export interface ContactRecord {
   id: string;
-  name: string;
-  issuer_did: string;
-  status_purpose: "revocation" | "suspension";
-  encoded_list: string;
+  user_did: string;
+  contact_did: string;
+  label: string;
+  avatar_url: string | null;
+  last_interaction_at: string | null;
+  unread_count: number;
   created_at: string;
   updated_at: string;
 }
 
-export function insertStatusList(record: Omit<StatusListRecord, "created_at" | "updated_at">): void {
-  query(`INSERT INTO ssi_status_lists (id, name, issuer_did, status_purpose, encoded_list) VALUES (${quote(record.id)}, ${quote(record.name)}, ${quote(record.issuer_did)}, ${quote(record.status_purpose)}, ${quote(record.encoded_list)})`);
+export function insertContact(record: Omit<ContactRecord, "created_at" | "updated_at"> & { created_at: string; updated_at: string }): void {
+  query(`INSERT INTO didcomm_contacts (id, user_did, contact_did, label, avatar_url, last_interaction_at, unread_count, created_at, updated_at) VALUES (${quote(record.id)}, ${quote(record.user_did)}, ${quote(record.contact_did)}, ${quote(record.label)}, ${quote(record.avatar_url)}, ${quote(record.last_interaction_at)}, ${record.unread_count}, ${quote(record.created_at)}, ${quote(record.updated_at)})`);
 }
 
-export function getStatusListById(id: string): StatusListRecord | null {
-  const rows = query(`SELECT * FROM ssi_status_lists WHERE id = ${quote(id)}`);
+export function getContactById(id: string): ContactRecord | null {
+  const rows = query(`SELECT * FROM didcomm_contacts WHERE id = ${quote(id)}`);
   if (rows.length === 0) return null;
-  return rows[0] as StatusListRecord;
+  return rows[0] as ContactRecord;
 }
 
-export function updateStatusListEncoded(id: string, encodedList: string): void {
-  query(`UPDATE ssi_status_lists SET encoded_list = ${quote(encodedList)}, updated_at = datetime('now') WHERE id = ${quote(id)}`);
+export function findContactByDIDs(userDID: string, contactDID: string): ContactRecord | null {
+  const rows = query(`SELECT * FROM didcomm_contacts WHERE user_did = ${quote(userDID)} AND contact_did = ${quote(contactDID)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as ContactRecord;
 }
 
-export function listStatusListsByIssuer(issuerDid: string): StatusListRecord[] {
-  return query(`SELECT * FROM ssi_status_lists WHERE issuer_did = ${quote(issuerDid)} ORDER BY created_at DESC`) as StatusListRecord[];
+export function listContacts(userDID: string): ContactRecord[] {
+  return query(`SELECT * FROM didcomm_contacts WHERE user_did = ${quote(userDID)} ORDER BY last_interaction_at DESC NULLS LAST, label ASC`) as ContactRecord[];
+}
+
+export function updateContactFields(id: string, setClause: string): void {
+  query(`UPDATE didcomm_contacts SET ${setClause} WHERE id = ${quote(id)}`);
+}
+
+export function incrementContactUnread(id: string): void {
+  query(`UPDATE didcomm_contacts SET unread_count = unread_count + 1, updated_at = datetime('now') WHERE id = ${quote(id)}`);
+}
+
+export function deleteContact(id: string): void {
+  query(`DELETE FROM didcomm_contacts WHERE id = ${quote(id)}`);
+}
+
+export function searchContacts(userDID: string, queryStr: string): ContactRecord[] {
+  const like = `%${queryStr.replace(/'/g, "''")}%`;
+  return query(`SELECT * FROM didcomm_contacts WHERE user_did = ${quote(userDID)} AND (label LIKE '${like}' OR contact_did LIKE '${like}') ORDER BY last_interaction_at DESC NULLS LAST, label ASC`) as ContactRecord[];
+}
+
+// ─── DIDComm Push Registration Storage ──────────────────────────────────────
+
+export interface PushRegistrationRecord {
+  id: string;
+  did: string;
+  push_token: string;
+  platform: string;
+  device_id: string;
+  active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function insertPushRegistration(record: Omit<PushRegistrationRecord, "created_at" | "updated_at"> & { created_at: string; updated_at: string }): void {
+  query(`INSERT INTO didcomm_push_registrations (id, did, push_token, platform, device_id, active, created_at, updated_at) VALUES (${quote(record.id)}, ${quote(record.did)}, ${quote(record.push_token)}, ${quote(record.platform)}, ${quote(record.device_id)}, ${record.active}, ${quote(record.created_at)}, ${quote(record.updated_at)})`);
+}
+
+export function getPushRegistration(id: string): PushRegistrationRecord | null {
+  const rows = query(`SELECT * FROM didcomm_push_registrations WHERE id = ${quote(id)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as PushRegistrationRecord;
+}
+
+export function findPushRegistration(deviceId: string): PushRegistrationRecord | null {
+  const rows = query(`SELECT * FROM didcomm_push_registrations WHERE device_id = ${quote(deviceId)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as PushRegistrationRecord;
+}
+
+export function getPushRegistrations(did: string): PushRegistrationRecord[] {
+  return query(`SELECT * FROM didcomm_push_registrations WHERE did = ${quote(did)} AND active = 1 ORDER BY created_at DESC`) as PushRegistrationRecord[];
+}
+
+export function updatePushRegistration(id: string, pushToken: string, did: string, now: string): void {
+  query(`UPDATE didcomm_push_registrations SET push_token = ${quote(pushToken)}, did = ${quote(did)}, updated_at = ${quote(now)} WHERE id = ${quote(id)}`);
+}
+
+export function deactivatePushRegistration(id: string): void {
+  query(`UPDATE didcomm_push_registrations SET active = 0, updated_at = datetime('now') WHERE id = ${quote(id)}`);
 }
