@@ -290,6 +290,60 @@ router.delete("/vault/:recordId", (req: Request, res: Response) => {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+/**
+ * PATCH /api/wallet/vault/:recordId/consent
+ * Update the consent/monetization flag on a vault record.
+ *
+ * Allows toggling a record between "private" (no monetization) and
+ * "monetizable" (user has opted in to receive access-compensation requests).
+ *
+ * Per design (07-vault-consent-screens.md §6): monetization toggle per record
+ * lets the user opt in to request compensation when sharing. Toggling to
+ * "monetizable" does NOT auto-share anything — explicit consent is still
+ * required per grant. The "private" default means no compensation is requested.
+ *
+ * Body: { consent: "private" | "monetizable" }
+ * Responses:
+ *   200 — { success: true, message, recordId, consent }
+ *   400 — Invalid consent value / missing
+ *   401 — Authentication required
+ *   404 — Record not found
+ */
+router.patch("/vault/:recordId/consent", (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
+    const { recordId } = req.params;
+    const { consent } = req.body;
+    if (!consent || !["private", "monetizable"].includes(consent)) {
+      res.status(400).json({ error: true, message: "consent must be 'private' or 'monetizable'" });
+      return;
+    }
+    // Verify the record exists and belongs to this user
+    const existing = query(`SELECT record_id, consent FROM vault_records WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
+    if (existing.length === 0) {
+      res.status(404).json({ error: true, message: "Record not found" });
+      return;
+    }
+    const oldConsent = (existing[0] as any).consent;
+    query(`UPDATE vault_records SET consent = ${quote(consent)}, updated_at = datetime('now') WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
+    // Audit-log the consent change
+    logAudit({
+      actorType: "user",
+      actorId: userId,
+      action: "vault.consent.update",
+      entityType: "vault_record",
+      entityId: recordId,
+      result: "success",
+      message: `Consent changed from '${oldConsent}' to '${consent}'`,
+      ipAddress: getClientIp(req),
+    });
+    res.json({ success: true, message: "Consent flag updated", recordId, consent });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
 // ===========================================================================
 // 5. DATA-SHARING GRANTS
 // ===========================================================================
@@ -329,6 +383,75 @@ router.get("/grants/:recordId", (req: Request, res: Response) => {
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
     const { recordId } = req.params;
     const grants = query(`SELECT g.*, (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count FROM vault_grants g WHERE g.record_id = ${quote(recordId)} AND g.owner_user_id = ${quote(userId)} ORDER BY g.created_at DESC`);
+    res.json({ success: true, count: grants.length, grants });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+/**
+ * GET /api/wallet/grants
+ *
+ * List ALL data-sharing grants for the authenticated user, in two roles:
+ *   - grantor — grants the user created (owner_user_id matches JWT sub)
+ *   - grantee — grants received from others (grantee_did matches user's linked DID,
+ *               from req.user.did set via PUT /api/auth/link-did)
+ *
+ * Each grant carries:
+ *   role          — "grantor" | "grantee"
+ *   status        — derived: "active" | "expired" | "revoked"
+ *   is_paid       — true when price_amount > 0 and status is "active"
+ *   access_count  — number of times the grantee accessed the shared data
+ *
+ * Used by AllSharesScreen (design 07-vault-consent-screens.md §5) with
+ * filter chips: Active / Expired / Revoked / Paid.
+ *
+ * Responses:
+ *   200 — { success: true, count, grants: [{ role, status, is_paid, ... }] }
+ *   401 — Authentication required
+ */
+router.get("/grants", (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
+    const userDID = req.user?.did;
+    // Build grantor + grantee queries with UNION, add role, status derivation
+    let sql = `
+      SELECT g.*,
+        (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count,
+        'grantor' as role,
+        CASE
+          WHEN g.revoked = 1 THEN 'revoked'
+          WHEN g.expires_at < datetime('now') THEN 'expired'
+          ELSE 'active'
+        END as status,
+        CASE
+          WHEN g.price_amount > 0 AND g.revoked = 0 AND g.expires_at >= datetime('now') THEN 1
+          ELSE 0
+        END as is_paid
+      FROM vault_grants g
+      WHERE g.owner_user_id = ${quote(userId)}
+    `;
+    if (userDID) {
+      sql += `
+      UNION ALL
+      SELECT g.*,
+        (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count,
+        'grantee' as role,
+        CASE
+          WHEN g.revoked = 1 THEN 'revoked'
+          WHEN g.expires_at < datetime('now') THEN 'expired'
+          ELSE 'active'
+        END as status,
+        CASE
+          WHEN g.price_amount > 0 AND g.revoked = 0 AND g.expires_at >= datetime('now') THEN 1
+          ELSE 0
+        END as is_paid
+      FROM vault_grants g
+      WHERE g.grantee_did = ${quote(userDID)}
+      `;
+    }
+    sql += " ORDER BY created_at DESC";
+    const grants = query(sql);
     res.json({ success: true, count: grants.length, grants });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });

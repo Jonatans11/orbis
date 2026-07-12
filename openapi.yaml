@@ -455,6 +455,80 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+  /api/wallet/grants:
+    get:
+      summary: List all data-sharing grants for the authenticated user
+      description: |
+        Returns grants where the user is either grantor (owner) or grantee (recipient).
+        Each grant includes role, derived status (active/expired/revoked), paid flag,
+        and access count. The grantee query requires a DID linked via PUT /api/auth/link-did.
+      operationId: listUserGrants
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of grants with role and status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  grants:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GrantWithRole"
+        "401":
+          description: Authentication required
+  /api/wallet/vault/{recordId}/consent:
+    patch:
+      summary: Update consent/monetization flag on a vault record
+      description: |
+        Toggles a record between "private" (default, no compensation requests)
+        and "monetizable" (user has opted in to request access compensation).
+        Does NOT auto-share — explicit grant consent is still required per share.
+      operationId: updateVaultConsent
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - consent
+              properties:
+                consent:
+                  type: string
+                  enum: [private, monetizable]
+                  description: "private = no compensation, monetizable = allow paid access requests"
+      responses:
+        "200":
+          description: Consent flag updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsentUpdateResponse"
+        "400":
+          description: Invalid consent value
+        "401":
+          description: Authentication required
+        "404":
+          description: Record not found
 components:
   schemas:
     HealthResponse:
@@ -779,3 +853,51 @@ components:
           type: object
           nullable: true
           $ref: "#/components/schemas/TrustEntry"
+    GrantWithRole:
+      type: object
+      properties:
+        grant_id:
+          type: string
+        record_id:
+          type: string
+        owner_user_id:
+          type: string
+        grantee_did:
+          type: string
+        scope:
+          type: string
+        price_amount:
+          type: integer
+        price_currency:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        revoked:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        access_count:
+          type: integer
+        role:
+          type: string
+          enum: [grantor, grantee]
+        status:
+          type: string
+          enum: [active, expired, revoked]
+        is_paid:
+          type: integer
+          enum: [0, 1]
+    ConsentUpdateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        recordId:
+          type: string
+        consent:
+          type: string
+          enum: [private, monetizable]
