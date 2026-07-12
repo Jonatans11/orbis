@@ -98,6 +98,9 @@ export async function sendMessage(options: SendMessageOptions): Promise<SendMess
 /**
  * Complete sending a message with the sender's secret key.
  * This is a separate step because the secret key comes from the API request body.
+ * 
+ * SECURITY: Stores ONLY the encrypted payload in the database.
+ * The `body` field is set to empty — clients MUST decrypt on-device.
  */
 export async function encryptAndStoreMessage(
   msg: types.DIDCommMessage,
@@ -125,7 +128,7 @@ export async function encryptAndStoreMessage(
     msg_type: msg.type,
     from_did: msg.from,
     to_did: toDID,
-    body: JSON.stringify(msg.body),
+    body: "", // EMPTY — plaintext body no longer stored; clients decrypt on-device
     encrypted_payload: encryptedPayload,
     status: "sent",
     thread_id: msg.thid || null,

@@ -13,6 +13,8 @@ import { verifyCredential } from "../src/vc/verify.js";
 import * as trustRegistry from "../src/trust/registry.js";
 import * as db from "../src/db/metadata.js";
 import { initDatabase } from "../src/db/metadata.js";
+import * as didcomm from "../src/didcomm/index.js";
+import * as didcommCalls from "../src/didcomm/calls.js";
 
 // Extend default timeout for integration tests (DB calls are slow)
 const TEST_TIMEOUT = 15000;
@@ -117,22 +119,22 @@ describe("DID:web Module", () => {
     expect(result.didJsonUrl).toBe("https://example.com/issuer/abc/did.json");
   });
 
-  it("should resolve did:web to DID document URL", () => {
-    const { didDocument, didJsonUrl } = webModule.resolveDIDWeb("did:web:example.com");
+  it("should resolve did:web to DID document URL", async () => {
+    const { didDocument, didJsonUrl } = await webModule.resolveDIDWeb("did:web:example.com");
 
     expect(didJsonUrl).toBe("https://example.com/.well-known/did.json");
     expect(didDocument).not.toBeNull();
     expect(didDocument!.id).toBe("did:web:example.com");
   });
 
-  it("should return null for invalid did:web", () => {
-    const result = webModule.resolveDIDWeb("invalid");
+  it("should return null for invalid did:web", async () => {
+    const result = await webModule.resolveDIDWeb("invalid");
     expect(result.didDocument).toBeNull();
     expect(result.didJsonUrl).toBeNull();
   });
 
-  it("should resolve did:web with path to correct URL", () => {
-    const { didJsonUrl } = webModule.resolveDIDWeb("did:web:example.com:issuer:abc");
+  it("should resolve did:web with path to correct URL", async () => {
+    const { didJsonUrl } = await webModule.resolveDIDWeb("did:web:example.com:issuer:abc");
     expect(didJsonUrl).toBe("https://example.com/issuer/abc/did.json");
   });
 });
@@ -176,20 +178,20 @@ describe("DID Registry", () => {
   it("should resolve a did:key to its DID document", async () => {
     // Use a dynamically generated DID instead of a hardcoded one
     const generated = await didRegistry.createDIDKey();
-    const keyDoc = didRegistry.resolveDID(generated.did);
+    const keyDoc = await didRegistry.resolveDID(generated.did);
     expect(keyDoc).not.toBeNull();
     expect(keyDoc!.id).toBe(generated.did);
     expect(keyDoc!.verificationMethod).toHaveLength(1);
   });
 
-  it("should resolve a did:web identifier", () => {
-    const webDoc = didRegistry.resolveDID("did:web:orbis.id");
+  it("should resolve a did:web identifier", async () => {
+    const webDoc = await didRegistry.resolveDID("did:web:orbis.id");
     expect(webDoc).not.toBeNull();
     expect(webDoc!.id).toBe("did:web:orbis.id");
   });
 
-  it("should return null for invalid DID", () => {
-    expect(didRegistry.resolveDID("invalid")).toBeNull();
+  it("should return null for invalid DID", async () => {
+    expect(await didRegistry.resolveDID("invalid")).toBeNull();
   });
 
   it("should revoke a DID", async () => {
@@ -568,6 +570,148 @@ describe("Trust Registry", () => {
   });
 });
 
+// ─── Wallet DIDComm Flow Tests ──────────────────────────────────────────────
+
+describe("Wallet DIDComm Integration", () => {
+  let aliceDID: string;
+  let bobDID: string;
+  let aliceKey: Uint8Array;
+
+  beforeAll(async () => {
+    // Create test DIDs for wallet messaging
+    const alice = await didRegistry.createDIDKey();
+    const bob = await didRegistry.createDIDKey();
+    aliceDID = alice.did;
+    bobDID = bob.did;
+    aliceKey = alice.keyPair.secretKey;
+  });
+
+  it("should create and parse OOB invitations from wallet", () => {
+    const invitation = didcomm.createOOBInvitation(
+      aliceDID,
+      "Alice's Wallet",
+      { goalCode: "issue-vc" }
+    );
+
+    expect(invitation.invitationUrl).toContain("oob");
+    expect(invitation.message.from).toBe(aliceDID);
+    expect(invitation.message.body).toHaveProperty("label", "Alice's Wallet");
+    expect(invitation.record.status).toBe("active");
+
+    // Parse it back
+    const parsed = didcomm.parseOOBInvitation(invitation.invitationUrl);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.from).toBe(aliceDID);
+    expect(parsed!.label).toBe("Alice's Wallet");
+  });
+
+  it("should send DIDComm basic message between wallet peers", async () => {
+    const bobPubKey = didRegistry.extractPublicKey(bobDID);
+    expect(bobPubKey).not.toBeNull();
+
+    const stored = await didcomm.sendBasicMessage(
+      aliceDID,
+      bobDID,
+      "Hello Bob, this is Alice from ORBIS wallet!",
+      aliceKey,
+      bobPubKey!
+    );
+
+    expect(stored).toBeDefined();
+    expect(stored.from_did).toBe(aliceDID);
+    expect(stored.to_did).toBe(bobDID);
+    expect(stored.status).toBe("sent");
+  });
+
+  it("should deliver message to Bob's inbox", () => {
+    const inbox = didcomm.getInbox(bobDID);
+    expect(inbox.length).toBeGreaterThan(0);
+    const msg = inbox.find((m) => m.from_did === aliceDID);
+    expect(msg).toBeDefined();
+    expect(msg!.status).toBe("sent");
+  });
+
+  it("should send trust ping between wallet peers", async () => {
+    const bobPubKey = didRegistry.extractPublicKey(bobDID);
+    expect(bobPubKey).not.toBeNull();
+
+    const stored = await didcomm.sendTrustPing(
+      aliceDID,
+      bobDID,
+      aliceKey,
+      bobPubKey!,
+      "Wallet connection test"
+    );
+
+    expect(stored).toBeDefined();
+    expect(stored.msg_type).toContain("trust-ping");
+    expect(stored.status).toBe("sent");
+  });
+
+  it("should mark messages as delivered and read", () => {
+    const inbox = didcomm.getInbox(bobDID);
+    expect(inbox.length).toBeGreaterThan(0);
+
+    const latest = inbox[0]!;
+    didcomm.markAsDelivered(latest.id);
+    const delivered = didcomm.getMessageById(latest.id);
+    expect(delivered!.status).toBe("delivered");
+
+    didcomm.markAsRead(latest.id);
+    const read = didcomm.getMessageById(latest.id);
+    expect(read!.status).toBe("read");
+  });
+
+  it("should send and verify WebRTC signaling offer for wallet calls", async () => {
+    const bobPubKey = didRegistry.extractPublicKey(bobDID);
+    expect(bobPubKey).not.toBeNull();
+
+    const result = await didcommCalls.createOffer({
+      callerDID: aliceDID,
+      calleeDID: bobDID,
+      sdp: "v=0\no=alice 12345 67890 IN IP4 10.0.0.1\ns=ORBIS Wallet Call\nm=audio 5004 RTP/AVP 0",
+      senderSecretKey: aliceKey,
+    });
+
+    expect(result.callId).toBeTruthy();
+    expect(result.storedCall.caller_did).toBe(aliceDID);
+    expect(result.storedCall.callee_did).toBe(bobDID);
+    expect(result.storedCall.status).toBe("ringing");
+    expect(result.storedMessage.msg_type).toBe("offer");
+    expect(result.storedMessage.sdp).toContain("ORBIS Wallet Call");
+  });
+
+  it("should answer a WebRTC call", async () => {
+    const bobKey = (await didRegistry.createDIDKey()).keyPair.secretKey;
+    const result = await didcommCalls.createOffer({
+      callerDID: aliceDID,
+      calleeDID: (await didRegistry.createDIDKey()).did,
+      sdp: "v=0\no=alice 12345 IN IP4 10.0.0.1\ns=Test Call",
+      senderSecretKey: aliceKey,
+    });
+
+    const alicePubKey = didRegistry.extractPublicKey(aliceDID);
+    expect(alicePubKey).not.toBeNull();
+
+    const answer = await didcommCalls.createAnswer({
+      callId: result.callId,
+      answererDID: result.storedCall.callee_did,
+      callerDID: aliceDID,
+      sdp: "v=0\no=bob 54321 IN IP4 10.0.0.2\ns=Answer",
+      senderSecretKey: bobKey,
+    });
+
+    expect(answer.messageId).toBeTruthy();
+    expect(answer.storedMessage.msg_type).toBe("answer");
+  });
+
+  it("should track wallet message queue (message waiting)", () => {
+    const inbox = didcomm.getInbox(bobDID);
+    const waiting = inbox.filter((m) => m.status === "sent");
+    expect(waiting.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
 // ─── Trust Registry + VC Integration Tests ───────────────────────────────────────
 
 describe("Trust Registry + VC Integration", () => {
@@ -769,7 +913,7 @@ describe("End-to-End Flow", () => {
   });
 });
 
-// ─── Database Metadata Tests ─────────────────────────────────────────────────────
+// ─── Database Metadata Tests ─────────────────────────���───────────────────────────
 
 describe("Database Metadata", () => {
   it("should store and retrieve credential metadata", async () => {

@@ -73,6 +73,12 @@ export function initDatabase(): void {
 
   // Webhook delivery log table
   query("CREATE TABLE IF NOT EXISTS webhook_deliveries (id TEXT PRIMARY KEY, webhook_id TEXT NOT NULL, event TEXT NOT NULL, payload TEXT NOT NULL, status_code INTEGER, response_body TEXT, success INTEGER NOT NULL DEFAULT 0, delivered_at TEXT NOT NULL DEFAULT (datetime('now')))");
+
+  // DIDComm contacts table (per-user contact list for mobile wallet)
+  query("CREATE TABLE IF NOT EXISTS didcomm_contacts (id TEXT PRIMARY KEY, user_did TEXT NOT NULL, contact_did TEXT NOT NULL, label TEXT NOT NULL, avatar_url TEXT, last_interaction_at TEXT, unread_count INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
+
+  // DIDComm push registration table (maps DIDs to device push tokens)
+  query("CREATE TABLE IF NOT EXISTS didcomm_push_registrations (id TEXT PRIMARY KEY, did TEXT NOT NULL, push_token TEXT NOT NULL, platform TEXT NOT NULL CHECK(platform IN ('ios', 'android', 'web')), device_id TEXT NOT NULL UNIQUE, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
 }
 
 // ─── DID Metadata ────────────────────────────────────────────────────────────
@@ -213,7 +219,7 @@ export function getVerificationsForCredential(credentialId: string): Verificatio
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function quote(val: string | null | undefined): string {
+export function quote(val: string | null | undefined): string {
   if (val === null || val === undefined) return "NULL";
   // Escape single quotes by doubling them (SQLite escape)
   return `'${val.replace(/'/g, "''")}'`;
@@ -303,4 +309,144 @@ export function getKeyAgreement(did: string): KeyAgreementRecord | null {
   const rows = query(`SELECT * FROM didcomm_key_agreement WHERE did = ${quote(did)}`);
   if (rows.length === 0) return null;
   return rows[0] as KeyAgreementRecord;
+}
+
+// ─── DIDComm Paginated Message Queries ──────────────────────────────────────
+
+export function getDIDCommInboxPaginated(did: string, limit: number, offset: number): DIDCommMessage[] {
+  const l = Math.min(Math.max(1, limit), 100);
+  const o = Math.max(0, offset);
+  return query(`SELECT * FROM didcomm_messages WHERE to_did = ${quote(did)} ORDER BY created_at DESC LIMIT ${l} OFFSET ${o}`) as DIDCommMessage[];
+}
+
+export function getDIDCommConversation(did: string, peerDID: string, limit: number, offset: number): DIDCommMessage[] {
+  const l = Math.min(Math.max(1, limit), 100);
+  const o = Math.max(0, offset);
+  return query(`SELECT * FROM didcomm_messages WHERE (from_did = ${quote(did)} AND to_did = ${quote(peerDID)}) OR (from_did = ${quote(peerDID)} AND to_did = ${quote(did)}) ORDER BY created_at DESC LIMIT ${l} OFFSET ${o}`) as DIDCommMessage[];
+}
+
+export function getDIDCommThreadMessages(threadId: string, limit: number, offset: number): DIDCommMessage[] {
+  const l = Math.min(Math.max(1, limit), 100);
+  const o = Math.max(0, offset);
+  return query(`SELECT * FROM didcomm_messages WHERE thread_id = ${quote(threadId)} ORDER BY created_at ASC LIMIT ${l} OFFSET ${o}`) as DIDCommMessage[];
+}
+
+export function getUnreadMessageCount(did: string): number {
+  const rows = query(`SELECT COUNT(*) as cnt FROM didcomm_messages WHERE to_did = ${quote(did)} AND status = 'sent'`);
+  return (rows[0] as any)?.cnt || 0;
+}
+
+export function getUnreadMessageCountFrom(fromDID: string, toDID: string): number {
+  const rows = query(`SELECT COUNT(*) as cnt FROM didcomm_messages WHERE from_did = ${quote(fromDID)} AND to_did = ${quote(toDID)} AND status = 'sent'`);
+  return (rows[0] as any)?.cnt || 0;
+}
+
+// ─── DIDComm E2E Encryption Purge Migration ─────────────────────────────────
+
+/**
+ * Purge plaintext bodies from didcomm_messages.
+ * SECURITY: Existing messages may have stored plaintext in the `body` column.
+ * This migration clears those bodies so the server can no longer read them.
+ * Messages without encrypted_payload are deleted entirely.
+ */
+export function purgePlaintextBodies(): { cleared: number; deleted: number } {
+  // Clear body field on all messages that have an encrypted_payload
+  query("UPDATE didcomm_messages SET body = '.' WHERE encrypted_payload IS NOT NULL AND body != '.' AND body != ''");
+  const cleared: any = query("SELECT changes() as cnt")[0];
+  // Delete messages that have no encrypted_payload (incomplete/old format messages)
+  query("DELETE FROM didcomm_messages WHERE encrypted_payload IS NULL OR encrypted_payload = ''");
+  const deleted: any = query("SELECT changes() as cnt")[0];
+  return { cleared: cleared?.cnt || 0, deleted: deleted?.cnt || 0 };
+}
+
+// ─── DIDComm Contact Storage ────────────────────────────────────────────────
+
+export interface ContactRecord {
+  id: string;
+  user_did: string;
+  contact_did: string;
+  label: string;
+  avatar_url: string | null;
+  last_interaction_at: string | null;
+  unread_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function insertContact(record: Omit<ContactRecord, "created_at" | "updated_at"> & { created_at: string; updated_at: string }): void {
+  query(`INSERT INTO didcomm_contacts (id, user_did, contact_did, label, avatar_url, last_interaction_at, unread_count, created_at, updated_at) VALUES (${quote(record.id)}, ${quote(record.user_did)}, ${quote(record.contact_did)}, ${quote(record.label)}, ${quote(record.avatar_url)}, ${quote(record.last_interaction_at)}, ${record.unread_count}, ${quote(record.created_at)}, ${quote(record.updated_at)})`);
+}
+
+export function getContactById(id: string): ContactRecord | null {
+  const rows = query(`SELECT * FROM didcomm_contacts WHERE id = ${quote(id)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as ContactRecord;
+}
+
+export function findContactByDIDs(userDID: string, contactDID: string): ContactRecord | null {
+  const rows = query(`SELECT * FROM didcomm_contacts WHERE user_did = ${quote(userDID)} AND contact_did = ${quote(contactDID)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as ContactRecord;
+}
+
+export function listContacts(userDID: string): ContactRecord[] {
+  return query(`SELECT * FROM didcomm_contacts WHERE user_did = ${quote(userDID)} ORDER BY last_interaction_at DESC NULLS LAST, label ASC`) as ContactRecord[];
+}
+
+export function updateContactFields(id: string, setClause: string): void {
+  query(`UPDATE didcomm_contacts SET ${setClause} WHERE id = ${quote(id)}`);
+}
+
+export function incrementContactUnread(id: string): void {
+  query(`UPDATE didcomm_contacts SET unread_count = unread_count + 1, updated_at = datetime('now') WHERE id = ${quote(id)}`);
+}
+
+export function deleteContact(id: string): void {
+  query(`DELETE FROM didcomm_contacts WHERE id = ${quote(id)}`);
+}
+
+export function searchContacts(userDID: string, queryStr: string): ContactRecord[] {
+  const like = `%${queryStr.replace(/'/g, "''")}%`;
+  return query(`SELECT * FROM didcomm_contacts WHERE user_did = ${quote(userDID)} AND (label LIKE '${like}' OR contact_did LIKE '${like}') ORDER BY last_interaction_at DESC NULLS LAST, label ASC`) as ContactRecord[];
+}
+
+// ─── DIDComm Push Registration Storage ──────────────────────────────────────
+
+export interface PushRegistrationRecord {
+  id: string;
+  did: string;
+  push_token: string;
+  platform: string;
+  device_id: string;
+  active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function insertPushRegistration(record: Omit<PushRegistrationRecord, "created_at" | "updated_at"> & { created_at: string; updated_at: string }): void {
+  query(`INSERT INTO didcomm_push_registrations (id, did, push_token, platform, device_id, active, created_at, updated_at) VALUES (${quote(record.id)}, ${quote(record.did)}, ${quote(record.push_token)}, ${quote(record.platform)}, ${quote(record.device_id)}, ${record.active}, ${quote(record.created_at)}, ${quote(record.updated_at)})`);
+}
+
+export function getPushRegistration(id: string): PushRegistrationRecord | null {
+  const rows = query(`SELECT * FROM didcomm_push_registrations WHERE id = ${quote(id)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as PushRegistrationRecord;
+}
+
+export function findPushRegistration(deviceId: string): PushRegistrationRecord | null {
+  const rows = query(`SELECT * FROM didcomm_push_registrations WHERE device_id = ${quote(deviceId)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as PushRegistrationRecord;
+}
+
+export function getPushRegistrations(did: string): PushRegistrationRecord[] {
+  return query(`SELECT * FROM didcomm_push_registrations WHERE did = ${quote(did)} AND active = 1 ORDER BY created_at DESC`) as PushRegistrationRecord[];
+}
+
+export function updatePushRegistration(id: string, pushToken: string, did: string, now: string): void {
+  query(`UPDATE didcomm_push_registrations SET push_token = ${quote(pushToken)}, did = ${quote(did)}, updated_at = ${quote(now)} WHERE id = ${quote(id)}`);
+}
+
+export function deactivatePushRegistration(id: string): void {
+  query(`UPDATE didcomm_push_registrations SET active = 0, updated_at = datetime('now') WHERE id = ${quote(id)}`);
 }

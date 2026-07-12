@@ -24,6 +24,7 @@ export interface ApiKeyRecord {
   key_hash: string;
   scopes: string;
   member_id: string | null;
+  plan: "free" | "developer" | "enterprise";
   created_at: string;
   revoked_at: string | null;
   last_used_at: string | null;
@@ -50,14 +51,15 @@ function generateId(): string {
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
- * Generate a new API key with the given name and scopes.
+ * Generate a new API key with the given name, scopes, and subscription plan.
  * Returns the raw key (shown once) and the stored record info.
  */
 export function generateApiKey(
   name: string,
   scopes: Scope[],
-  memberId?: string
-): { rawKey: string; id: string; name: string; scopes: string; created_at: string } {
+  memberId?: string,
+  plan: "free" | "developer" | "enterprise" = "free"
+): { rawKey: string; id: string; name: string; scopes: string; plan: string; created_at: string } {
   if (!name || name.trim().length === 0) {
     throw new Error("API key name is required");
   }
@@ -77,10 +79,10 @@ export function generateApiKey(
   const scopesStr = scopes.join(",");
 
   db(
-    `INSERT INTO api_keys (id, name, key_hash, scopes, member_id, created_at) VALUES ('${id}', '${name.replace(/'/g, "''")}', '${keyHash}', '${scopesStr}', ${memberId ? `'${memberId}'` : "NULL"}, '${now}')`
+    `INSERT INTO api_keys (id, name, key_hash, scopes, member_id, plan, created_at) VALUES ('${id}', '${name.replace(/'/g, "''")}', '${keyHash}', '${scopesStr}', ${memberId ? `'${memberId}'` : "NULL"}, '${plan}', '${now}')`
   );
 
-  return { rawKey, id, name, scopes: scopesStr, created_at: now };
+  return { rawKey, id, name, scopes: scopesStr, plan, created_at: now };
 }
 
 /**
@@ -90,7 +92,7 @@ export function generateApiKey(
 export function findApiKey(rawKey: string): ApiKeyRecord | null {
   const keyHash = hashKey(rawKey);
   const rows = db(
-    `SELECT id, name, key_hash, scopes, member_id, created_at, revoked_at, last_used_at FROM api_keys WHERE key_hash = '${keyHash}'`
+    `SELECT id, name, key_hash, scopes, member_id, plan, created_at, revoked_at, last_used_at FROM api_keys WHERE key_hash = '${keyHash}'`
   ) as any[];
 
   if (rows.length === 0) return null;
@@ -102,6 +104,7 @@ export function findApiKey(rawKey: string): ApiKeyRecord | null {
     key_hash: row.key_hash,
     scopes: row.scopes,
     member_id: row.member_id,
+    plan: row.plan || "free",
     created_at: row.created_at,
     revoked_at: row.revoked_at,
     last_used_at: row.last_used_at,
@@ -129,7 +132,7 @@ export function revokeApiKey(id: string): boolean {
  */
 export function listApiKeys(): Omit<ApiKeyRecord, "key_hash">[] {
   const rows = db(
-    "SELECT id, name, scopes, member_id, created_at, revoked_at, last_used_at FROM api_keys ORDER BY created_at DESC"
+    "SELECT id, name, scopes, member_id, plan, created_at, revoked_at, last_used_at FROM api_keys ORDER BY created_at DESC"
   ) as any[];
 
   return rows.map((r: any) => ({
@@ -137,6 +140,7 @@ export function listApiKeys(): Omit<ApiKeyRecord, "key_hash">[] {
     name: r.name,
     scopes: r.scopes,
     member_id: r.member_id,
+    plan: r.plan || "free",
     created_at: r.created_at,
     revoked_at: r.revoked_at,
     last_used_at: r.last_used_at,

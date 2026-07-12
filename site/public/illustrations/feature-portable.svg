@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="320" height="200" role="img" aria-label="Portable identity illustration">
+  <defs>
+    <linearGradient id="pOrbit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="320" height="200" rx="16" fill="#0F172A" stroke="#1E293B"/>
+
+  <!-- Center: identity -->
+  <g transform="translate(160 100)">
+    <circle r="36" fill="url(#pOrbit)"/>
+    <g fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-10 0 L-3 7 L10 -7"/>
+    </g>
+  </g>
+
+  <!-- Surrounding services -->
+  <g fill="none" stroke="#22D3EE" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.6">
+    <path d="M160 100 L60 60"/>
+    <path d="M160 100 L260 60"/>
+    <path d="M160 100 L60 140"/>
+    <path d="M160 100 L260 140"/>
+  </g>
+
+  <g>
+    <g transform="translate(60 60)">
+      <circle r="18" fill="#1E293B" stroke="#22D3EE" stroke-width="1.5"/>
+      <g transform="translate(-7 -7)" fill="none" stroke="#22D3EE" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 6V4a5 5 0 0 1 10 0v2"/>
+        <rect x="0" y="6" width="14" height="8" rx="1.5"/>
+      </g>
+    </g>
+    <text x="60" y="92" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="9" font-weight="600">BANK</text>
+
+    <g transform="translate(260 60)">
+      <circle r="18" fill="#1E293B" stroke="#A78BFA" stroke-width="1.5"/>
+      <g transform="translate(-7 -7)" fill="none" stroke="#A78BFA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M-7 -1 -2 -1 -2 7 -7 7zM-2 -1 7 -1 7 7 -2 7zM7 0 11 -3 11 7 7 7z"/>
+        <path d="M-7 9 H11"/>
+      </g>
+    </g>
+    <text x="260" y="92" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="9" font-weight="600">GOV</text>
+
+    <g transform="translate(60 140)">
+      <circle r="18" fill="#1E293B" stroke="#F59E0B" stroke-width="1.5"/>
+      <g transform="translate(-7 -7)" fill="none" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M-7 0 0 -5 7 0 0 5z"/>
+        <path d="M-4 1v5c0 1 2 2 4 2s4-1 4-2V1"/>
+      </g>
+    </g>
+    <text x="60" y="172" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="9" font-weight="600">SCHOOL</text>
+
+    <g transform="translate(260 140)">
+      <circle r="18" fill="#1E293B" stroke="#10B981" stroke-width="1.5"/>
+      <g transform="translate(-7 -7)" fill="none" stroke="#10B981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M-7 3 0 -2 7 3"/>
+        <path d="M-5 3v5h10V3"/>
+      </g>
+    </g>
+    <text x="260" y="172" text-anchor="middle" fill="#94A3B8" font-family="Inter, system-ui, sans-serif" font-size="9" font-weight="600">WORK</text>
+  </g>
+</svg>

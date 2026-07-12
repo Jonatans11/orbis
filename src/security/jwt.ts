@@ -33,6 +33,7 @@ export interface UserRecord {
   created_at: string;
   updated_at: string;
   verified: number;
+  admin: number;
 }
 
 export interface JwtPayload {
@@ -228,6 +229,7 @@ export async function registerHandler(req: Request, res: Response): Promise<void
         displayName: user.display_name,
         did: user.did,
         verified: user.verified === 1,
+        admin: user.admin === 1,
       },
     });
   } catch (err: any) {
@@ -276,6 +278,7 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
         displayName: user.display_name,
         did: user.did,
         verified: user.verified === 1,
+        admin: user.admin === 1,
       },
     });
   } catch (err: any) {
@@ -303,6 +306,7 @@ export function meHandler(req: Request, res: Response): void {
       displayName: user.display_name,
       did: user.did,
       verified: user.verified === 1,
+      admin: user.admin === 1,
       created_at: user.created_at,
     },
   });

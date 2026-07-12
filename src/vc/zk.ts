@@ -6,6 +6,25 @@
  * proving claims about hidden fields (e.g., "age >= 18") without disclosing
  * the underlying data.
  * 
+ * ── TWO FLOWS ──────────────────────────────────────────────────────────
+ * 
+ * 1. ON-DEVICE PROVING (RECOMMENDED for mobile wallets)
+ *    The wallet creates and signs the proof locally using @orbis/wallet-core.
+ *    The holder's secret key NEVER leaves the device.
+ *    Flow: challenge → create proof on-device → POST to /api/vc/zk/verify
+ *          or /api/wallet/vc/present (wallet-specific endpoint)
+ * 
+ * 2. SERVER-SIDE PROVING (LEGACY, for automated backend systems)
+ *    The holder sends their credential and secret key to the server.
+ *    The server creates and signs the proof.
+ *    WARNING: This requires transmitting the holder's secret key over the
+ *    network — NEVER use this flow for mobile wallet users.
+ *    Flow: POST /api/vc/zk/prove with credential + holderSecretKey
+ * 
+ * ── VERIFICATION (same for both flows) ────────────────────────────────
+ * Verification always uses the holder's PUBLIC key (extracted from the DID
+ * document). No secret key is needed at verification time.
+ * 
  * This is a "ZK-lite" approach using hash-based commitments and holder binding
  * rather than full BBS+ or zk-SNARKs. It provides:
  *   1. Selective disclosure — reveal only chosen fields
@@ -141,6 +160,17 @@ const CRYPTOSUITE = "orbis-zk-sd-2025";
 
 /**
  * Create a ZK selective disclosure proof from a Verifiable Credential.
+ * 
+ * ⚠️  DEPRECATED for mobile wallet flows.
+ * This function requires the holder's SECRET KEY to be transmitted to the server.
+ * For mobile wallets, the proof MUST be created ON-DEVICE using @orbis/wallet-core.
+ * The wallet should generate the proof locally and POST it to /api/vc/zk/verify
+ * or /api/wallet/vc/present.
+ * 
+ * This endpoint is retained for:
+ *   - Backend-to-backend automated proving
+ *   - Testing and development
+ *   - Legacy integrations
  * 
  * The holder specifies which fields to reveal and which to hide.
  * Hidden fields are replaced with SHA-256 hash commitments.

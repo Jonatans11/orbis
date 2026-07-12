@@ -76,13 +76,13 @@ export async function createDIDWeb(options: webModule.DIDWebOptions): Promise<DI
 /**
  * Resolve a DID to its DID Document.
  */
-export function resolveDID(did: string): keyModule.DIDDocument | null {
+export async function resolveDID(did: string): Promise<keyModule.DIDDocument | null> {
   if (did.startsWith("did:key:")) {
     return keyModule.resolveDIDKey(did);
   }
 
   if (did.startsWith("did:web:")) {
-    const { didDocument } = webModule.resolveDIDWeb(did);
+    const { didDocument } = await webModule.resolveDIDWeb(did);
     return didDocument;
   }
 
@@ -129,4 +129,11 @@ export function extractPublicKey(did: string): Uint8Array | null {
   }
 
   return null;
+}
+
+/**
+ * Get the public key bytes from a VerificationMethod.
+ */
+export function getPublicKeyFromVerificationMethod(vm: keyModule.VerificationMethod): Uint8Array | null {
+  return keyModule.getPublicKeyFromVerificationMethod(vm);
 }
