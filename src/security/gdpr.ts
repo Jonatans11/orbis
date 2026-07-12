@@ -9,7 +9,7 @@
  */
 
 import type { Request, Response } from "express";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { findUserById } from "./jwt.js";
 import { logAudit, getClientIp } from "./audit.js";
@@ -19,7 +19,7 @@ const TEAM_DB = "team-db";
 function query(sql: string): any[] {
   const normalized = sql.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
   try {
-    const output = execSync(`${TEAM_DB} ${JSON.stringify(normalized)}`, {
+    const output = execFileSync(TEAM_DB, [normalized], {
       encoding: "utf-8",
       timeout: 10_000,
     });
