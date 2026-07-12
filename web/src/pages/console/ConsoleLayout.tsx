@@ -1,6 +1,6 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
 import {
-  LayoutGrid, KeyRound, FileBadge2, ShieldCheck, MessagesSquare, Code2, ArrowLeft, ShieldAlert, ToggleLeft
+  LayoutGrid, KeyRound, FileBadge2, ShieldCheck, MessagesSquare, Code2, ArrowLeft,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { useAsync } from "../../components/ui";
@@ -10,11 +10,9 @@ const NAV = [
   { to: "/app", label: "Overview", icon: LayoutGrid, end: true },
   { to: "/app/dids", label: "Identifiers", icon: KeyRound },
   { to: "/app/credentials", label: "Credentials", icon: FileBadge2 },
-  { to: "/app/status-lists", label: "Status Lists", icon: ToggleLeft },
   { to: "/app/trust", label: "Trust Registry", icon: ShieldCheck },
   { to: "/app/messages", label: "Messages", icon: MessagesSquare },
   { to: "/app/developer", label: "Developer", icon: Code2 },
-  { to: "/app/audit", label: "Audit Logs", icon: ShieldAlert },
 ];
 
 function ApiStatus() {

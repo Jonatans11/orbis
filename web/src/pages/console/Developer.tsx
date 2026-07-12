@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Code2, KeySquare, BarChart3, BookOpen } from "lucide-react";
-import { api, type UsageStats, type ApiKeyInfo } from "../../lib/api";
+import { Code2, KeySquare, BarChart3, BookOpen, Webhook } from "lucide-react";
+import { api, type UsageStats, type ApiKeyInfo, type WebhookInfo } from "../../lib/api";
 import {
   Card, CardHeader, Button, Input, Field, Mono, CopyButton, CodeBlock,
   ErrorNote, EmptyState, StatTile, useAsync,
 } from "../../components/ui";
+
+const WEBHOOK_EVENTS = ["credential.issued", "credential.verified"] as const;
 
 /** Usage-by-endpoint — single-series horizontal bars, direct value labels. */
 function EndpointBars({ byEndpoint }: { byEndpoint: Record<string, number> }) {
@@ -43,6 +45,16 @@ export default function Developer() {
   const [panelError, setPanelError] = useState<string | null>(null);
   const [loadingPanel, setLoadingPanel] = useState(false);
 
+  // Webhook state
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+  const [webhooks, setWebhooks] = useState<WebhookInfo[] | null>(null);
+  const [whLoading, setWhLoading] = useState(false);
+  const [whRegistering, setWhRegistering] = useState(false);
+  const [whError, setWhError] = useState<string | null>(null);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+
   async function handleRegister() {
     setRegistering(true); setRegError(null); setRawKey(null);
     try { const res = await api.gateway.register({ name, email }); setRawKey(res.raw_key); setApiKey(res.raw_key); }
@@ -58,11 +70,42 @@ export default function Developer() {
     } catch (e) { setPanelError((e as Error).message); setKeys(null); setUsage(null); } finally { setLoadingPanel(false); }
   }
 
+  async function loadWebhooks() {
+    if (!apiKey.trim()) return;
+    setWhLoading(true); setWhError(null);
+    try {
+      const res = await api.gateway.webhooks.list(apiKey.trim());
+      setWebhooks(res.webhooks);
+    } catch (e) { setWhError((e as Error).message); setWebhooks(null); } finally { setWhLoading(false); }
+  }
+
+  async function handleRegisterWebhook() {
+    if (!apiKey.trim() || !webhookUrl.trim() || selectedEvents.length === 0) return;
+    setWhRegistering(true); setWhError(null);
+    try {
+      await api.gateway.webhooks.create(apiKey.trim(), { url: webhookUrl.trim(), events: selectedEvents });
+      setWebhookUrl(""); setSelectedEvents([]);
+      await loadWebhooks();
+    } catch (e) { setWhError((e as Error).message); } finally { setWhRegistering(false); }
+  }
+
+  async function handleDeleteWebhook(id: string) {
+    if (!apiKey.trim()) return;
+    try {
+      await api.gateway.webhooks.remove(apiKey.trim(), id);
+      setWebhooks((prev) => prev ? prev.filter((w) => w.id !== id) : null);
+    } catch (e) { setWhError((e as Error).message); }
+  }
+
+  function toggleEvent(event: string) {
+    setSelectedEvents((prev) => prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]);
+  }
+
   return (
     <div className="space-y-7">
       <div>
         <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">Developer</h1>
-        <p className="mt-1 text-[13.5px] text-ink-3">API keys, usage analytics, and scopes for building on the ORBIS SSI gateway.</p>
+        <p className="mt-1 text-[13.5px] text-ink-3">API keys, usage analytics, webhooks, and scopes for building on the ORBIS SSI gateway.</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -154,7 +197,115 @@ POST /api/didcomm/send      # encrypted DIDComm message`} />
         </div>
       </Card>
 
-      <p className="flex items-center gap-2 text-[12px] text-ink-3"><Code2 size={13} /> The gateway enforces per-key rate limits (token bucket) and logs usage for the stats above.</p>
+      {/* ── Webhooks ────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader
+          title="Webhooks"
+          subtitle="Register endpoints to receive credential events in real time."
+          icon={<Webhook size={16} />}
+          action={
+            apiKey.trim() ? (
+              <Button variant="secondary" size="sm" onClick={loadWebhooks} loading={whLoading}>
+                <Webhook size={13} /> Refresh
+              </Button>
+            ) : undefined
+          }
+        />
+        <div className="space-y-5 p-5">
+          {/* Register form */}
+          {apiKey.trim() && (
+            <div className="rounded-lg border border-[var(--color-line-2)] bg-[var(--color-surface-2)]/30 p-4">
+              <h4 className="mb-3 text-[12px] font-medium text-ink-2">Register a webhook</h4>
+              <div className="space-y-3">
+                <Input
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://your-service.com/webhook"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {WEBHOOK_EVENTS.map((evt) => (
+                    <label
+                      key={evt}
+                      className={`cursor-pointer rounded-md border px-3 py-1.5 text-[11.5px] font-medium transition-colors ${
+                        selectedEvents.includes(evt)
+                          ? "border-[var(--color-accent)] bg-[rgba(77,124,255,0.12)] text-[var(--color-accent-hi)]"
+                          : "border-[var(--color-line-2)] text-ink-3 hover:border-ink-2 hover:text-ink-2"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={selectedEvents.includes(evt)}
+                        onChange={() => toggleEvent(evt)}
+                      />
+                      {evt}
+                    </label>
+                  ))}
+                </div>
+                <Button
+                  onClick={handleRegisterWebhook}
+                  loading={whRegistering}
+                  disabled={!webhookUrl.trim() || selectedEvents.length === 0}
+                  size="sm"
+                >
+                  <Webhook size={13} /> Register webhook
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {whError && <ErrorNote message={whError} />}
+
+          {/* Webhook list */}
+          {webhooks && webhooks.length > 0 ? (
+            <div className="space-y-2">
+              {webhooks.map((wh) => {
+                const eventList = wh.events.split(",");
+                return (
+                  <div
+                    key={wh.id}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-2)]/50 px-4 py-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="break-all font-mono text-[12px] text-ink">{wh.url}</p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        {eventList.map((evt) => (
+                          <span
+                            key={evt}
+                            className="inline-block rounded-full bg-[rgba(77,124,255,0.1)] px-2 py-0.5 font-mono text-[10px] font-medium text-[var(--color-accent-hi)]"
+                          >
+                            {evt}
+                          </span>
+                        ))}
+                        <span className="text-[11px] text-ink-3">
+                          {wh.active ? "Active" : "Inactive"} · Created {new Date(wh.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteWebhook(wh.id)}
+                      className="shrink-0 rounded-md px-2.5 py-1.5 text-[11.5px] font-medium text-ink-3 transition-colors hover:bg-red-500/15 hover:text-red-400"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : webhooks && webhooks.length === 0 ? (
+            <EmptyState title="No webhooks registered" hint="Register a webhook above to receive credential events." icon={<Webhook size={20} />} />
+          ) : !apiKey.trim() ? (
+            <EmptyState title="Enter an API key" hint="Paste or create an API key above to manage webhooks." icon={<Webhook size={20} />} />
+          ) : null}
+        </div>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-4 text-[12px] text-ink-3">
+        <span className="flex items-center gap-2"><Code2 size={13} /> The gateway enforces per-key rate limits (token bucket), logs usage for the stats above, and delivers webhooks for credential events.</span>
+        <a href="/test.html" target="_blank" className="focusable inline-flex items-center gap-1.5 rounded-md border border-[var(--color-line-2)] bg-[var(--color-surface-2)] px-3 py-1.5 font-medium text-ink-2 transition-colors hover:bg-[var(--color-surface-3)] hover:text-ink">
+          <Code2 size={13} /> End-to-end test page
+        </a>
+      </div>
     </div>
   );
 }
