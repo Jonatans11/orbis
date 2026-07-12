@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { KeyRound, FileBadge2, ShieldCheck, ArrowUpRight, Plus, Fingerprint } from "lucide-react";
+import { KeyRound, FileBadge2, ShieldCheck, ArrowUpRight, Plus, Fingerprint, RefreshCw } from "lucide-react";
 import { api } from "../../lib/api";
 import { Card, CardHeader, StatTile, StatusPill, Mono, useAsync, EmptyState } from "../../components/ui";
 
@@ -18,9 +18,17 @@ export default function Overview() {
 
   return (
     <div className="space-y-7">
-      <div>
-        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">Overview</h1>
-        <p className="mt-1 text-[13.5px] text-ink-3">Live state of your ORBIS.ID identity infrastructure.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">Overview</h1>
+          <p className="mt-1 text-[13.5px] text-ink-3">Live state of your ORBIS.ID identity infrastructure.</p>
+        </div>
+        <button
+          onClick={() => { dids.reload(); creds.reload(); trust.reload(); }}
+          className="focusable inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-line-2)] bg-[var(--color-surface-2)] px-3 py-1.5 text-[12px] font-medium text-ink-2 transition-colors hover:bg-[var(--color-surface-3)] hover:text-ink"
+        >
+          <RefreshCw size={13} /> Refresh
+        </button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

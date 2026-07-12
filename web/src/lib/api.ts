@@ -20,6 +20,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+/** Like request() but adds an optional JWT Bearer token. */
+async function requestWithToken<T>(path: string, token?: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return request<T>(path, { ...init, headers: { ...headers, ...(init?.headers as Record<string, string>) } });
+}
+
 const get = <T,>(path: string) => request<T>(path);
 const post = <T,>(path: string, body: unknown) =>
   request<T>(path, { method: "POST", body: JSON.stringify(body) });
@@ -107,27 +114,108 @@ export interface ApiKeyInfo {
   last_used_at: string | null;
 }
 
-export interface AuditLogEntry {
+export interface WebhookInfo {
+  id: string;
+  url: string;
+  events: string;
+  active: number;
+  created_at: string;
+}
+
+// ─── Auth & User Types ───────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  did: string | null;
+  verified: boolean;
+  admin: boolean;
+  created_at?: string;
+}
+
+export interface LoginResult {
+  success: boolean;
+  token: string;
+  user: AuthUser;
+}
+
+export interface MeResult {
+  success: boolean;
+  user: AuthUser & { created_at: string };
+}
+
+// ─── Admin Types ─────────────────────────────────────────────────────────────
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  did: string | null;
+  admin: boolean;
+  status: string;
+  display_name: string;
+  verified: boolean;
+  created_at: string;
+}
+
+export interface AdminAuditEntry {
   id: string;
   actor_type: string;
-  actor_id: string | null;
+  actor_id: string;
   action: string;
   entity_type: string;
-  entity_id: string | null;
-  result: "success" | "failure";
-  message: string | null;
-  ip_address: string | null;
+  entity_id: string;
+  result: string;
+  message: string;
+  ip_address: string;
   timestamp: string;
 }
 
-export interface StatusListRecord {
+export interface SystemStats {
+  users: { total: number; active: number; suspended: number; admins: number };
+  dids: { total: number; did_key: number; did_web: number };
+  credentials: { total: number; active: number; revoked: number };
+  trust_registry: { total_entries: number };
+  audit_log: { total_entries: number };
+  messages: { total: number };
+  api_keys: { total: number };
+}
+
+export interface AdminCredential {
   id: string;
-  name: string;
+  credential_id: string;
   issuer_did: string;
-  status_purpose: "revocation" | "suspension";
-  encoded_list: string;
+  subject_did: string;
+  type: string;
+  status: string;
+  schema_url: string;
+  issuance_date: string;
+  expiration_date: string;
+  proof_type: string;
+  created_at: string;
+}
+
+export interface AdminDID {
+  id: string;
+  did: string;
+  method: string;
+  status: string;
+  verification_method_id: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface AdminApiKey {
+  id: string;
+  name: string;
+  email: string;
+  scopes: string[];
+  status: string;
+  member_id: string | null;
+  total_requests: number;
+  created_at: string;
+  revoked_at: string | null;
+  last_used_at: string | null;
 }
 
 // ─── API surface ─────────────────────────────────────────────────────────────
@@ -219,17 +307,6 @@ export const api = {
       ),
   },
 
-  status: {
-    create: (body: { name: string; issuerDid: string; statusPurpose?: "revocation" | "suspension"; numBits?: number }) =>
-      post<{ success: boolean; statusList: StatusListRecord }>("/api/status/create", body),
-    get: (listId: string) =>
-      get<{ success: boolean; statusList: StatusListRecord }>(`/api/status/list/${encodeURIComponent(listId)}`),
-    update: (body: { listId: string; index: number; status: boolean }) =>
-      post<{ success: boolean; statusList: StatusListRecord }>("/api/status/update", body),
-    check: (listId: string, index: number) =>
-      get<{ success: boolean; listId: string; index: number; status: boolean }>(`/api/status/check/${encodeURIComponent(listId)}/${index}`),
-  },
-
   gateway: {
     register: (body: { name: string; email: string }) =>
       post<{
@@ -258,12 +335,125 @@ export const api = {
       }>("/api/gateway/stats", {
         headers: { Authorization: `Bearer ${apiKey}` },
       }),
-    listAuditLogs: (apiKey?: string) => {
-      // Intelligently fallback to localStorage saved dev keys if none passed
-      const key = apiKey || localStorage.getItem("orb_dev_key") || "orb_admin_stub";
-      return request<{ success: boolean; count: number; total: number; logs: AuditLogEntry[] }>("/api/gateway/audit", {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-    }
+    webhooks: {
+      list: (apiKey: string) =>
+        request<{ success: boolean; count: number; webhooks: WebhookInfo[] }>("/api/gateway/webhooks", {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        }),
+      create: (apiKey: string, body: { url: string; events: string[] }) =>
+        request<{ success: boolean; webhook: WebhookInfo }>("/api/gateway/webhooks", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      remove: (apiKey: string, id: string) =>
+        request<{ success: boolean }>(`/api/gateway/webhooks/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${apiKey}` },
+        }),
+    },
+  },
+
+  // ─── Auth ──────────────────────────────────────────────────────────────────
+
+  auth: {
+    /** POST /api/auth/register — create a new user account. */
+    register: (body: { email: string; password: string; displayName: string }) =>
+      post<LoginResult>("/api/auth/register", body),
+
+    /** POST /api/auth/login — authenticate and receive a JWT token. */
+    login: (body: { email: string; password: string }) =>
+      post<LoginResult>("/api/auth/login", body),
+
+    /** GET /api/auth/me — get current user profile (requires JWT). */
+    me: (token?: string) =>
+      requestWithToken<MeResult>("/api/auth/me", token),
+
+    /** PUT /api/auth/password — change password (requires JWT). */
+    changePassword: (body: { currentPassword: string; newPassword: string }, token?: string) =>
+      requestWithToken<{ success: boolean; message: string }>(
+        "/api/auth/password", token,
+        { method: "PUT", body: JSON.stringify(body) }
+      ),
+
+    /** PUT /api/auth/did — link a DID to the user account (requires JWT). */
+    linkDID: (body: { did: string }, token?: string) =>
+      requestWithToken<{ success: boolean; message: string }>(
+        "/api/auth/did", token,
+        { method: "PUT", body: JSON.stringify(body) }
+      ),
+  },
+
+  // ─── Admin ─────────────────────────────────────────────────────────────────
+
+  admin: {
+    /** GET /api/admin/users — list all registered users. */
+    users: (token?: string) =>
+      requestWithToken<{ success: boolean; count: number; users: AdminUser[] }>(
+        "/api/admin/users", token
+      ),
+
+    /** PUT /api/admin/users/:id/suspend — suspend a user. */
+    suspendUser: (userId: string, token?: string) =>
+      requestWithToken<{ success: boolean; message: string }>(
+        `/api/admin/users/${userId}/suspend`, token,
+        { method: "PUT" }
+      ),
+
+    /** PUT /api/admin/users/:id/activate — reactivate a user. */
+    activateUser: (userId: string, token?: string) =>
+      requestWithToken<{ success: boolean; message: string }>(
+        `/api/admin/users/${userId}/activate`, token,
+        { method: "PUT" }
+      ),
+
+    /** GET /api/admin/audit-log — view audit logs. */
+    auditLog: (params: { limit?: number; offset?: number; actor_id?: string } = {}, token?: string) =>
+      requestWithToken<{
+        success: boolean; count: number; total: number; limit: number; offset: number;
+        entries: AdminAuditEntry[];
+      }>(
+        `/api/admin/audit-log?limit=${params.limit || 100}&offset=${params.offset || 0}${params.actor_id ? `&actor_id=${encodeURIComponent(params.actor_id)}` : ""}`,
+        token
+      ),
+
+    /** GET /api/admin/system/stats — aggregated system statistics. */
+    stats: (token?: string) =>
+      requestWithToken<{ success: boolean; stats: SystemStats }>(
+        "/api/admin/system/stats", token
+      ),
+
+    /** GET /api/admin/credentials — view all credentials. */
+    credentials: (params: { limit?: number; offset?: number } = {}, token?: string) =>
+      requestWithToken<{
+        success: boolean; count: number; total: number; limit: number; offset: number;
+        credentials: AdminCredential[];
+      }>(
+        `/api/admin/credentials?limit=${params.limit || 50}&offset=${params.offset || 0}`,
+        token
+      ),
+
+    /** GET /api/admin/dids — view all DIDs. */
+    dids: (params: { limit?: number; offset?: number } = {}, token?: string) =>
+      requestWithToken<{
+        success: boolean; count: number; total: number; limit: number; offset: number;
+        dids: AdminDID[];
+      }>(
+        `/api/admin/dids?limit=${params.limit || 50}&offset=${params.offset || 0}`,
+        token
+      ),
+
+    /** GET /api/admin/api-keys — view all API keys. */
+    apiKeys: (token?: string) =>
+      requestWithToken<{ success: boolean; count: number; keys: AdminApiKey[] }>(
+        "/api/admin/api-keys", token
+      ),
+
+    /** GET /api/admin/health/detailed — detailed health check. */
+    detailedHealth: (token?: string) =>
+      requestWithToken<{
+        success: boolean; status: string; version: string; service: string;
+        timestamp: string; checks: Record<string, unknown>;
+      }>("/api/admin/health/detailed", token),
   },
 };
