@@ -14,7 +14,13 @@ import { OnboardingScreen } from '@/screens/OnboardingScreen';
 import { ScanQRScreen } from '@/screens/ScanQRScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ShowQRScreen } from '@/screens/ShowQRScreen';
-import { VaultScreen } from '@/screens/VaultScreen';
+import { AllSharesScreen } from '@/screens/vault/AllSharesScreen';
+import { CompensationScreen } from '@/screens/vault/CompensationScreen';
+import { ShareRedeemScreen } from '@/screens/vault/ShareRedeemScreen';
+import { VaultCategoryScreen } from '@/screens/vault/VaultCategoryScreen';
+import { VaultHomeScreen } from '@/screens/vault/VaultHomeScreen';
+import { VaultRecordScreen } from '@/screens/vault/VaultRecordScreen';
+import { VaultShareScreen } from '@/screens/vault/VaultShareScreen';
 import { colors, navigationTheme } from '@/theme';
 import type { MainTabsParamList, RootStackParamList } from './types';
 
@@ -51,7 +57,7 @@ function MainTabs() {
     >
       <Tabs.Screen name="Home" component={HomeScreen} />
       <Tabs.Screen name="Credentials" component={CredentialsScreen} />
-      <Tabs.Screen name="Vault" component={VaultScreen} />
+      <Tabs.Screen name="Vault" component={VaultHomeScreen} />
       <Tabs.Screen name="Messages" component={MessagesScreen} />
       <Tabs.Screen name="Settings" component={SettingsScreen} />
     </Tabs.Navigator>
@@ -88,6 +94,12 @@ export function RootNavigator() {
               component={ShowQRScreen}
               options={{ presentation: 'modal' }}
             />
+            <Stack.Screen name="VaultCategory" component={VaultCategoryScreen} />
+            <Stack.Screen name="VaultRecord" component={VaultRecordScreen} />
+            <Stack.Screen name="VaultShare" component={VaultShareScreen} />
+            <Stack.Screen name="AllShares" component={AllSharesScreen} />
+            <Stack.Screen name="Compensation" component={CompensationScreen} />
+            <Stack.Screen name="ShareRedeem" component={ShareRedeemScreen} />
           </>
         )}
       </Stack.Navigator>

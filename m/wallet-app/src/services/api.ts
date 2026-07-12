@@ -27,7 +27,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
+export async function request<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
@@ -106,7 +106,11 @@ export const api = {
 
   auth: {
     register: (body: { email: string; password: string; name?: string }) =>
-      post<AuthResponse>('/api/auth/register', body),
+      post<AuthResponse>('/api/auth/register', {
+        ...body,
+        // The live backend requires `displayName`; keep `name` for older builds.
+        displayName: body.name ?? body.email.split('@')[0],
+      }),
     login: (body: { email: string; password: string }) =>
       post<AuthResponse>('/api/auth/login', body),
     me: () => get<{ user: UserProfile }>('/api/auth/me'),

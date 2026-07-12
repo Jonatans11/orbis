@@ -21,7 +21,16 @@ export const SecureKeys = {
   didKeys: 'orbis.did.keys',
   /** Expo push token registered with the backend. */
   pushToken: 'orbis.push.token',
+  /** Vault master key (base64, 32 bytes). Wraps per-record keys; never leaves the device. */
+  vaultMasterKey: 'orbis.vault.master',
+  /** Data monetization master switch (Settings → Privacy & data). */
+  monetizationEnabled: 'orbis.privacy.monetization',
+  /** JSON map recordId → true for records with "Allow paid access requests" on. */
+  vaultMonetizableMap: 'orbis.vault.monetizable',
 } as const;
+
+/** Prefix for per-record wrapped vault keys (dynamic keys: `orbis.vault.rk.<recordId>`). */
+export const VAULT_RECORD_KEY_PREFIX = 'orbis.vault.rk.';
 
 type SecureKey = (typeof SecureKeys)[keyof typeof SecureKeys];
 
@@ -46,6 +55,34 @@ export async function secureSet(key: SecureKey, value: string): Promise<void> {
 }
 
 export async function secureDelete(key: SecureKey): Promise<void> {
+  if (!isNative) {
+    memoryFallback.delete(key);
+    return;
+  }
+  await SecureStore.deleteItemAsync(key);
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic keys (per-record vault keys). SecureStore keys are limited to
+// [A-Za-z0-9._-]; record ids are UUIDs so `orbis.vault.rk.<uuid>` is valid.
+// ---------------------------------------------------------------------------
+
+export async function secureGetRaw(key: string): Promise<string | null> {
+  if (!isNative) return memoryFallback.get(key) ?? null;
+  return SecureStore.getItemAsync(key);
+}
+
+export async function secureSetRaw(key: string, value: string): Promise<void> {
+  if (!isNative) {
+    memoryFallback.set(key, value);
+    return;
+  }
+  await SecureStore.setItemAsync(key, value, {
+    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  });
+}
+
+export async function secureDeleteRaw(key: string): Promise<void> {
   if (!isNative) {
     memoryFallback.delete(key);
     return;
