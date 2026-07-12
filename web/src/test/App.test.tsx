@@ -10,7 +10,10 @@ describe("Landing page", () => {
         <Landing />
       </MemoryRouter>
     );
-    expect(screen.getByText(/ORBIS\.ID/i)).toBeInTheDocument();
+    // There are multiple "ORBIS.ID" references (Wordmark nav + body text),
+    // so use getAllByText and assert at least one exists
+    const matches = screen.getAllByText(/ORBIS\.ID/i);
+    expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders without crashing", () => {
