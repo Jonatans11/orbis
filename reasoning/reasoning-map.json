@@ -1,0 +1,3235 @@
+{
+ "meta": {
+  "project": "ORBIS.ID",
+  "description": "Reasoning map of the ORBIS.ID self-sovereign identity platform: every known law/standard, decision, rule, constraint, direction, and principle, with sources and typed relations. Authoritative for agents; see CLAUDE.md and .claude/agents/reason.md.",
+  "generated": "2026-07-18",
+  "nodeTypes": [
+   "law",
+   "decision",
+   "rule",
+   "constraint",
+   "direction",
+   "principle"
+  ],
+  "relations": [
+   "implements",
+   "enforces",
+   "constrains",
+   "enables",
+   "derives-from",
+   "conflicts-with",
+   "part-of",
+   "motivates"
+  ],
+  "domains": [
+   "governance",
+   "did",
+   "vc",
+   "zk",
+   "trust",
+   "didcomm",
+   "gateway",
+   "security",
+   "data",
+   "ops",
+   "web",
+   "wallet",
+   "core"
+  ],
+  "layout": "Radial shells by type (principles r=75 at core, decisions 155, rules 225, constraints 275, laws 335, directions 395); 12 domain sectors around the Y axis."
+ },
+ "nodes": [
+  {
+   "id": "member-ownership",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Members own 50% of the operating company",
+   "statement": "Global Holdings LLC is split 50% Member Trust, 49% XFabrix, 1% SSI Trust; members receive quarterly cash distributions and accumulate wealth in the Liberty Fund.",
+   "source": "web/src/pages/Landing.tsx:17-22,190-192",
+   "pos": [
+    127.4,
+    -43.4,
+    -51.7
+   ]
+  },
+  {
+   "id": "perpetual-trust",
+   "type": "decision",
+   "domain": "governance",
+   "title": "South Dakota Dynasty Trust holds IP and governance in perpetuity",
+   "statement": "The ORBIS.ID SSI Trust holds all IP, perpetual governance authority, and a 51% coin reserve; it is creditor-protected and built to exist in perpetuity.",
+   "source": "web/src/pages/Landing.tsx:19,39-44,187-189",
+   "pos": [
+    143,
+    36.7,
+    -46.3
+   ]
+  },
+  {
+   "id": "five-entity-structure",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Five-entity legal structure",
+   "statement": "ORBIS.ID SSI Trust (SD), Global Holdings LLC (DE, 50% member-owned), Member Trust (SD, 100% privacy control), Liberty Fund LP (DE, vested 5-15 yrs), and regional subsidiaries in the Netherlands, Singapore, Delaware, UAE, and Mauritius.",
+   "source": "web/src/pages/Landing.tsx:39-45,190-193",
+   "pos": [
+    138.4,
+    -36.7,
+    -29.5
+   ]
+  },
+  {
+   "id": "global-compliance",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Multi-jurisdictional compliance from day one",
+   "statement": "The platform commits to GDPR, MiCA, CCPA/CPRA, PIPL, LGPD, eIDAS 2.0, and the GENIUS Act, with hubs across Europe, Asia, the Americas, the Middle East, and Africa.",
+   "source": "web/src/pages/Landing.tsx:20,54,196",
+   "pos": [
+    154.6,
+    1,
+    -15.8
+   ]
+  },
+  {
+   "id": "distribution-formula",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Quarterly member distribution formula",
+   "statement": "Distributions split 30% individual activity, 25% equal share, 25% country transaction volume, 10% low-income members, 10% country-weighted equity; 50% of distributions auto-invest into the Liberty Fund (vested 5-15 years).",
+   "source": "web/src/pages/Landing.tsx:31-37,244-245",
+   "pos": [
+    142.4,
+    -36.2,
+    3.3
+   ]
+  },
+  {
+   "id": "orbis-coin",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Orbis Coin: 100-billion utility token",
+   "statement": "50 coins per verified member, 20% fee discount, governance power, and staking; declared MiCA and GENIUS Act compliant.",
+   "source": "web/src/pages/Landing.tsx:12,266",
+   "pos": [
+    152.2,
+    23.7,
+    22.5
+   ]
+  },
+  {
+   "id": "multi-tier-democracy",
+   "type": "decision",
+   "domain": "governance",
+   "title": "One member, one vote democracy",
+   "statement": "Members elect the Member Trust Board and SSI Trust directors, can veto privacy changes, and can submit proposals.",
+   "source": "web/src/pages/Landing.tsx:267",
+   "pos": [
+    149.1,
+    16.1,
+    42.1
+   ]
+  },
+  {
+   "id": "headline-commitments",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Headline commitments: 50% / 100% / 100B / 5",
+   "statement": "The platform publicly commits to 50% member economic ownership, 100% member control of data privacy, a 100-billion coin supply, and 5 regional hubs.",
+   "source": "web/src/pages/Landing.tsx:10-15",
+   "pos": [
+    133.6,
+    40.6,
+    67.1
+   ]
+  },
+  {
+   "id": "mica-genius-compliance",
+   "type": "law",
+   "domain": "governance",
+   "title": "MiCA & GENIUS Act (crypto-asset regulation)",
+   "statement": "Orbis Coin is declared compliant with the EU Markets in Crypto-Assets regulation and the US GENIUS Act.",
+   "source": "web/src/pages/Landing.tsx:266,54",
+   "pos": [
+    332.3,
+    57,
+    14.6
+   ]
+  },
+  {
+   "id": "roadmap-p1-foundation",
+   "type": "direction",
+   "domain": "governance",
+   "title": "Phase 01 (Years 1-2): Foundation",
+   "statement": "US and EU launch, 10M members, first partnerships.",
+   "source": "web/src/pages/Landing.tsx:48",
+   "pos": [
+    341.5,
+    -80.6,
+    -138
+   ]
+  },
+  {
+   "id": "roadmap-p2-growth",
+   "type": "direction",
+   "domain": "governance",
+   "title": "Phase 02 (Years 3-5): Growth",
+   "statement": "Expansion to Asia-Pacific, Middle East, and Latin America; 100M members; break-even.",
+   "source": "web/src/pages/Landing.tsx:49",
+   "pos": [
+    368,
+    -80.6,
+    -36.6
+   ]
+  },
+  {
+   "id": "roadmap-p3-acceleration",
+   "type": "direction",
+   "domain": "governance",
+   "title": "Phase 03 (Years 6-10): Acceleration",
+   "statement": "Global presence, 500M members, dominant market position.",
+   "source": "web/src/pages/Landing.tsx:50",
+   "pos": [
+    338.4,
+    170.1,
+    42.1
+   ]
+  },
+  {
+   "id": "roadmap-p4-maturity",
+   "type": "direction",
+   "domain": "governance",
+   "title": "Phase 04 (Years 11+): Maturity",
+   "statement": "1B+ members, the global standard for identity, perpetual operation.",
+   "source": "web/src/pages/Landing.tsx:51",
+   "pos": [
+    311.3,
+    174,
+    126.7
+   ]
+  },
+  {
+   "id": "self-sovereign-identity",
+   "type": "principle",
+   "domain": "core",
+   "title": "Self-sovereign identity: identity you hold",
+   "statement": "Identifiers are self-certifying and holders control their own keys and proofs; the server orchestrates but does not custody secrets by default. Includes data sovereignty: local storage, selective disclosure, right to be forgotten.",
+   "source": "src/index.ts:1-8; web/src/pages/Landing.tsx:25,268",
+   "pos": [
+    25.3,
+    56.5,
+    0
+   ]
+  },
+  {
+   "id": "aligned-economics",
+   "type": "principle",
+   "domain": "core",
+   "title": "Members earn from platform success",
+   "statement": "Economic alignment: members share the platform's upside through the distribution formula, Orbis Coin, and vested Liberty Fund accumulation.",
+   "source": "web/src/pages/Landing.tsx:21,244-245",
+   "pos": [
+    -31.4,
+    49.4,
+    -28.7
+   ]
+  },
+  {
+   "id": "member-owned",
+   "type": "principle",
+   "domain": "core",
+   "title": "Member-owned, not corporate-controlled",
+   "statement": "The people who create the network's value own it — the platform's founding premise.",
+   "source": "web/src/pages/Landing.tsx:110,169-170,312",
+   "pos": [
+    4.6,
+    42.4,
+    52.9
+   ]
+  },
+  {
+   "id": "privacy-by-default",
+   "type": "principle",
+   "domain": "core",
+   "title": "Privacy-preserving by design",
+   "statement": "No personal data on chain; ORBIS stores ciphertext only; members hold 100% control of their data privacy.",
+   "source": "web/src/pages/Landing.tsx:223,268,313; m/wallet-app/src/features/vault/copy.ts:9-11",
+   "pos": [
+    36.9,
+    35.3,
+    -48.1
+   ]
+  },
+  {
+   "id": "user-consent",
+   "type": "principle",
+   "domain": "core",
+   "title": "Nothing shared without explicit consent",
+   "statement": "Every disclosure requires the holder's explicit approval of who, what, how long, and at what price — and is revocable at any time.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:55-56",
+   "pos": [
+    -65.2,
+    28.2,
+    11.5
+   ]
+  },
+  {
+   "id": "data-minimization",
+   "type": "principle",
+   "domain": "core",
+   "title": "Reveal only what is asked",
+   "statement": "Selective disclosure proves a fact (over-18, licensed, accredited) without revealing underlying data; fields not requested are hidden automatically.",
+   "source": "web/src/pages/Landing.tsx:27; src/vc/zk.ts:1-15",
+   "pos": [
+    59.2,
+    21.2,
+    37.7
+   ]
+  },
+  {
+   "id": "on-device-proving",
+   "type": "principle",
+   "domain": "core",
+   "title": "Favor holder-side, on-device proving",
+   "statement": "ZK proofs and DIDComm require the holder to supply their own secret key per request, binding proofs to holder control instead of server-side key custody.",
+   "source": "src/vc/zk.ts:85-104,167-176,486-552",
+   "pos": [
+    -18.9,
+    14.1,
+    -70.4
+   ]
+  },
+  {
+   "id": "unlinkability-goal",
+   "type": "principle",
+   "domain": "core",
+   "title": "Favor unlinkable, non-correlatable credentials",
+   "statement": "The BBS+ option is described as offering unlinkable (non-correlated) credentials — a design preference for privacy against correlation, currently aspirational.",
+   "source": "src/vc/zk.ts:9-13,480",
+   "pos": [
+    -34.3,
+    7.1,
+    66.1
+   ]
+  },
+  {
+   "id": "user-presence",
+   "type": "principle",
+   "domain": "core",
+   "title": "High-value crypto ops require physical presence",
+   "statement": "Unlock, signing, ZK proving, and share confirmation require active biometric presence (FaceID/TouchID/fingerprint).",
+   "source": "m/wallet-app/src/context/AuthContext.tsx; NEXT_STEPS_ASSESSMENT.md:36",
+   "pos": [
+    70.4,
+    0,
+    -25.7
+   ]
+  },
+  {
+   "id": "auditability",
+   "type": "principle",
+   "domain": "core",
+   "title": "Every sensitive operation is auditable",
+   "statement": "Every credential access and security event is logged with actor, entity, result, IP, and timestamp; audit trails are exportable and the access log is visible only to the member.",
+   "source": "src/security/audit.ts:1-13; m/wallet-app/src/features/vault/copy.ts:42",
+   "pos": [
+    -68.8,
+    -7.1,
+    -28.4
+   ]
+  },
+  {
+   "id": "standards-interop",
+   "type": "principle",
+   "domain": "core",
+   "title": "Standards-based and interoperable",
+   "statement": "The platform builds on W3C DIDs/VCs, DIF protocols, and eIDAS so it interoperates with global SSI systems rather than creating a silo.",
+   "source": "web/src/pages/Landing.tsx:220-223",
+   "pos": [
+    30.9,
+    -14.1,
+    66
+   ]
+  },
+  {
+   "id": "honest-ux",
+   "type": "principle",
+   "domain": "core",
+   "title": "Honest UX: never claim what hasn't happened",
+   "statement": "V1 copy never says money moved before it does and no UI is built against non-existent capability.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:2-6",
+   "pos": [
+    21,
+    -21.2,
+    -67
+   ]
+  },
+  {
+   "id": "non-blocking-io",
+   "type": "principle",
+   "domain": "core",
+   "title": "Never block the event loop on logging or writes",
+   "statement": "Analytics, audit, verification, webhook, and message writes are pushed to background processes so compliance reporting never blocks critical operations.",
+   "source": "src/db/metadata.ts:36-49; src/security/audit.ts:116-135",
+   "pos": [
+    -57.3,
+    -28.2,
+    33.2
+   ]
+  },
+  {
+   "id": "multi-process-consistency",
+   "type": "principle",
+   "domain": "core",
+   "title": "Database is source of truth over in-memory cache",
+   "statement": "Rate-limit state is loaded from the DB on every request for perfect multi-process consistency, deliberately trading round-trips for correctness.",
+   "source": "src/gateway/ratelimit.ts:88-92,166-170",
+   "pos": [
+    59.2,
+    -35.3,
+    13
+   ]
+  },
+  {
+   "id": "least-privilege",
+   "type": "principle",
+   "domain": "core",
+   "title": "Least-privilege runtime",
+   "statement": "Deployment minimizes privilege: dedicated non-root user, systemd hardening flags, docker no-new-privileges, read-only mounts.",
+   "source": "deploy/orbis-ssi-backend.service:8-22; docker-compose.yml:30-39",
+   "pos": [
+    -30.6,
+    -42.4,
+    -43.5
+   ]
+  },
+  {
+   "id": "graceful-degradation",
+   "type": "principle",
+   "domain": "core",
+   "title": "Degrade gracefully rather than crash",
+   "statement": "Resolution, storage, and audit failures degrade (mock docs, empty arrays, degraded health status, non-fatal catches) rather than failing the request.",
+   "source": "src/did/web.ts:188-227; src/index.ts:49-77",
+   "pos": [
+    -5.5,
+    -49.4,
+    42.2
+   ]
+  },
+  {
+   "id": "key-reveal-once",
+   "type": "principle",
+   "domain": "core",
+   "title": "Secrets revealed once, never re-shown",
+   "statement": "Raw API keys are returned only at creation; every list and read path omits the hash and never re-exposes raw keys.",
+   "source": "src/gateway/apikey.ts:131-148",
+   "pos": [
+    19.4,
+    -56.5,
+    -16.3
+   ]
+  },
+  {
+   "id": "w3c-did-core",
+   "type": "law",
+   "domain": "did",
+   "title": "W3C DID Core data model",
+   "statement": "DID Documents use the https://www.w3.org/ns/did/v1 context with standard verificationMethod, authentication, assertionMethod, keyAgreement, capabilityInvocation, and capabilityDelegation properties.",
+   "source": "src/did/key.ts:29-38; src/did/web.ts:99-110; src/did/peer.ts:116-127",
+   "pos": [
+    329.8,
+    61.5,
+    33.8
+   ]
+  },
+  {
+   "id": "did-key-spec",
+   "type": "law",
+   "domain": "did",
+   "title": "W3C did:key method",
+   "statement": "did:key encodes an Ed25519 public key as z-base58btc(0xed01 multicodec + raw key); resolution is deterministic with no network access.",
+   "source": "src/did/key.ts:66-152",
+   "pos": [
+    255.4,
+    -172.3,
+    57.8
+   ]
+  },
+  {
+   "id": "did-web-spec",
+   "type": "law",
+   "domain": "did",
+   "title": "W3C did:web method",
+   "statement": "did:web:<domain>[:<path>] maps to a DID Document served at https://<domain>/.well-known/did.json (or /<path>/did.json), fetched over HTTPS.",
+   "source": "src/did/web.ts:51-163",
+   "pos": [
+    282.2,
+    -65.3,
+    137.7
+   ]
+  },
+  {
+   "id": "did-peer-spec",
+   "type": "law",
+   "domain": "did",
+   "title": "DIF Peer DID method 2",
+   "statement": "Offline, self-certifying did:peer:2.E<enc>.V<sign>.S<service> identifiers encoding signing (Ed25519), key-agreement (X25519), and a base64url DIDComm service element.",
+   "source": "src/did/peer.ts:30-128",
+   "pos": [
+    190.2,
+    -147.9,
+    145.1
+   ]
+  },
+  {
+   "id": "multicodec-multibase",
+   "type": "law",
+   "domain": "did",
+   "title": "Multicodec + multibase key encoding",
+   "statement": "Public keys carry multicodec varint prefixes (Ed25519 0xed01, X25519 0xec01) then base58btc multibase (z prefix) via the multiformats library.",
+   "source": "src/did/key.ts:11-15,72; src/did/peer.ts:12-16",
+   "pos": [
+    247.6,
+    42.7,
+    224
+   ]
+  },
+  {
+   "id": "ed25519-verification-key-2020",
+   "type": "law",
+   "domain": "did",
+   "title": "Ed25519VerificationKey2020 method type",
+   "statement": "All verification methods declare type Ed25519VerificationKey2020 with publicKeyMultibase and the ed25519-2020 security context.",
+   "source": "src/did/key.ts:76-87; src/did/web.ts:92-103",
+   "pos": [
+    180,
+    -95.6,
+    233
+   ]
+  },
+  {
+   "id": "two-did-methods-plus-peer",
+   "type": "decision",
+   "domain": "did",
+   "title": "Support did:key + did:web (did:peer for DIDComm only)",
+   "statement": "The registry restricts creatable/resolvable methods to key and web, with did:peer reserved for offline DIDComm channels.",
+   "source": "src/did/index.ts:11,79-90; src/index.ts:90-104",
+   "pos": [
+    147.7,
+    42.6,
+    10.1
+   ]
+  },
+  {
+   "id": "did-web-ttl-cache",
+   "type": "decision",
+   "domain": "did",
+   "title": "5-minute TTL cache for did:web resolution",
+   "statement": "did:web resolution caches documents in-memory with a 5-minute TTL and a 5-second HTTPS abort timeout to keep resolution non-blocking.",
+   "source": "src/did/web.ts:35-44,146-175",
+   "pos": [
+    63.6,
+    -69,
+    90.7
+   ]
+  },
+  {
+   "id": "did-format-guard",
+   "type": "rule",
+   "domain": "did",
+   "title": "DIDs must match known method prefixes",
+   "statement": "Resolution and creation reject inputs not matching did:, did:key:z, did:web:, or did:peer:2.; unknown methods return null/400.",
+   "source": "src/did/index.ts:79-90; src/did/key.ts:108-115",
+   "pos": [
+    188,
+    102.5,
+    14
+   ]
+  },
+  {
+   "id": "ed25519-multicodec-guard",
+   "type": "rule",
+   "domain": "did",
+   "title": "Reject non-Ed25519 or wrong-length keys",
+   "statement": "Decoders require the 0xed01 multicodec prefix and a 32-byte public key; mismatches return null.",
+   "source": "src/did/key.ts:120-126,162,180-183",
+   "pos": [
+    152.9,
+    -99.5,
+    52.8
+   ]
+  },
+  {
+   "id": "did-web-doc-id-match",
+   "type": "rule",
+   "domain": "did",
+   "title": "Fetched did:web document id must match the DID",
+   "statement": "A remotely fetched did.json is only accepted if doc.id equals the requested DID; otherwise resolution falls through to the local DB then a mock.",
+   "source": "src/did/web.ts:177-186",
+   "pos": [
+    140.3,
+    -100.9,
+    76.3
+   ]
+  },
+  {
+   "id": "did-registry-lifecycle",
+   "type": "rule",
+   "domain": "did",
+   "title": "DID lifecycle: active → revoked",
+   "statement": "Created DIDs persist with status active; resolve returns the stored document; revoke sets status revoked; tests pin this lifecycle.",
+   "source": "tests/ssi.test.ts:142-216",
+   "pos": [
+    145.6,
+    98.6,
+    126.5
+   ]
+  },
+  {
+   "id": "did-key-shape-tests",
+   "type": "rule",
+   "domain": "did",
+   "title": "did:key document shape pinned by tests",
+   "statement": "Tests enforce: ^did:key:z prefix, 32-byte keys, single Ed25519VerificationKey2020 VM with id ${did}#${suffix}, controller = did, deterministic generation from seed, and null for invalid input.",
+   "source": "tests/ssi.test.ts:38-98",
+   "pos": [
+    127,
+    28.1,
+    184.9
+   ]
+  },
+  {
+   "id": "did-web-mock-fallback",
+   "type": "constraint",
+   "domain": "did",
+   "title": "did:web falls back to an empty mock document",
+   "statement": "If the HTTPS fetch fails and no local record exists, resolution returns a mock DID Document with empty verification arrays (cached 5 min) — resolution can 'succeed' with no keys.",
+   "source": "src/did/web.ts:188-227",
+   "pos": [
+    216.7,
+    -105.6,
+    20.1
+   ]
+  },
+  {
+   "id": "resolvedid-not-awaited",
+   "type": "constraint",
+   "domain": "did",
+   "title": "resolveDID promise not awaited in resolve endpoint",
+   "statement": "GET /api/did/resolve/:did truthiness-checks an un-awaited Promise, so did:web resolution results are mishandled at this endpoint — a known defect recorded here until fixed.",
+   "source": "src/index.ts:137-149",
+   "pos": [
+    142.1,
+    87,
+    215.6
+   ]
+  },
+  {
+   "id": "w3c-vc-data-model-2",
+   "type": "law",
+   "domain": "vc",
+   "title": "W3C Verifiable Credentials Data Model 2.0",
+   "statement": "Credentials use the https://www.w3.org/ns/credentials/v2 context with issuer, issuanceDate, credentialSubject, optional expirationDate and credentialSchema, and urn:uuid ids.",
+   "source": "src/vc/issue.ts:21-34,88-118",
+   "pos": [
+    231.4,
+    151.3,
+    163.4
+   ]
+  },
+  {
+   "id": "ed25519-signature-2020",
+   "type": "law",
+   "domain": "vc",
+   "title": "Ed25519Signature2020 proof suite",
+   "statement": "VC proofs use type Ed25519Signature2020, cryptosuite ed25519-2020, proofPurpose assertionMethod, signing over canonicalized credential + proof options, multibase-encoded.",
+   "source": "src/vc/issue.ts:141,161-213",
+   "pos": [
+    171.7,
+    31.8,
+    289.1
+   ]
+  },
+  {
+   "id": "statuslist-2021",
+   "type": "law",
+   "domain": "vc",
+   "title": "W3C StatusList2021 revocation/suspension",
+   "statement": "Status is a gzipped, base64url-encoded bitstring (StatusList2021Credential / StatusList2021Entry); bit=1 means revoked or suspended; purposes are revocation and suspension.",
+   "source": "src/vc/statuslist.ts:46-93,167-196",
+   "pos": [
+    25,
+    -15.3,
+    331
+   ]
+  },
+  {
+   "id": "custom-canonicalization",
+   "type": "decision",
+   "domain": "vc",
+   "title": "Custom deterministic-JSON canonicalization",
+   "statement": "Instead of JSON-LD RDF canonicalization, issuance and verification use a home-grown sorted-key deterministic stringify, then SHA-256, then Ed25519 — issuer and verifier must share this exact algorithm.",
+   "source": "src/vc/issue.ts:178-213; src/vc/verify.ts:209-246",
+   "pos": [
+    110.5,
+    -38.4,
+    87.6
+   ]
+  },
+  {
+   "id": "webcrypto-sha256",
+   "type": "decision",
+   "domain": "vc",
+   "title": "WebCrypto SHA-256 for hashing",
+   "statement": "Signature and commitment hashing use crypto.subtle.digest('SHA-256'); the simple ZK verifier uses Node createHash instead.",
+   "source": "src/vc/issue.ts:192-196; src/vc/verify-zk.ts:89-91",
+   "pos": [
+    19.4,
+    -39.3,
+    139.1
+   ]
+  },
+  {
+   "id": "vc-verify-check-chain",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Verification is an all-must-pass check chain",
+   "statement": "verifyCredential runs structure → expiration → issuer-DID resolution → proof signature → optional trust registry → optional required types → StatusList revocation; verified is true only if every check passes.",
+   "source": "src/vc/verify.ts:48-112",
+   "pos": [
+    180,
+    12.2,
+    136.9
+   ]
+  },
+  {
+   "id": "expiry-check",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Expired credentials fail verification",
+   "statement": "If expirationDate is present and past (or unparseable) the check fails; absent expiration passes as non-expiring.",
+   "source": "src/vc/verify.ts:144-161",
+   "pos": [
+    140.1,
+    -65.8,
+    137.8
+   ]
+  },
+  {
+   "id": "proof-vm-must-match",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Proof verified only against its named verification method",
+   "statement": "The proof's verificationMethod must exist in the resolved DID document; the public key is taken from that specific VM and the signature must validate over recomputed canonical data.",
+   "source": "src/vc/verify.ts:177-246",
+   "pos": [
+    132.7,
+    62.3,
+    168.8
+   ]
+  },
+  {
+   "id": "revocation-check",
+   "type": "rule",
+   "domain": "vc",
+   "title": "StatusList2021 revocation gate",
+   "statement": "If a StatusList2021Entry credentialStatus exists, verification reads the bit at statusListIndex; bit=1 fails verification and flips a previously-valid VC to unverified. Unsupported status types pass through.",
+   "source": "src/vc/verify.ts:285-320; tests/statuslist.test.ts:71-109",
+   "pos": [
+    117.5,
+    40.9,
+    189.3
+   ]
+  },
+  {
+   "id": "status-update-validation",
+   "type": "rule",
+   "domain": "vc",
+   "title": "StatusList updates validated",
+   "statement": "Updates require a listId, a non-negative numeric index within list bounds, and a boolean status.",
+   "source": "src/index.ts:574-600; src/vc/statuslist.ts:63-82",
+   "pos": [
+    91.4,
+    -24.7,
+    200.1
+   ]
+  },
+  {
+   "id": "vc-issuance-contract",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Issuance contract pinned by tests",
+   "statement": "Issued VCs must carry a urn:uuid id, the requested types, correct issuer/subject/claims, an Ed25519Signature2020 assertionMethod proof, and support expirationDate, additionalContexts, and credentialSchema; issuance under 5s.",
+   "source": "tests/ssi.test.ts:220-316",
+   "pos": [
+    71.1,
+    -68.4,
+    180.9
+   ]
+  },
+  {
+   "id": "vc-metadata-logging",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Issuance and verification leave metadata trails",
+   "statement": "Issuance persists credential metadata (issuer, subject, id, status active); every verification appends a verification log row.",
+   "source": "tests/ssi.test.ts:774-827",
+   "pos": [
+    39.3,
+    44.3,
+    218.4
+   ]
+  },
+  {
+   "id": "vc-claims-fidelity",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Claims survive round-trips with full fidelity",
+   "statement": "Claims preserve mixed types (string/number/bool/null/nested/array); empty claims yield a subject with only id; 10k-character values survive.",
+   "source": "tests/ssi.test.ts:831-887",
+   "pos": [
+    31.1,
+    6,
+    222.9
+   ]
+  },
+  {
+   "id": "verify-vm-derivation-fragile",
+   "type": "constraint",
+   "domain": "vc",
+   "title": "verificationMethod derived by string-splitting the DID",
+   "statement": "Issuance builds the VM id as ${issuerDID}#${lastSegment}, which aligns only with did:key fragments; did:web VMs (uuid fragment) can mismatch at verification.",
+   "source": "src/vc/issue.ts:167; src/did/web.ts:82-84",
+   "pos": [
+    214.2,
+    83,
+    146
+   ]
+  },
+  {
+   "id": "issuance-perf-noop",
+   "type": "constraint",
+   "domain": "vc",
+   "title": "Issuance timing telemetry is a no-op",
+   "statement": "issuanceTimeMs measures Date.now() - startTime where both are captured after issuance completes — always ~0ms placeholder telemetry.",
+   "source": "src/index.ts:262-271",
+   "pos": [
+    31.7,
+    -80.2,
+    239.5
+   ]
+  },
+  {
+   "id": "credentialstatus-backcompat",
+   "type": "direction",
+   "domain": "vc",
+   "title": "credentialStatus injection kept for back-compat",
+   "statement": "The issue endpoint supports injecting a credentialStatus after issuance 'for backward compatibility' — a transitional path.",
+   "source": "src/index.ts:257-260",
+   "pos": [
+    171,
+    193.9,
+    269.9
+   ]
+  },
+  {
+   "id": "dif-presentation-exchange",
+   "type": "law",
+   "domain": "zk",
+   "title": "DIF Presentation Exchange",
+   "statement": "Verifiers express required claims via a PresentationDefinition (input_descriptors, constraints, JSONPath fields, filters); the holder evaluates it and auto-generates a matching disclosure.",
+   "source": "src/vc/presentation-exchange.ts:1-117",
+   "pos": [
+    144.7,
+    35.7,
+    303.2
+   ]
+  },
+  {
+   "id": "bbs-bls-2020",
+   "type": "law",
+   "domain": "zk",
+   "title": "BBS+ / BbsBlsSignatureProof2020 suite (declared)",
+   "statement": "A second ZK cryptosuite bbs-bls-2020 is declared for pairing-based BLS12-381 unlinkable disclosure, selectable per request.",
+   "source": "src/vc/zk.ts:10-13,142-144,215-222",
+   "pos": [
+    -122.1,
+    -52.8,
+    297.3
+   ]
+  },
+  {
+   "id": "orbis-zk-suite",
+   "type": "decision",
+   "domain": "zk",
+   "title": "Custom OrbisZKSelectiveDisclosure2025 suite",
+   "statement": "The default ZK suite (cryptosuite orbis-zk-sd-2025, context https://orbis.id/ns/zkp/v1) hides fields behind SHA-256(value+nonce) 64-hex commitments inside a VerifiablePresentation, with optional Merkle inclusion and derived predicates.",
+   "source": "src/vc/zk.ts:1-15,102-104; tests/zk.test.ts:59-60",
+   "pos": [
+    57.2,
+    62,
+    124.3
+   ]
+  },
+  {
+   "id": "separate-simple-zk-endpoint",
+   "type": "decision",
+   "domain": "zk",
+   "title": "Separate lightweight hash/Merkle verifier",
+   "statement": "verify-zk is a distinct, presentation-free endpoint for direct SHA-256 hash-commitment checks and Merkle-inclusion proofs, avoiding full-presentation overhead.",
+   "source": "src/vc/verify-zk.ts:110-383",
+   "pos": [
+    6.2,
+    75.1,
+    125.5
+   ]
+  },
+  {
+   "id": "on-device-zk",
+   "type": "decision",
+   "domain": "zk",
+   "title": "On-device ZK proving via wallet.presentVc",
+   "statement": "The wallet's presentVc client method proves selective disclosure on-device, aiming for an Apple/Google-style permission screen showing revealed vs hidden fields before consent.",
+   "source": "PROGRESS_REVIEW.md:25; NEXT_STEPS_ASSESSMENT.md:35",
+   "pos": [
+    -60.2,
+    16.7,
+    143.3
+   ]
+  },
+  {
+   "id": "holder-must-equal-subject",
+   "type": "rule",
+   "domain": "zk",
+   "title": "ZK holder must equal credentialSubject.id",
+   "statement": "createZKProof throws unless the holder DID matches the credential subject id, binding the presentation to the credential's subject.",
+   "source": "src/vc/zk.ts:167-169",
+   "pos": [
+    66.4,
+    -83.2,
+    167.8
+   ]
+  },
+  {
+   "id": "zk-field-partition",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Every field revealed XOR hidden",
+   "statement": "Reveal/hide sets must exist in the subject, never overlap, and jointly account for every subject field; commitment count must equal hidden count with 64-hex hashes.",
+   "source": "src/vc/zk.ts:198-203,421-483",
+   "pos": [
+    55.7,
+    -90,
+    164.8
+   ]
+  },
+  {
+   "id": "predicates-over-hidden-only",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Predicates only valid over hidden fields",
+   "statement": "A derived predicate (e.g. age >= 18) must reference a field in hiddenFields with a matching commitment; predicates on revealed fields fail verification.",
+   "source": "src/vc/zk.ts:554-588; tests/zk.test.ts:499-575",
+   "pos": [
+    29.8,
+    11.4,
+    224.2
+   ]
+  },
+  {
+   "id": "zk-challenge-replay-guard",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Challenge binding prevents replay",
+   "statement": "A verifier-supplied challenge must equal the challenge embedded in the proof or holder-binding fails; /zk/challenge mints 32-byte random challenges with 5-minute expiry.",
+   "source": "src/vc/zk.ts:521-524; src/index.ts:481-493",
+   "pos": [
+    4.3,
+    -32.5,
+    216.2
+   ]
+  },
+  {
+   "id": "bbs-blinding-required",
+   "type": "rule",
+   "domain": "zk",
+   "title": "BBS+ commitments must carry a blinding factor",
+   "statement": "When the cryptosuite is bbs-bls-2020, each hidden commitment must include a blindingFactor scalar or verification fails.",
+   "source": "src/vc/zk.ts:474-477",
+   "pos": [
+    -11,
+    59.6,
+    216.4
+   ]
+  },
+  {
+   "id": "zk-verification-checks",
+   "type": "rule",
+   "domain": "zk",
+   "title": "ZK verification check chain",
+   "statement": "Verification runs zk-structure, original-vc signature, hidden-commitments, and holder-binding checks; tampered reveals, tampered VCs, removed commitments, and wrong challenges each fail their named check.",
+   "source": "tests/zk.test.ts:214-409",
+   "pos": [
+    -35,
+    -21.4,
+    217.3
+   ]
+  },
+  {
+   "id": "zk-commitment-math",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Commitment math pinned by tests",
+   "statement": "sha256Hex is deterministic 64-hex; hashWithNonce differs by nonce; hash commitments verify only on exact match; Merkle roots and inclusion proofs recompute correctly and reject wrong siblings.",
+   "source": "tests/verify-zk.test.ts:19-333",
+   "pos": [
+    -67.9,
+    -26.7,
+    207.6
+   ]
+  },
+  {
+   "id": "presentation-auto-disclosure",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Requested fields revealed, everything else hidden",
+   "statement": "generatePresentationFromQuery auto-reveals fields requested by the presentation definition and auto-hides all others; the generated presentation must verify.",
+   "source": "tests/presentation-exchange.test.ts:12-77",
+   "pos": [
+    -97.4,
+    50,
+    197.5
+   ]
+  },
+  {
+   "id": "bbs-simulated",
+   "type": "constraint",
+   "domain": "zk",
+   "title": "BBS+ is simulated, not real pairing crypto",
+   "statement": "The bbs-bls-2020 path simulates BBS+ by hashing 'BBS+Commitment:<value>:<blindingFactor>' with a random-UUID blinding factor and Ed25519-signing — no real pairing-based unlinkability.",
+   "source": "src/vc/zk.ts:215-222,258-263",
+   "pos": [
+    89,
+    -75.1,
+    227.5
+   ]
+  },
+  {
+   "id": "predicate-not-cryptographic",
+   "type": "constraint",
+   "domain": "zk",
+   "title": "Predicates verified structurally, not cryptographically",
+   "statement": "Range predicates are checked only for statement/field/proof presence and a matching commitment; the predicate math is never evaluated, so its truth is trusted, not proven.",
+   "source": "src/vc/zk.ts:554-588",
+   "pos": [
+    1,
+    -38.8,
+    264.6
+   ]
+  },
+  {
+   "id": "zk-hash-not-circuit",
+   "type": "constraint",
+   "domain": "zk",
+   "title": "ZK is hash-commitment based, not a ZK circuit",
+   "statement": "Selective disclosure uses SHA-256 + nonce commitments and Merkle proofs rather than a full zero-knowledge circuit; derived-predicate proof strings are simplified.",
+   "source": "tests/zk.test.ts:517-520",
+   "pos": [
+    -108.5,
+    -79.8,
+    214.9
+   ]
+  },
+  {
+   "id": "eidas-trusted-lists",
+   "type": "law",
+   "domain": "trust",
+   "title": "eIDAS 2.0 QTSP trusted lists",
+   "statement": "The trust registry classifies DIDs as QTSP/Non-QTSP with granted/withdrawn/deprecated status; verifyEidasTrust gates a DID as an eIDAS Qualified Trust Service Provider if it is an active trusted issuer.",
+   "source": "src/trust/registry.ts:160-180; tests/eidas.test.ts:9-36",
+   "pos": [
+    -171.8,
+    -1.1,
+    288.2
+   ]
+  },
+  {
+   "id": "trust-registry-model",
+   "type": "decision",
+   "domain": "trust",
+   "title": "Trust registry with category + status lifecycle",
+   "statement": "Trust entries carry category issuer/verifier/both and status active/suspended/revoked, are uniquely keyed by DID, and list authorized credential types.",
+   "source": "openapi.yaml:294-457; src/trust/registry.ts",
+   "pos": [
+    -80.6,
+    -19.3,
+    126.7
+   ]
+  },
+  {
+   "id": "trust-registry-active-check",
+   "type": "rule",
+   "domain": "trust",
+   "title": "Trusted issuer must be active and type-authorized",
+   "statement": "Trust checks fail if the issuer is absent, not active, or lacks the required authorizedCredentialTypes; category must be issuer or both.",
+   "source": "src/vc/verify.ts:248-272; src/trust/registry.ts:141-158",
+   "pos": [
+    -18.5,
+    3.9,
+    224.2
+   ]
+  },
+  {
+   "id": "trust-registry-lifecycle",
+   "type": "rule",
+   "domain": "trust",
+   "title": "Registry lifecycle pinned by tests",
+   "statement": "Duplicate DIDs are rejected; suspend↔reactivate toggles trust; revoke/remove drop trust; revoking an issuer flips previously-valid VCs to unverified when trust checking is on.",
+   "source": "tests/ssi.test.ts:441-770",
+   "pos": [
+    -141.4,
+    -82.9,
+    112.7
+   ]
+  },
+  {
+   "id": "didcomm-v2",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm Messaging v2",
+   "statement": "The messaging layer implements DIF DIDComm v2: authcrypt/anoncrypt encrypted envelopes, standard plaintext message structure, and the application/didcomm-encrypted+json media type.",
+   "source": "src/didcomm/envelope.ts:1-13,196-232; src/didcomm/types.ts:1-61",
+   "pos": [
+    -166.1,
+    133.4,
+    246.9
+   ]
+  },
+  {
+   "id": "didcomm-basicmessage",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm BasicMessage 2.0",
+   "statement": "Implements https://didcomm.org/basicmessage/2.0/message for plain text messaging.",
+   "source": "src/didcomm/types.ts:63-90",
+   "pos": [
+    -227.8,
+    8.4,
+    245.8
+   ]
+  },
+  {
+   "id": "didcomm-trust-ping",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm Trust Ping 2.0",
+   "statement": "Implements ping and ping_response for connectivity checks; response_requested defaults true.",
+   "source": "src/didcomm/types.ts:92-147",
+   "pos": [
+    -213.7,
+    -118.6,
+    174.3
+   ]
+  },
+  {
+   "id": "didcomm-oob",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm Out-of-Band 2.0 invitations",
+   "statement": "Encodes inviter DID plus a DIDCommMessaging service (accept didcomm/v2) into a URL parameter for QR/side-channel delivery.",
+   "source": "src/didcomm/types.ts:149-195; src/didcomm/outofband.ts:1-92",
+   "pos": [
+    -216.9,
+    -142.8,
+    120.4
+   ]
+  },
+  {
+   "id": "didcomm-mediation",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm Coordinate Mediation 2.0",
+   "statement": "Routing grants and message forwarding/queueing for offline edge clients.",
+   "source": "src/didcomm/mediation.ts:1-89",
+   "pos": [
+    -267,
+    138.8,
+    118.5
+   ]
+  },
+  {
+   "id": "x25519-key-agreement",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "X25519 ECDH key agreement",
+   "statement": "Key agreement uses ECDH over X25519 with the standard edwards25519→curve25519 conversion; peer DIDs carry X25519KeyAgreementKey2020 entries in keyAgreement.",
+   "source": "src/didcomm/envelope.ts:15-51; src/did/peer.ts:89-98",
+   "pos": [
+    -325.2,
+    37.3,
+    78.4
+   ]
+  },
+  {
+   "id": "jose-jwe-headers",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "JOSE/JWE-style protected headers (nominal)",
+   "statement": "Envelope headers advertise alg ECDH-ES+A256KW and enc A256GCM following the JWE shape — but the actual cipher is a custom substitute.",
+   "source": "src/didcomm/envelope.ts:194-209",
+   "pos": [
+    -297.1,
+    -91.2,
+    20
+   ]
+  },
+  {
+   "id": "encrypt-then-mac",
+   "type": "rule",
+   "domain": "didcomm",
+   "title": "Encrypt-then-MAC with constant-time tag check",
+   "statement": "Envelopes compute ciphertext then an HMAC-SHA256 tag over protected||ciphertext; decryption recomputes and compares byte-by-byte before decrypting.",
+   "source": "src/didcomm/envelope.ts:218-223,325-344",
+   "pos": [
+    -109.8,
+    91.1,
+    165.7
+   ]
+  },
+  {
+   "id": "inbox-access-rule",
+   "type": "rule",
+   "domain": "didcomm",
+   "title": "Inbox vs history query scoping",
+   "statement": "The inbox returns only messages where to_did = did; history returns messages where the DID is sender OR recipient, newest first; status lifecycle sent→delivered→read.",
+   "source": "src/db/metadata.ts:291-297; src/didcomm/index.ts:174-199",
+   "pos": [
+    -194.8,
+    93.6,
+    28.1
+   ]
+  },
+  {
+   "id": "envelope-crypto-substitution",
+   "type": "constraint",
+   "domain": "didcomm",
+   "title": "Custom SHA-256 stream cipher substitutes AEAD",
+   "statement": "Instead of XChaCha20-Poly1305/A256GCM, the envelope uses a self-rolled SHA-256-counter XOR keystream with hand-rolled HMAC and HKDF-like derivation — explicitly a simplified interim construction.",
+   "source": "src/didcomm/envelope.ts:53-153",
+   "pos": [
+    -143.8,
+    115.8,
+    191.6
+   ]
+  },
+  {
+   "id": "single-recipient-envelope",
+   "type": "constraint",
+   "domain": "didcomm",
+   "title": "Single-recipient envelopes only",
+   "statement": "Encryption targets one recipient (msg.to[0]); the recipients array has a single entry and decryption reads recipients[0].",
+   "source": "src/didcomm/index.ts:109; src/didcomm/envelope.ts:236-261",
+   "pos": [
+    -206.7,
+    -18.5,
+    175.5
+   ]
+  },
+  {
+   "id": "non-random-message-id",
+   "type": "constraint",
+   "domain": "didcomm",
+   "title": "Message IDs use Math.random UUIDs",
+   "statement": "DIDComm message IDs come from a Math.random-based UUIDv4, not crypto-random — an accepted shortcut for correlation IDs (the gateway uses randomBytes by contrast).",
+   "source": "src/didcomm/types.ts:199-214",
+   "pos": [
+    -239.7,
+    88.3,
+    91.3
+   ]
+  },
+  {
+   "id": "mediation-fetch-not-atomic",
+   "type": "constraint",
+   "domain": "didcomm",
+   "title": "Queue fetch-then-clear is non-atomic",
+   "statement": "fetchAndClearQueue reads queued rows synchronously then marks them delivered via a background write; the read and status flip are not transactional.",
+   "source": "src/didcomm/mediation.ts:80-89",
+   "pos": [
+    -273,
+    26.5,
+    33
+   ]
+  },
+  {
+   "id": "xchacha-todo",
+   "type": "direction",
+   "domain": "didcomm",
+   "title": "Move to real XChaCha20-Poly1305 AEAD",
+   "statement": "Comments direct that production DIDComm should use XChaCha20-Poly1305 via @noble/ciphers; the current construction is interim.",
+   "source": "src/didcomm/envelope.ts:55-62",
+   "pos": [
+    -224,
+    31,
+    327.6
+   ]
+  },
+  {
+   "id": "oob-base-url-todo",
+   "type": "direction",
+   "domain": "didcomm",
+   "title": "Make the OOB base URL configurable",
+   "statement": "OOB_BASE_URL is hardcoded to https://orbis.id/oob with a note that production should make it configurable.",
+   "source": "src/didcomm/outofband.ts:17-21,43",
+   "pos": [
+    -320.1,
+    -76.1,
+    190.1
+   ]
+  },
+  {
+   "id": "wallet-didcomm-ux",
+   "type": "direction",
+   "domain": "didcomm",
+   "title": "Chat-like DIDComm UI in the wallet",
+   "statement": "Planned: a chat-like interface for DIDComm v2 messages translating OOB invitations into simple Accept Connection prompts, with deep biometric coupling for high-value operations.",
+   "source": "NEXT_STEPS_ASSESSMENT.md:35-37",
+   "pos": [
+    -351.1,
+    153.9,
+    20.4
+   ]
+  },
+  {
+   "id": "apikey-sha256-hashing",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "API keys stored as SHA-256 hashes",
+   "statement": "Raw keys are orb_-prefixed 24 random bytes (base64url); only the SHA-256 hex hash persists; lookup re-hashes the presented key; the raw key is revealed exactly once at creation.",
+   "source": "src/gateway/apikey.ts:43-96",
+   "pos": [
+    -104.5,
+    -65.1,
+    48.6
+   ]
+  },
+  {
+   "id": "token-bucket-ratelimit",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Token-bucket rate limiting persisted in DB",
+   "statement": "Rate limiting is a token bucket persisted per API key, reloaded from the DB on every request for multi-process consistency (no in-memory cache).",
+   "source": "src/gateway/ratelimit.ts:1-133",
+   "pos": [
+    -145.3,
+    42.7,
+    31.4
+   ]
+  },
+  {
+   "id": "ratelimit-plan-tiers",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Tiered quotas: free 100 / developer 1000 / enterprise 10000",
+   "statement": "Plans map to bucket sizes refilling maxTokens per 60s; the plan column is added via a runtime ALTER TABLE migration.",
+   "source": "src/gateway/ratelimit.ts:14-30",
+   "pos": [
+    -106.7,
+    -71.5,
+    7.7
+   ]
+  },
+  {
+   "id": "webhook-design",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Webhook fan-out with delivery log and retry",
+   "statement": "Webhooks subscribe to credential.issued/credential.verified; delivery is an HTTP POST with X-Webhook-* headers, 10s timeout, 2xx = success; every attempt is logged and retryable by delivery id.",
+   "source": "src/gateway/webhooks.ts:120-244",
+   "pos": [
+    -152.6,
+    -5.3,
+    -20.1
+   ]
+  },
+  {
+   "id": "bearer-auth-scheme",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Bearer-token API authentication",
+   "statement": "Auth extracts the key from Authorization: Bearer <key>, requiring exactly two space-separated parts.",
+   "source": "src/gateway/middleware.ts:29-50",
+   "pos": [
+    -125.3,
+    -52.7,
+    -30.6
+   ]
+  },
+  {
+   "id": "dashboard-server-render",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Server-rendered developer dashboard",
+   "statement": "/api/developer/dashboard returns a single server-built HTML page (inline CSS, vanilla JS) showing keys, stats, webhook deliveries with retry, audit trail, and recent requests.",
+   "source": "src/gateway/routes.ts:40-72,407-703",
+   "pos": [
+    -139.6,
+    -12.4,
+    -60.9
+   ]
+  },
+  {
+   "id": "scope-enforcement",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Per-request scope enforcement",
+   "statement": "requireAuth rejects missing/malformed auth (401), unknown/revoked keys (401), and keys lacking a required scope (403); scopes are membership checks against a fixed set (did:read/write, vc:issue/verify, trust:read/write).",
+   "source": "src/gateway/middleware.ts:29-72",
+   "pos": [
+    -209.1,
+    14.7,
+    86
+   ]
+  },
+  {
+   "id": "revoked-key-invalid",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Revoked keys resolve to null",
+   "statement": "findApiKey returns null when revoked_at is set, so revoked keys fail auth; revocation only sets revoked_at where currently null.",
+   "source": "src/gateway/apikey.ts:113-128",
+   "pos": [
+    -180.6,
+    102.6,
+    57.1
+   ]
+  },
+  {
+   "id": "ratelimit-after-auth",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Rate limiting runs after auth, keyed by key id",
+   "statement": "The rate-limit middleware passes through unauthenticated requests and otherwise decrements the bucket for the API key, returning 429 with Retry-After when empty.",
+   "source": "src/gateway/middleware.ts:74-100,145-147",
+   "pos": [
+    -166.3,
+    -92.5,
+    34.7
+   ]
+  },
+  {
+   "id": "ratelimit-header-hardcoded",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "X-RateLimit-Limit hardcoded to 100",
+   "statement": "The middleware always emits X-RateLimit-Limit: 100 regardless of plan tier, so the advertised limit disagrees with the enforced quota for developer/enterprise keys.",
+   "source": "src/gateway/middleware.ts:86",
+   "pos": [
+    -200.6,
+    83.9,
+    30
+   ]
+  },
+  {
+   "id": "usage-after-routes",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Usage middleware wraps res.json, logs async",
+   "statement": "Usage tracking monkey-patches res.json to capture status and response time, logs in the background, must be registered after routes, and skips unauthenticated requests.",
+   "source": "src/gateway/middleware.ts:102-140",
+   "pos": [
+    -226.1,
+    10.9,
+    -0.8
+   ]
+  },
+  {
+   "id": "usage-analytics",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Usage stats aggregate per key and endpoint",
+   "statement": "Stats aggregate total/success/error counts, average response time, and per-endpoint breakdown; unknown keys yield zeros; aggregate stats expose totalRequests and activeKeys.",
+   "source": "tests/gateway.test.ts:121-157",
+   "pos": [
+    -223.6,
+    29.1,
+    -25.6
+   ]
+  },
+  {
+   "id": "webhook-url-validation",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Webhook URL and event validation",
+   "statement": "Registration rejects URLs not starting with http(s):// and event lists outside credential.issued/credential.verified; deletion and listing are scoped to the owning API key.",
+   "source": "src/gateway/webhooks.ts:66-117",
+   "pos": [
+    -201.5,
+    80.3,
+    -38.7
+   ]
+  },
+  {
+   "id": "html-escaping",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Dashboard HTML escaping",
+   "statement": "Dashboard cell values pass through escHtml to reduce stored XSS in rendered key names, emails, and paths.",
+   "source": "src/gateway/routes.ts:701-703",
+   "pos": [
+    -185.2,
+    -65.2,
+    -67.3
+   ]
+  },
+  {
+   "id": "admin-key-seed-once",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Admin API key seeded only when none exist",
+   "statement": "On boot the server seeds a full-scope orb_ admin key (sha256-hashed, printed once) only if the api_keys table is empty.",
+   "source": "src/index.ts:1132-1165",
+   "pos": [
+    -189.6,
+    -46.3,
+    -91.4
+   ]
+  },
+  {
+   "id": "full-scope-public-registration",
+   "type": "constraint",
+   "domain": "gateway",
+   "title": "Public self-registration grants all scopes",
+   "statement": "The unauthenticated /api/developer/register endpoint issues a key with the full scope set from just a name and email, with no verification.",
+   "source": "src/gateway/routes.ts:79-113",
+   "pos": [
+    -192.9,
+    -107.1,
+    94.1
+   ]
+  },
+  {
+   "id": "webhook-schema-drift",
+   "type": "constraint",
+   "domain": "gateway",
+   "title": "Webhook delivery schema mismatch",
+   "statement": "initDatabase creates webhook_deliveries with columns event/status_code/response_body but the webhook code reads/writes event_type/response_status — an internal schema inconsistency.",
+   "source": "src/db/metadata.ts:104 vs src/gateway/webhooks.ts:163,187",
+   "pos": [
+    -257.6,
+    13.4,
+    -100.2
+   ]
+  },
+  {
+   "id": "noble-crypto",
+   "type": "decision",
+   "domain": "security",
+   "title": "Audited @noble libraries for all curve crypto",
+   "statement": "All Ed25519 keygen/sign/verify and curve conversion use the audited @noble/ed25519 and @noble/curves async APIs.",
+   "source": "src/did/key.ts:10,50-63; src/vc/issue.ts:8,199",
+   "pos": [
+    -122.9,
+    77.7,
+    -14.2
+   ]
+  },
+  {
+   "id": "keys-not-persisted-server-side",
+   "type": "decision",
+   "domain": "security",
+   "title": "Private keys never persist server-side",
+   "statement": "DID creation returns the keypair to the caller; the DB stores only public material; issuance, ZK proving, and DIDComm all require the caller to pass the secret key per request.",
+   "source": "src/did/index.ts:29-64; src/vc/issue.ts:49-56; src/index.ts:206-245",
+   "pos": [
+    -133.8,
+    -35.9,
+    -47.7
+   ]
+  },
+  {
+   "id": "aes-256-gcm-envelope",
+   "type": "decision",
+   "domain": "security",
+   "title": "AES-256-GCM KMS envelope encryption",
+   "statement": "Optional envelope encryption wraps a raw private key with a 32-byte master key using AES-256-GCM (random 12-byte IV, auth tag), returning hex ciphertext/iv/tag.",
+   "source": "src/did/key.ts:189-246",
+   "pos": [
+    -116.5,
+    35.7,
+    -96.6
+   ]
+  },
+  {
+   "id": "jwt-bcrypt-auth",
+   "type": "decision",
+   "domain": "security",
+   "title": "JWT + bcrypt user authentication",
+   "statement": "User auth uses bcrypt (12 rounds) password hashing and 24h HS256 JWTs; a requireJwt Bearer middleware protects routes.",
+   "source": "src/security/jwt.ts:12-23,101-183",
+   "pos": [
+    -92.8,
+    -2.9,
+    -123.3
+   ]
+  },
+  {
+   "id": "kms-wrong-key-fails",
+   "type": "rule",
+   "domain": "security",
+   "title": "Wrong master key must fail decryption",
+   "statement": "The AES-256-GCM envelope round-trips, and decryption under a different master key must throw (auth tag mismatch); master keys must decode to exactly 32 bytes.",
+   "source": "tests/kms.test.ts:5-42; src/did/key.ts:199-231",
+   "pos": [
+    -199.3,
+    88.5,
+    -13
+   ]
+  },
+  {
+   "id": "secretkey-32-byte-check",
+   "type": "rule",
+   "domain": "security",
+   "title": "Secret keys must be 32-byte hex",
+   "statement": "Issue, ZK, DIDComm, and status endpoints reject any supplied secret key that does not decode to exactly 32 bytes.",
+   "source": "src/index.ts:241-245,422-426,548-552,806-810",
+   "pos": [
+    -209.7,
+    -42.5,
+    -34.3
+   ]
+  },
+  {
+   "id": "password-min-8",
+   "type": "rule",
+   "domain": "security",
+   "title": "Passwords ≥ 8 chars; emails normalized",
+   "statement": "Registration and password change reject passwords under 8 characters; emails are lowercased, trimmed, and unique.",
+   "source": "src/security/jwt.ts:83-108,200-206",
+   "pos": [
+    -213.9,
+    11.2,
+    -73.4
+   ]
+  },
+  {
+   "id": "bearer-token-format",
+   "type": "rule",
+   "domain": "security",
+   "title": "Strict Bearer <jwt> header enforcement",
+   "statement": "requireJwt rejects requests lacking an Authorization header, not shaped exactly 'Bearer <token>', or carrying an invalid/expired token.",
+   "source": "src/security/jwt.ts:153-183",
+   "pos": [
+    -191.8,
+    67,
+    -93.6
+   ]
+  },
+  {
+   "id": "linked-did-format",
+   "type": "rule",
+   "domain": "security",
+   "title": "Linked DID must start with did:",
+   "statement": "PUT /api/auth/did rejects a DID that is not a string starting with did:.",
+   "source": "src/security/jwt.ts:358-364",
+   "pos": [
+    -189,
+    49.4,
+    -113.4
+   ]
+  },
+  {
+   "id": "debug-key-production-guard",
+   "type": "rule",
+   "domain": "security",
+   "title": "Debug key material suppressed in production",
+   "statement": "DID creation only attaches a _debug block (public key hex) when NODE_ENV is not production, explicitly to avoid exposing key material in production.",
+   "source": "src/index.ts:112-118",
+   "pos": [
+    -178,
+    55.3,
+    -125
+   ]
+  },
+  {
+   "id": "audit-logging",
+   "type": "rule",
+   "domain": "security",
+   "title": "Append-only audit log for sensitive operations",
+   "statement": "All sensitive operations (did.*, vc.*, zk.*, trust.*, auth.*, compliance.*, key rotation) log actor type/id, action, entity, result, IP, and timestamp; writes are async and never crash the caller.",
+   "source": "src/security/audit.ts:41-135; tests/audit.test.ts:10-30",
+   "pos": [
+    -152.2,
+    85.8,
+    -132.2
+   ]
+  },
+  {
+   "id": "audit-actor-derivation",
+   "type": "rule",
+   "domain": "security",
+   "title": "Actor and client IP derivation",
+   "statement": "Actor is user (req.user.sub), else api_key (req.apiKey.id), else unknown; client IP prefers the first x-forwarded-for entry, then req.ip, then 0.0.0.0.",
+   "source": "src/security/audit.ts:194-217",
+   "pos": [
+    -106.9,
+    -98.9,
+    -120.7
+   ]
+  },
+  {
+   "id": "audit-db-constraints",
+   "type": "rule",
+   "domain": "security",
+   "title": "Audit rows constrained by CHECK enums",
+   "statement": "ssi_audit_log enforces actor_type IN (user, api_key, system, unknown) and result IN (success, failure) at the schema level, with entity/timestamp/actor indexes.",
+   "source": "src/security/audit.ts:41-56",
+   "pos": [
+    -110.5,
+    103.9,
+    -151.1
+   ]
+  },
+  {
+   "id": "jwt-secret-ephemeral",
+   "type": "constraint",
+   "domain": "security",
+   "title": "Auto-generated JWT secret invalidates tokens on restart",
+   "statement": "If JWT_SECRET is unset a random per-process secret is generated (dev only), invalidating all JWTs on restart; .env.example instructs openssl rand -hex 32 for production.",
+   "source": "src/security/jwt.ts:20-22; .env.example:13-23",
+   "pos": [
+    -228.7,
+    78.5,
+    -128.7
+   ]
+  },
+  {
+   "id": "remove-debug-in-prod",
+   "type": "direction",
+   "domain": "security",
+   "title": "Remove debug key exposure for production",
+   "statement": "An inline comment directs removing the _debug public-key block entirely in production deployments.",
+   "source": "src/index.ts:112-118",
+   "pos": [
+    -327.5,
+    114.6,
+    -181.7
+   ]
+  },
+  {
+   "id": "team-db-shell-store",
+   "type": "decision",
+   "domain": "data",
+   "title": "Persistence via team-db shell CLI",
+   "statement": "All persistence shells out to a team-db CLI (Turso/SQLite semantics) returning JSON rows, rather than a DB driver; each module carries its own db() helper.",
+   "source": "src/db/metadata.ts:11-49; scripts/team-db:1-44",
+   "pos": [
+    -121.8,
+    -16.3,
+    -90.6
+   ]
+  },
+  {
+   "id": "turso-shared-store",
+   "type": "decision",
+   "domain": "data",
+   "title": "Shared Turso/SQLite store, no DB container",
+   "statement": "The backend uses the shared team-db so docker-compose runs without a database container; the host binary is bind-mounted read-only.",
+   "source": "docker-compose.yml:3-8,30-32",
+   "pos": [
+    -107.9,
+    7.5,
+    -112.3
+   ]
+  },
+  {
+   "id": "teamdb-python-shim",
+   "type": "decision",
+   "domain": "data",
+   "title": "Python SQLite shim for local development",
+   "statement": "A local shim (scripts/team-db, python3) fulfills the team-db contract against a local SQLite file (TEAM_DB_PATH, default ./.data/team.db) so backend and tests run anywhere.",
+   "source": "scripts/team-db:1-44; .env.example:26-30",
+   "pos": [
+    -82.5,
+    61.9,
+    -110.1
+   ]
+  },
+  {
+   "id": "runtime-migration",
+   "type": "decision",
+   "domain": "data",
+   "title": "Idempotent runtime schema migration",
+   "statement": "initDatabase creates all tables with IF NOT EXISTS and runs a try/catch-guarded ALTER TABLE for the plan column, since team-db runs one statement per call.",
+   "source": "src/db/metadata.ts:69-115",
+   "pos": [
+    -57.8,
+    -57.6,
+    -109.8
+   ]
+  },
+  {
+   "id": "async-exec-writes",
+   "type": "decision",
+   "domain": "data",
+   "title": "Non-blocking async exec for write/log paths",
+   "statement": "Read paths use synchronous execSync; high-volume writes (usage logs, audit logs, messages, webhook deliveries) use non-blocking exec callbacks so logging never blocks the event loop.",
+   "source": "src/db/metadata.ts:42-63; src/gateway/usage.ts:37-55",
+   "pos": [
+    -45.6,
+    3.2,
+    -148.1
+   ]
+  },
+  {
+   "id": "env-var-contract",
+   "type": "decision",
+   "domain": "data",
+   "title": "Environment variable contract",
+   "statement": "The contract: PORT (3001), NODE_ENV, JWT_SECRET, ENCRYPTION_KEY, DATABASE_URL, TEAM_DB_PATH; CI adds TEAM_DB_SYNC_URL; deploy adds REGISTRY/IMAGE_NAME.",
+   "source": ".env.example:1-31; .github/workflows/ci.yml:13-14",
+   "pos": [
+    -11.5,
+    46,
+    -146
+   ]
+  },
+  {
+   "id": "metadata-only-store",
+   "type": "rule",
+   "domain": "data",
+   "title": "No personal data in the metadata store",
+   "statement": "The team-db store holds only non-sensitive indexed metadata (DID/credential/trust metadata); personal data never touches this store.",
+   "source": "src/db/metadata.ts:4-9",
+   "pos": [
+    -172,
+    -34.5,
+    -131.2
+   ]
+  },
+  {
+   "id": "sql-quote-escaping",
+   "type": "rule",
+   "domain": "data",
+   "title": "Single-quote doubling as SQL escaping",
+   "statement": "Values are interpolated via a quote() helper that null-checks and doubles single quotes (SQLite escaping) — string escaping, not parameterization.",
+   "source": "src/db/metadata.ts:258-262",
+   "pos": [
+    -20.1,
+    66.7,
+    -211.7
+   ]
+  },
+  {
+   "id": "single-line-sql",
+   "type": "constraint",
+   "domain": "data",
+   "title": "team-db accepts single-line SQL only",
+   "statement": "The CLI supports neither multi-line SQL nor multiple statements per call, so every query is whitespace-collapsed to one line and each DDL statement is a separate invocation.",
+   "source": "src/db/metadata.ts:8-9,17-34",
+   "pos": [
+    -195.5,
+    106.5,
+    -148.1
+   ]
+  },
+  {
+   "id": "raw-sql-interpolation",
+   "type": "constraint",
+   "domain": "data",
+   "title": "SQL built by string interpolation",
+   "statement": "With no parameter binding available through the CLI, all queries interpolate values directly, relying on quote-doubling — an accepted injection surface (some paths escape only ad hoc).",
+   "source": "src/gateway/webhooks.ts:130; src/vc/verify-zk.ts:401; src/index.ts:1149-1152",
+   "pos": [
+    -145.4,
+    113.3,
+    -192.7
+   ]
+  },
+  {
+   "id": "async-write-loss-risk",
+   "type": "constraint",
+   "domain": "data",
+   "title": "Background writes have no durability guarantee",
+   "statement": "Fire-and-forget audit/usage/message/webhook writes only console.error on failure, so failed compliance writes are silently lost — the accepted price of non-blocking IO.",
+   "source": "src/security/audit.ts:126-134; src/gateway/usage.ts:50-54",
+   "pos": [
+    -108.2,
+    -37.7,
+    -242
+   ]
+  },
+  {
+   "id": "serial-tests",
+   "type": "constraint",
+   "domain": "data",
+   "title": "Test suites run serially on one DB",
+   "statement": "Vitest runs with fileParallelism false and a fresh temp SQLite DB per run; suites share one team-db file and must run sequentially to avoid write races.",
+   "source": "vitest.config.ts:6-18",
+   "pos": [
+    -26.7,
+    -116.4,
+    -201.5
+   ]
+  },
+  {
+   "id": "web-stack-react18",
+   "type": "decision",
+   "domain": "web",
+   "title": "Web stack: React 18 + Vite 6 + Tailwind CSS 4",
+   "statement": "The frontend uses React 18.3, Vite 6, Tailwind CSS 4 (@tailwindcss/vite), react-router-dom 7, lucide-react, and TypeScript 5.7.",
+   "source": "web/package.json:13-27",
+   "pos": [
+    12.9,
+    58.7,
+    -139.2
+   ]
+  },
+  {
+   "id": "vite-proxy-api",
+   "type": "decision",
+   "domain": "web",
+   "title": "Dev server proxies /api to the backend",
+   "statement": "The Vite dev server (:5173) proxies /api to http://localhost:3001 with changeOrigin, so all web API calls are relative.",
+   "source": "web/vite.config.ts:10-16",
+   "pos": [
+    47.6,
+    -62.5,
+    -108.5
+   ]
+  },
+  {
+   "id": "identity-console",
+   "type": "decision",
+   "domain": "web",
+   "title": "Identity Console at /app",
+   "statement": "The console (ConsoleLayout) has routes for Overview, DIDs, Credentials, Trust, Messages, Developer, Audit, and Status Lists; the public marketing site lives at /.",
+   "source": "web/src/App.tsx:13-30",
+   "pos": [
+    88.9,
+    -6.1,
+    -125.5
+   ]
+  },
+  {
+   "id": "statuslist-ui-console",
+   "type": "decision",
+   "domain": "web",
+   "title": "Dedicated StatusList2021 UI console",
+   "statement": "The console includes a StatusList2021 panel to create lists and set/check revocation bits by index.",
+   "source": "web/src/pages/console/StatusLists.tsx:98-200",
+   "pos": [
+    119.3,
+    -20.7,
+    -91.3
+   ]
+  },
+  {
+   "id": "web-console-validation",
+   "type": "rule",
+   "domain": "web",
+   "title": "Console input validation",
+   "statement": "Console inputs expect did:key:z…/did:web:… formats, a 32-byte hex issuer secret in a password field, valid JSON bodies with explicit error messages, and required status-list fields.",
+   "source": "web/src/pages/console/*.tsx",
+   "pos": [
+    95.1,
+    99.6,
+    -165.7
+   ]
+  },
+  {
+   "id": "uiux-guided-tours",
+   "type": "direction",
+   "domain": "web",
+   "title": "Guided tours and visual trust indicators",
+   "statement": "Planned: react-joyride onboarding tours, visual verified/hidden-field indicators, and Recharts/Chart.js gateway analytics dashboards.",
+   "source": "NEXT_STEPS_ASSESSMENT.md:19-21",
+   "pos": [
+    26.6,
+    49.1,
+    -394.4
+   ]
+  },
+  {
+   "id": "admin-trust-mgmt",
+   "type": "direction",
+   "domain": "web",
+   "title": "Deeper admin control surfaces",
+   "statement": "Planned: bulk eIDAS trusted-list import/export, granular trust-request approval workflow, audit/compliance filter/search/export views, temporary key suspension, and rate-limit metric views.",
+   "source": "NEXT_STEPS_ASSESSMENT.md:27-29",
+   "pos": [
+    295.3,
+    129.4,
+    -217.9
+   ]
+  },
+  {
+   "id": "wcag-accessibility",
+   "type": "law",
+   "domain": "wallet",
+   "title": "WCAG accessibility treated as required",
+   "statement": "The wallet uses accessibilityRole/Label throughout, announces wizard steps via AccessibilityInfo, marks radio states, and keeps 44px minimum touch targets.",
+   "source": "m/wallet-app/src/screens/vault/VaultShareScreen.tsx:97-103,375-397,604",
+   "pos": [
+    162.8,
+    -128.8,
+    -209.1
+   ]
+  },
+  {
+   "id": "expo-conventions",
+   "type": "law",
+   "domain": "wallet",
+   "title": "Expo managed-workflow conventions",
+   "statement": "The wallet follows Expo managed-workflow requirements: app.json plugins, iOS infoPlist usage strings, Android permissions, expo-secure-store keychain, expo-local-authentication, expo-camera, new architecture enabled.",
+   "source": "m/wallet-app/app.json:11-65",
+   "pos": [
+    291.6,
+    139.1,
+    -31.5
+   ]
+  },
+  {
+   "id": "expo-sdk-57",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Mobile wallet on Expo SDK 57",
+   "statement": "The wallet uses Expo SDK 57 (React Native 0.86 / React 19), React Navigation 7, strict TypeScript, dark default theme — note the web app remains on React 18.",
+   "source": "m/wallet-app/README.md:3-16; m/wallet-app/app.json:8",
+   "pos": [
+    97.5,
+    11.3,
+    -121.5
+   ]
+  },
+  {
+   "id": "biometric-gating",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Biometrics gate the wallet",
+   "statement": "expo-local-authentication (FaceID/TouchID/fingerprint) gates the app through an auth state machine: loading → onboarding → locked → unlocked, with opt-in unlock in Settings.",
+   "source": "m/wallet-app/src/services/biometrics.ts; src/context/AuthContext.tsx:1-88",
+   "pos": [
+    93.1,
+    79.1,
+    -78
+   ]
+  },
+  {
+   "id": "e2e-share-encryption",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "End-to-end encrypted vault sharing",
+   "statement": "Vault records are encrypted on-device with a per-record AES-256-GCM key (AAD-bound to record id) wrapped under a keychain-held device master key; sharing seals only that record's key for the grantee's X25519 key (ECDH-ES) — the server sees ciphertext only.",
+   "source": "m/wallet-app/src/services/vaultCrypto.ts:1-116",
+   "pos": [
+    101.5,
+    -68.5,
+    -43.9
+   ]
+  },
+  {
+   "id": "wallet-api-base-url",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Wallet talks to https://orbis.ctonew.app",
+   "statement": "The wallet's live backend base URL is https://orbis.ctonew.app, overridable via app.json extra.apiBaseUrl, with a JWT bearer held in the secure store.",
+   "source": "m/wallet-app/src/services/api.ts:12-43",
+   "pos": [
+    111.8,
+    -67.4,
+    -16.5
+   ]
+  },
+  {
+   "id": "consent-wizard",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Every share answers WHO / WHAT / HOW LONG / PRICE",
+   "statement": "A 4-step wizard collects recipient, scope, duration, and price before any grant, reviews it in a plain-language sentence, and confirms with biometrics before sealing on-device.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:2-6; VaultShareScreen.tsx:41,173-195",
+   "pos": [
+    124.7,
+    53.9,
+    -179.9
+   ]
+  },
+  {
+   "id": "share-requires-keyagreement",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Shares blocked without a resolvable X25519 key",
+   "statement": "Sharing is blocked if the grantee DID has no resolvable key-agreement key; shares are DID-bound — never 'anyone with the link'.",
+   "source": "m/wallet-app/src/screens/vault/VaultShareScreen.tsx:117-122,296-297",
+   "pos": [
+    124.7,
+    -77.1,
+    -138.9
+   ]
+  },
+  {
+   "id": "grant-max-90-days",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Grant expiry capped at 90 days",
+   "statement": "Custom grant durations must be 1-90 days (MAX_GRANT_DAYS=90); the server rejects longer expiries.",
+   "source": "m/wallet-app/src/services/walletApi.ts:107; VaultShareScreen.tsx:141-162",
+   "pos": [
+    165.9,
+    -11.2,
+    -148.7
+   ]
+  },
+  {
+   "id": "vault-regate",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Vault re-gates after 5 minutes",
+   "statement": "The vault requires fresh biometric auth when the last auth is older than 5 minutes (VAULT_AUTH_TTL_MS); devices without enrolled biometrics fall through to the app lock.",
+   "source": "m/wallet-app/src/features/vault/session.ts:1-36",
+   "pos": [
+    191,
+    -14.3,
+    -114.9
+   ]
+  },
+  {
+   "id": "honest-money-copy",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Money copy says 'requested', never 'earned'",
+   "statement": "Compensation copy uses the verb 'request compensation' and status 'pending' only; never earned/paid/balance until money actually moves, and no payout-method UI is built.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:2-6,17-19",
+   "pos": [
+    201.9,
+    32.6,
+    -96.1
+   ]
+  },
+  {
+   "id": "title-plaintext-only",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Only record titles are plaintext server-side",
+   "statement": "The only plaintext the server sees is record metadata (title ≤120 chars + type); the title helper warns to keep personal details out; the body is ciphertext.",
+   "source": "m/wallet-app/src/services/walletApi.ts:29-33",
+   "pos": [
+    214.5,
+    26.7,
+    -66.1
+   ]
+  },
+  {
+   "id": "blob-quota-limits",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "512 KB per record, 50 MB per vault",
+   "statement": "Per-record blobs are capped at 512 KB and total vault quota at 50 MB, with quota warnings and vault-full copy.",
+   "source": "m/wallet-app/src/services/walletApi.ts:105-106",
+   "pos": [
+    192.5,
+    92.9,
+    -43.8
+   ]
+  },
+  {
+   "id": "network-retry-dedupe",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Share retries dedupe against recent grants",
+   "statement": "On a network error after a share POST, the client checks for a just-created (<2 min) matching non-revoked grant before retrying, avoiding duplicate grants.",
+   "source": "m/wallet-app/src/screens/vault/VaultShareScreen.tsx:216-234",
+   "pos": [
+    219.8,
+    -22.5,
+    -19.6
+   ]
+  },
+  {
+   "id": "record-key-device-bound",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "Per-record keys live only on the originating device",
+   "statement": "A record fetched on a device without its key fails to decrypt (RECORD_KEY_MISSING) — cross-device key sync does not exist yet.",
+   "source": "m/wallet-app/src/services/vaultCrypto.ts:91-98",
+   "pos": [
+    158.3,
+    7.5,
+    -225
+   ]
+  },
+  {
+   "id": "scope-full-or-meta",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "Share scope: full or meta-only",
+   "statement": "V1 share scope is limited to full or meta-only; field-level sharing is not yet available.",
+   "source": "m/wallet-app/src/services/walletApi.ts:27",
+   "pos": [
+    204,
+    55.4,
+    -176.6
+   ]
+  },
+  {
+   "id": "usd-only",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "Compensation currency is USD only",
+   "statement": "Only USD is supported for share compensation; more currencies are promised later.",
+   "source": "m/wallet-app/src/screens/vault/VaultShareScreen.tsx:193,460",
+   "pos": [
+    230.2,
+    104.2,
+    -89.1
+   ]
+  },
+  {
+   "id": "ios-portrait-dark-only",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "iOS: no tablet, portrait, dark only",
+   "statement": "app.json sets supportsTablet false, portrait orientation, and a dark-only UI.",
+   "source": "m/wallet-app/app.json:6-12",
+   "pos": [
+    229.9,
+    124.7,
+    -31.9
+   ]
+  },
+  {
+   "id": "wallet-phase1",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "Wallet Phase 1 complete; follow-ups pending",
+   "statement": "Done: scaffold, tokens, nav shell, email auth, biometric unlock, keychain, QR. Pending: social login, push-notification registration, on-device DID creation.",
+   "source": "m/wallet-app/README.md:43-54",
+   "pos": [
+    212,
+    166.5,
+    -270.8
+   ]
+  },
+  {
+   "id": "social-login-pending",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "Social login stubbed until OAuth IDs supplied",
+   "statement": "signInWithProvider (Google/Apple/Microsoft via expo-auth-session) throws until the owner supplies OAuth client IDs.",
+   "source": "m/wallet-app/src/services/auth.ts:35-39",
+   "pos": [
+    294.8,
+    89.3,
+    -249.4
+   ]
+  },
+  {
+   "id": "share-field-level",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "Field-level selective sharing coming",
+   "statement": "Sharing specific fields is 'coming soon'; it will relax the full/meta-only scope constraint.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:29",
+   "pos": [
+    340.3,
+    51.8,
+    -197.6
+   ]
+  },
+  {
+   "id": "payments-pending",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "Payments and payouts not yet live",
+   "statement": "Compensation is recorded per share and payable when payouts launch; USD only for now.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:31-32",
+   "pos": [
+    338.4,
+    -108.2,
+    -91.7
+   ]
+  },
+  {
+   "id": "ondevice-did-pending",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "On-device DID creation pending",
+   "statement": "Creating DIDs on-device in the wallet is a Phase 1 follow-up not yet implemented.",
+   "source": "m/wallet-app/README.md:54",
+   "pos": [
+    350.5,
+    -106.6,
+    -29.5
+   ]
+  },
+  {
+   "id": "openapi-31",
+   "type": "law",
+   "domain": "ops",
+   "title": "OpenAPI 3.1 API contract",
+   "statement": "The full public API surface is specified as an OpenAPI 3.1.0 document served at /openapi.yaml.",
+   "source": "openapi.yaml:1-7; src/gateway/routes.ts:531",
+   "pos": [
+    -5.8,
+    -124,
+    -270.2
+   ]
+  },
+  {
+   "id": "bun-runtime",
+   "type": "decision",
+   "domain": "ops",
+   "title": "Bun 1.3 runtime with multi-stage Docker",
+   "statement": "Production containers run on Bun 1.3 via a two-stage Dockerfile (deps → runtime) with curl only for the healthcheck; CI standardizes on Bun 1.3 too.",
+   "source": "Dockerfile:1-35; .github/workflows/ci.yml:25-28",
+   "pos": [
+    -53.6,
+    -49.8,
+    -120.3
+   ]
+  },
+  {
+   "id": "systemd-node-tsx",
+   "type": "decision",
+   "domain": "ops",
+   "title": "systemd deployment via node --import tsx",
+   "statement": "A systemd unit runs the service as a dedicated orbis user under /opt/orbis-ssi-backend with node --import tsx, hardening flags, restart-on-failure, and journal logging — a different runtime than the Docker path.",
+   "source": "deploy/orbis-ssi-backend.service:1-25",
+   "pos": [
+    -39.1,
+    17.6,
+    -150.3
+   ]
+  },
+  {
+   "id": "ci-pipeline",
+   "type": "decision",
+   "domain": "ops",
+   "title": "CI: typecheck + tests + gated Docker build",
+   "statement": "CI runs on pushes to main/feat/fix/chore branches and PRs to main: Bun install, tsc --noEmit, vitest, then a Docker build that runs only on push and depends on tests passing.",
+   "source": ".github/workflows/ci.yml:1-72",
+   "pos": [
+    0.3,
+    -8.7,
+    -153.3
+   ]
+  },
+  {
+   "id": "deploy-pipeline",
+   "type": "decision",
+   "domain": "ops",
+   "title": "Deploy: push image to GHCR on main",
+   "statement": "On push to main, tests run then a Docker image is built and pushed to ghcr.io with sha/branch/semver/latest tags; the actual cloud deploy step is a documented placeholder.",
+   "source": ".github/workflows/deploy.yml:1-79",
+   "pos": [
+    31.3,
+    62.4,
+    -133.6
+   ]
+  },
+  {
+   "id": "port-3001",
+   "type": "decision",
+   "domain": "ops",
+   "title": "Fixed port 3001 contract",
+   "statement": "The service listens on 3001 across the env default, docker-compose mapping and healthcheck, Dockerfile EXPOSE, and the OpenAPI local server URL.",
+   "source": ".env.example:7-8; Dockerfile:27-31; openapi.yaml:11-13",
+   "pos": [
+    47.2,
+    -70.4,
+    -98
+   ]
+  },
+  {
+   "id": "health-endpoint",
+   "type": "rule",
+   "domain": "ops",
+   "title": "/api/health liveness contract",
+   "statement": "GET /api/health returns status/version/service/timestamp and is the liveness probe for docker-compose and Dockerfile healthchecks (curl, 30s interval).",
+   "source": "openapi.yaml:15-27; docker-compose.yml:23-28",
+   "pos": [
+    -98.2,
+    39.7,
+    -199.3
+   ]
+  },
+  {
+   "id": "error-handling-contract",
+   "type": "rule",
+   "domain": "ops",
+   "title": "Uniform error/404 JSON contract",
+   "statement": "AppError yields {error:true,message} with its status; unknown errors return a generic 500 with no internals leaked; 404s return 'Resource not found'; all errors log with stack.",
+   "source": "src/middleware/error.ts:1-44",
+   "pos": [
+    77,
+    -61.1,
+    -184.7
+   ]
+  },
+  {
+   "id": "deploy-target-todo",
+   "type": "direction",
+   "domain": "ops",
+   "title": "Cloud deploy target not configured",
+   "statement": "The deploy workflow explicitly ends with 'Deployment target not configured — extend this workflow for your cloud provider', with commented Railway/Fly.io/Kubernetes examples.",
+   "source": ".github/workflows/deploy.yml:69-79",
+   "pos": [
+    -12.3,
+    19.5,
+    -395.3
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "source": "member-ownership",
+   "relation": "implements",
+   "target": "member-owned"
+  },
+  {
+   "source": "perpetual-trust",
+   "relation": "part-of",
+   "target": "five-entity-structure"
+  },
+  {
+   "source": "five-entity-structure",
+   "relation": "implements",
+   "target": "member-ownership"
+  },
+  {
+   "source": "global-compliance",
+   "relation": "part-of",
+   "target": "mica-genius-compliance"
+  },
+  {
+   "source": "global-compliance",
+   "relation": "part-of",
+   "target": "eidas-trusted-lists"
+  },
+  {
+   "source": "global-compliance",
+   "relation": "motivates",
+   "target": "auditability"
+  },
+  {
+   "source": "distribution-formula",
+   "relation": "implements",
+   "target": "aligned-economics"
+  },
+  {
+   "source": "orbis-coin",
+   "relation": "constrains",
+   "target": "mica-genius-compliance"
+  },
+  {
+   "source": "orbis-coin",
+   "relation": "implements",
+   "target": "aligned-economics"
+  },
+  {
+   "source": "multi-tier-democracy",
+   "relation": "enables",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "multi-tier-democracy",
+   "relation": "implements",
+   "target": "member-owned"
+  },
+  {
+   "source": "headline-commitments",
+   "relation": "derives-from",
+   "target": "member-ownership"
+  },
+  {
+   "source": "roadmap-p2-growth",
+   "relation": "derives-from",
+   "target": "roadmap-p1-foundation"
+  },
+  {
+   "source": "roadmap-p3-acceleration",
+   "relation": "derives-from",
+   "target": "roadmap-p2-growth"
+  },
+  {
+   "source": "roadmap-p4-maturity",
+   "relation": "derives-from",
+   "target": "roadmap-p3-acceleration"
+  },
+  {
+   "source": "roadmap-p4-maturity",
+   "relation": "motivates",
+   "target": "perpetual-trust"
+  },
+  {
+   "source": "user-consent",
+   "relation": "derives-from",
+   "target": "self-sovereign-identity"
+  },
+  {
+   "source": "data-minimization",
+   "relation": "derives-from",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "on-device-proving",
+   "relation": "derives-from",
+   "target": "self-sovereign-identity"
+  },
+  {
+   "source": "unlinkability-goal",
+   "relation": "motivates",
+   "target": "bbs-bls-2020"
+  },
+  {
+   "source": "unlinkability-goal",
+   "relation": "derives-from",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "w3c-did-core",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "did-key-spec",
+   "relation": "implements",
+   "target": "w3c-did-core"
+  },
+  {
+   "source": "did-key-spec",
+   "relation": "derives-from",
+   "target": "multicodec-multibase"
+  },
+  {
+   "source": "did-web-spec",
+   "relation": "implements",
+   "target": "w3c-did-core"
+  },
+  {
+   "source": "did-peer-spec",
+   "relation": "implements",
+   "target": "w3c-did-core"
+  },
+  {
+   "source": "did-peer-spec",
+   "relation": "enables",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "ed25519-verification-key-2020",
+   "relation": "part-of",
+   "target": "ed25519-signature-2020"
+  },
+  {
+   "source": "two-did-methods-plus-peer",
+   "relation": "implements",
+   "target": "did-key-spec"
+  },
+  {
+   "source": "two-did-methods-plus-peer",
+   "relation": "implements",
+   "target": "did-web-spec"
+  },
+  {
+   "source": "two-did-methods-plus-peer",
+   "relation": "implements",
+   "target": "did-peer-spec"
+  },
+  {
+   "source": "did-web-ttl-cache",
+   "relation": "implements",
+   "target": "non-blocking-io"
+  },
+  {
+   "source": "did-format-guard",
+   "relation": "enforces",
+   "target": "two-did-methods-plus-peer"
+  },
+  {
+   "source": "ed25519-multicodec-guard",
+   "relation": "enforces",
+   "target": "did-key-spec"
+  },
+  {
+   "source": "did-web-doc-id-match",
+   "relation": "enforces",
+   "target": "did-web-spec"
+  },
+  {
+   "source": "did-key-shape-tests",
+   "relation": "enforces",
+   "target": "did-key-spec"
+  },
+  {
+   "source": "did-web-mock-fallback",
+   "relation": "constrains",
+   "target": "did-web-spec"
+  },
+  {
+   "source": "did-web-mock-fallback",
+   "relation": "derives-from",
+   "target": "graceful-degradation"
+  },
+  {
+   "source": "resolvedid-not-awaited",
+   "relation": "conflicts-with",
+   "target": "did-web-spec"
+  },
+  {
+   "source": "w3c-vc-data-model-2",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "ed25519-signature-2020",
+   "relation": "part-of",
+   "target": "w3c-vc-data-model-2"
+  },
+  {
+   "source": "statuslist-2021",
+   "relation": "part-of",
+   "target": "w3c-vc-data-model-2"
+  },
+  {
+   "source": "custom-canonicalization",
+   "relation": "conflicts-with",
+   "target": "ed25519-signature-2020"
+  },
+  {
+   "source": "custom-canonicalization",
+   "relation": "constrains",
+   "target": "standards-interop"
+  },
+  {
+   "source": "vc-verify-check-chain",
+   "relation": "enforces",
+   "target": "w3c-vc-data-model-2"
+  },
+  {
+   "source": "expiry-check",
+   "relation": "part-of",
+   "target": "vc-verify-check-chain"
+  },
+  {
+   "source": "proof-vm-must-match",
+   "relation": "part-of",
+   "target": "vc-verify-check-chain"
+  },
+  {
+   "source": "proof-vm-must-match",
+   "relation": "enforces",
+   "target": "ed25519-signature-2020"
+  },
+  {
+   "source": "revocation-check",
+   "relation": "enforces",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "revocation-check",
+   "relation": "part-of",
+   "target": "vc-verify-check-chain"
+  },
+  {
+   "source": "status-update-validation",
+   "relation": "enforces",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "vc-issuance-contract",
+   "relation": "enforces",
+   "target": "w3c-vc-data-model-2"
+  },
+  {
+   "source": "vc-metadata-logging",
+   "relation": "implements",
+   "target": "auditability"
+  },
+  {
+   "source": "verify-vm-derivation-fragile",
+   "relation": "conflicts-with",
+   "target": "proof-vm-must-match"
+  },
+  {
+   "source": "credentialstatus-backcompat",
+   "relation": "constrains",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "dif-presentation-exchange",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "dif-presentation-exchange",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "orbis-zk-suite",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "orbis-zk-suite",
+   "relation": "enables",
+   "target": "on-device-proving"
+  },
+  {
+   "source": "separate-simple-zk-endpoint",
+   "relation": "part-of",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "on-device-zk",
+   "relation": "implements",
+   "target": "on-device-proving"
+  },
+  {
+   "source": "on-device-zk",
+   "relation": "implements",
+   "target": "user-consent"
+  },
+  {
+   "source": "on-device-zk",
+   "relation": "implements",
+   "target": "dif-presentation-exchange"
+  },
+  {
+   "source": "holder-must-equal-subject",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "zk-field-partition",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "predicates-over-hidden-only",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "zk-challenge-replay-guard",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "bbs-blinding-required",
+   "relation": "enforces",
+   "target": "bbs-bls-2020"
+  },
+  {
+   "source": "zk-verification-checks",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "zk-commitment-math",
+   "relation": "enforces",
+   "target": "separate-simple-zk-endpoint"
+  },
+  {
+   "source": "presentation-auto-disclosure",
+   "relation": "enforces",
+   "target": "dif-presentation-exchange"
+  },
+  {
+   "source": "presentation-auto-disclosure",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "bbs-simulated",
+   "relation": "constrains",
+   "target": "bbs-bls-2020"
+  },
+  {
+   "source": "bbs-simulated",
+   "relation": "conflicts-with",
+   "target": "unlinkability-goal"
+  },
+  {
+   "source": "predicate-not-cryptographic",
+   "relation": "constrains",
+   "target": "predicates-over-hidden-only"
+  },
+  {
+   "source": "zk-hash-not-circuit",
+   "relation": "constrains",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "eidas-trusted-lists",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "trust-registry-active-check",
+   "relation": "enforces",
+   "target": "trust-registry-model"
+  },
+  {
+   "source": "trust-registry-active-check",
+   "relation": "part-of",
+   "target": "vc-verify-check-chain"
+  },
+  {
+   "source": "trust-registry-lifecycle",
+   "relation": "enforces",
+   "target": "trust-registry-model"
+  },
+  {
+   "source": "didcomm-v2",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "didcomm-basicmessage",
+   "relation": "part-of",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "didcomm-trust-ping",
+   "relation": "part-of",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "didcomm-oob",
+   "relation": "part-of",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "didcomm-mediation",
+   "relation": "part-of",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "x25519-key-agreement",
+   "relation": "enables",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "jose-jwe-headers",
+   "relation": "conflicts-with",
+   "target": "envelope-crypto-substitution"
+  },
+  {
+   "source": "encrypt-then-mac",
+   "relation": "enforces",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "envelope-crypto-substitution",
+   "relation": "constrains",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "single-recipient-envelope",
+   "relation": "constrains",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "mediation-fetch-not-atomic",
+   "relation": "derives-from",
+   "target": "async-exec-writes"
+  },
+  {
+   "source": "xchacha-todo",
+   "relation": "constrains",
+   "target": "envelope-crypto-substitution"
+  },
+  {
+   "source": "wallet-didcomm-ux",
+   "relation": "implements",
+   "target": "user-presence"
+  },
+  {
+   "source": "apikey-sha256-hashing",
+   "relation": "implements",
+   "target": "key-reveal-once"
+  },
+  {
+   "source": "token-bucket-ratelimit",
+   "relation": "implements",
+   "target": "multi-process-consistency"
+  },
+  {
+   "source": "ratelimit-plan-tiers",
+   "relation": "part-of",
+   "target": "token-bucket-ratelimit"
+  },
+  {
+   "source": "webhook-design",
+   "relation": "derives-from",
+   "target": "async-exec-writes"
+  },
+  {
+   "source": "bearer-auth-scheme",
+   "relation": "enables",
+   "target": "scope-enforcement"
+  },
+  {
+   "source": "scope-enforcement",
+   "relation": "enforces",
+   "target": "bearer-auth-scheme"
+  },
+  {
+   "source": "scope-enforcement",
+   "relation": "implements",
+   "target": "least-privilege"
+  },
+  {
+   "source": "revoked-key-invalid",
+   "relation": "part-of",
+   "target": "scope-enforcement"
+  },
+  {
+   "source": "ratelimit-after-auth",
+   "relation": "enforces",
+   "target": "token-bucket-ratelimit"
+  },
+  {
+   "source": "ratelimit-header-hardcoded",
+   "relation": "conflicts-with",
+   "target": "ratelimit-plan-tiers"
+  },
+  {
+   "source": "usage-after-routes",
+   "relation": "implements",
+   "target": "non-blocking-io"
+  },
+  {
+   "source": "webhook-url-validation",
+   "relation": "part-of",
+   "target": "webhook-design"
+  },
+  {
+   "source": "html-escaping",
+   "relation": "part-of",
+   "target": "dashboard-server-render"
+  },
+  {
+   "source": "admin-key-seed-once",
+   "relation": "implements",
+   "target": "key-reveal-once"
+  },
+  {
+   "source": "full-scope-public-registration",
+   "relation": "conflicts-with",
+   "target": "least-privilege"
+  },
+  {
+   "source": "webhook-schema-drift",
+   "relation": "conflicts-with",
+   "target": "webhook-design"
+  },
+  {
+   "source": "noble-crypto",
+   "relation": "implements",
+   "target": "ed25519-signature-2020"
+  },
+  {
+   "source": "keys-not-persisted-server-side",
+   "relation": "implements",
+   "target": "self-sovereign-identity"
+  },
+  {
+   "source": "keys-not-persisted-server-side",
+   "relation": "implements",
+   "target": "on-device-proving"
+  },
+  {
+   "source": "kms-wrong-key-fails",
+   "relation": "enforces",
+   "target": "aes-256-gcm-envelope"
+  },
+  {
+   "source": "secretkey-32-byte-check",
+   "relation": "enforces",
+   "target": "keys-not-persisted-server-side"
+  },
+  {
+   "source": "password-min-8",
+   "relation": "part-of",
+   "target": "jwt-bcrypt-auth"
+  },
+  {
+   "source": "bearer-token-format",
+   "relation": "part-of",
+   "target": "jwt-bcrypt-auth"
+  },
+  {
+   "source": "linked-did-format",
+   "relation": "enforces",
+   "target": "did-format-guard"
+  },
+  {
+   "source": "debug-key-production-guard",
+   "relation": "enforces",
+   "target": "keys-not-persisted-server-side"
+  },
+  {
+   "source": "audit-logging",
+   "relation": "implements",
+   "target": "auditability"
+  },
+  {
+   "source": "audit-logging",
+   "relation": "implements",
+   "target": "non-blocking-io"
+  },
+  {
+   "source": "audit-actor-derivation",
+   "relation": "part-of",
+   "target": "audit-logging"
+  },
+  {
+   "source": "audit-db-constraints",
+   "relation": "part-of",
+   "target": "audit-logging"
+  },
+  {
+   "source": "jwt-secret-ephemeral",
+   "relation": "constrains",
+   "target": "jwt-bcrypt-auth"
+  },
+  {
+   "source": "remove-debug-in-prod",
+   "relation": "constrains",
+   "target": "debug-key-production-guard"
+  },
+  {
+   "source": "turso-shared-store",
+   "relation": "part-of",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "teamdb-python-shim",
+   "relation": "implements",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "runtime-migration",
+   "relation": "derives-from",
+   "target": "single-line-sql"
+  },
+  {
+   "source": "runtime-migration",
+   "relation": "enables",
+   "target": "ratelimit-plan-tiers"
+  },
+  {
+   "source": "async-exec-writes",
+   "relation": "implements",
+   "target": "non-blocking-io"
+  },
+  {
+   "source": "metadata-only-store",
+   "relation": "implements",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "metadata-only-store",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "sql-quote-escaping",
+   "relation": "constrains",
+   "target": "raw-sql-interpolation"
+  },
+  {
+   "source": "single-line-sql",
+   "relation": "derives-from",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "raw-sql-interpolation",
+   "relation": "derives-from",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "async-write-loss-risk",
+   "relation": "derives-from",
+   "target": "async-exec-writes"
+  },
+  {
+   "source": "async-write-loss-risk",
+   "relation": "conflicts-with",
+   "target": "auditability"
+  },
+  {
+   "source": "serial-tests",
+   "relation": "derives-from",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "vite-proxy-api",
+   "relation": "derives-from",
+   "target": "port-3001"
+  },
+  {
+   "source": "statuslist-ui-console",
+   "relation": "implements",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "statuslist-ui-console",
+   "relation": "part-of",
+   "target": "identity-console"
+  },
+  {
+   "source": "web-console-validation",
+   "relation": "part-of",
+   "target": "identity-console"
+  },
+  {
+   "source": "admin-trust-mgmt",
+   "relation": "constrains",
+   "target": "eidas-trusted-lists"
+  },
+  {
+   "source": "expo-sdk-57",
+   "relation": "derives-from",
+   "target": "expo-conventions"
+  },
+  {
+   "source": "biometric-gating",
+   "relation": "implements",
+   "target": "user-presence"
+  },
+  {
+   "source": "e2e-share-encryption",
+   "relation": "implements",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "e2e-share-encryption",
+   "relation": "derives-from",
+   "target": "did-key-spec"
+  },
+  {
+   "source": "consent-wizard",
+   "relation": "implements",
+   "target": "user-consent"
+  },
+  {
+   "source": "consent-wizard",
+   "relation": "implements",
+   "target": "user-presence"
+  },
+  {
+   "source": "consent-wizard",
+   "relation": "enforces",
+   "target": "e2e-share-encryption"
+  },
+  {
+   "source": "share-requires-keyagreement",
+   "relation": "enforces",
+   "target": "e2e-share-encryption"
+  },
+  {
+   "source": "grant-max-90-days",
+   "relation": "part-of",
+   "target": "consent-wizard"
+  },
+  {
+   "source": "vault-regate",
+   "relation": "enforces",
+   "target": "biometric-gating"
+  },
+  {
+   "source": "honest-money-copy",
+   "relation": "implements",
+   "target": "honest-ux"
+  },
+  {
+   "source": "title-plaintext-only",
+   "relation": "implements",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "title-plaintext-only",
+   "relation": "part-of",
+   "target": "e2e-share-encryption"
+  },
+  {
+   "source": "network-retry-dedupe",
+   "relation": "part-of",
+   "target": "consent-wizard"
+  },
+  {
+   "source": "record-key-device-bound",
+   "relation": "constrains",
+   "target": "e2e-share-encryption"
+  },
+  {
+   "source": "scope-full-or-meta",
+   "relation": "constrains",
+   "target": "consent-wizard"
+  },
+  {
+   "source": "social-login-pending",
+   "relation": "part-of",
+   "target": "wallet-phase1"
+  },
+  {
+   "source": "share-field-level",
+   "relation": "constrains",
+   "target": "scope-full-or-meta"
+  },
+  {
+   "source": "share-field-level",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "payments-pending",
+   "relation": "constrains",
+   "target": "honest-money-copy"
+  },
+  {
+   "source": "ondevice-did-pending",
+   "relation": "implements",
+   "target": "self-sovereign-identity"
+  },
+  {
+   "source": "ondevice-did-pending",
+   "relation": "part-of",
+   "target": "wallet-phase1"
+  },
+  {
+   "source": "openapi-31",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "bun-runtime",
+   "relation": "conflicts-with",
+   "target": "systemd-node-tsx"
+  },
+  {
+   "source": "systemd-node-tsx",
+   "relation": "implements",
+   "target": "least-privilege"
+  },
+  {
+   "source": "ci-pipeline",
+   "relation": "enables",
+   "target": "deploy-pipeline"
+  },
+  {
+   "source": "health-endpoint",
+   "relation": "part-of",
+   "target": "port-3001"
+  },
+  {
+   "source": "deploy-target-todo",
+   "relation": "constrains",
+   "target": "deploy-pipeline"
+  }
+ ]
+}
