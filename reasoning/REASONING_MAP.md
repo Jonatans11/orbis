@@ -1,14 +1,14 @@
 # ORBIS.ID Reasoning Map — index
 
 Human-readable index of [`reasoning-map.json`](reasoning-map.json) (the
-authoritative machine-readable graph: 180 nodes, 170 typed edges).
+authoritative machine-readable graph: 217 nodes, 210 typed edges).
 Interactive 3D view: open [`viewer.html`](viewer.html) in a browser; regenerate
 it after data changes with `node reasoning/build-viewer.mjs`.
 
 Consult the `reason` subagent (`.claude/agents/reason.md`) to query this map,
 check a proposed change against it, or record a new decision into it.
 
-Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
+Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 
 ## Principles — values the project favors (17)
 
@@ -81,7 +81,7 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 
 - `openapi-31` — **OpenAPI 3.1 API contract.** The full public API surface is specified as an OpenAPI 3.1.0 document served at /openapi.yaml. _(openapi.yaml:1-7; src/gateway/routes.ts:531)_
 
-## Decisions — choices the project made (45)
+## Decisions — choices the project made (55)
 
 **governance**
 
@@ -98,6 +98,7 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 
 - `two-did-methods-plus-peer` — **Support did:key + did:web (did:peer for DIDComm only).** The registry restricts creatable/resolvable methods to key and web, with did:peer reserved for offline DIDComm channels. _(src/did/index.ts:11,79-90; src/index.ts:90-104)_
 - `did-web-ttl-cache` — **5-minute TTL cache for did:web resolution.** did:web resolution caches documents in-memory with a 5-minute TTL and a 5-second HTTPS abort timeout to keep resolution non-blocking. _(src/did/web.ts:35-44,146-175)_
+- `did-owner-scoping` — **DID records are owner-scoped.** DIDRecord now requires owner_user_id so /api/did/list is scoped per user rather than global — introduced on main after the map's first extraction. _(src/db/metadata.ts (DIDRecord); git c9e36d9)_
 
 **vc**
 
@@ -145,6 +146,9 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 - `vite-proxy-api` — **Dev server proxies /api to the backend.** The Vite dev server (:5173) proxies /api to http://localhost:3001 with changeOrigin, so all web API calls are relative. _(web/vite.config.ts:10-16)_
 - `identity-console` — **Identity Console at /app.** The console (ConsoleLayout) has routes for Overview, DIDs, Credentials, Trust, Messages, Developer, Audit, and Status Lists; the public marketing site lives at /. _(web/src/App.tsx:13-30)_
 - `statuslist-ui-console` — **Dedicated StatusList2021 UI console.** The console includes a StatusList2021 panel to create lists and set/check revocation bits by index. _(web/src/pages/console/StatusLists.tsx:98-200)_
+- `site-tanstack-marketing` — **site/ is a standalone TanStack Start marketing site.** site/ is an SSR TanStack Start (React 19 + Vite + Tailwind) app on port 3000, Bun-run, driven by site.json — a 'coming soon' placeholder meant to grow into the dynamic public site, distinct from the web/ console SPA. _(site/SITE.md:1-40; site/package.json)_
+- `web-vitest-harness` — **Web frontend tests: Vitest + jsdom + Testing Library.** Vitest is configured with globals, jsdom environment, a jest-dom setup file, and css:true; scripts test/test:watch/test:coverage. _(web/vite.config.ts:1-16; web/src/test/setup.ts)_
+- `web-eslint-flat-config` — **Flat ESLint config with typescript-eslint + react-hooks.** web/eslint.config.js extends js and typescript-eslint recommended plus react-hooks rules, warns on no-unused-vars (ignoring _-prefixed) and no-explicit-any, ignoring dist/. _(web/eslint.config.js:1-24)_
 
 **wallet**
 
@@ -152,6 +156,9 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 - `biometric-gating` — **Biometrics gate the wallet.** expo-local-authentication (FaceID/TouchID/fingerprint) gates the app through an auth state machine: loading → onboarding → locked → unlocked, with opt-in unlock in Settings. _(m/wallet-app/src/services/biometrics.ts; src/context/AuthContext.tsx:1-88)_
 - `e2e-share-encryption` — **End-to-end encrypted vault sharing.** Vault records are encrypted on-device with a per-record AES-256-GCM key (AAD-bound to record id) wrapped under a keychain-held device master key; sharing seals only that record's key for the grantee's X25519 key (ECDH-ES) — the server sees ciphertext only. _(m/wallet-app/src/services/vaultCrypto.ts:1-116)_
 - `wallet-api-base-url` — **Wallet talks to https://orbis.ctonew.app.** The wallet's live backend base URL is https://orbis.ctonew.app, overridable via app.json extra.apiBaseUrl, with a JWT bearer held in the secure store. _(m/wallet-app/src/services/api.ts:12-43)_
+- `wallet-server-tables` — **Wallet server owns 9 tables in the shared store.** initWalletTables creates wallet_devices, wallet_backup_items, vault_records, vault_grants, grant_access_log, refresh_tokens, wallet_push_tokens, wallet_message_queue, and oauth_identities. _(src/wallet/db.ts:31-41)_
+- `wallet-consent-toggle` — **Per-record consent flag: private ↔ monetizable.** PATCH /vault/:recordId/consent toggles between private (default) and monetizable (opt-in to compensation requests); toggling never auto-shares — explicit per-grant consent is still required — and the change is audit-logged. _(src/wallet/routes.ts:293-345)_
+- `wallet-grants-dual-role` — **Unified grant list spans grantor and grantee roles.** GET /grants unions grants the user owns with grants received by their DID, deriving status active/expired/revoked and an is_paid flag. _(src/wallet/routes.ts:412-459)_
 
 **ops**
 
@@ -161,7 +168,7 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 - `deploy-pipeline` — **Deploy: push image to GHCR on main.** On push to main, tests run then a Docker image is built and pushed to ghcr.io with sha/branch/semver/latest tags; the actual cloud deploy step is a documented placeholder. _(.github/workflows/deploy.yml:1-79)_
 - `port-3001` — **Fixed port 3001 contract.** The service listens on 3001 across the env default, docker-compose mapping and healthcheck, Dockerfile EXPOSE, and the OpenAPI local server URL. _(.env.example:7-8; Dockerfile:27-31; openapi.yaml:11-13)_
 
-## Rules — invariants enforced in code and tests (56)
+## Rules — invariants enforced in code and tests (70)
 
 **did**
 
@@ -231,10 +238,12 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 
 - `metadata-only-store` — **No personal data in the metadata store.** The team-db store holds only non-sensitive indexed metadata (DID/credential/trust metadata); personal data never touches this store. _(src/db/metadata.ts:4-9)_
 - `sql-quote-escaping` — **Single-quote doubling as SQL escaping.** Values are interpolated via a quote() helper that null-checks and doubles single quotes (SQLite escaping) — string escaping, not parameterization. _(src/db/metadata.ts:258-262)_
+- `sql-execfilesync-no-shell` — **SQL executed via execFileSync argv, no shell.** New admin/wallet modules pass SQL as an argv element to execFileSync('team-db', [sql]) — avoiding shell interpolation so bcrypt hashes and whitespace survive — with quote-doubling as the only injection guard. _(src/admin/auth.ts:23-41; src/wallet/routes.ts:21-35)_
 
 **web**
 
 - `web-console-validation` — **Console input validation.** Console inputs expect did:key:z…/did:web:… formats, a 32-byte hex issuer secret in a password field, valid JSON bodies with explicit error messages, and required status-list fields. _(web/src/pages/console/*.tsx)_
+- `web-smoke-test` — **Landing smoke test uses getAllByText.** App.test.tsx renders Landing in a MemoryRouter and asserts getAllByText(/ORBIS\.ID/i).length >= 1 — deliberately not getByText, because the wordmark appears multiple times. _(web/src/test/App.test.tsx:6-27)_
 
 **wallet**
 
@@ -246,23 +255,30 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 - `title-plaintext-only` — **Only record titles are plaintext server-side.** The only plaintext the server sees is record metadata (title ≤120 chars + type); the title helper warns to keep personal details out; the body is ciphertext. _(m/wallet-app/src/services/walletApi.ts:29-33)_
 - `blob-quota-limits` — **512 KB per record, 50 MB per vault.** Per-record blobs are capped at 512 KB and total vault quota at 50 MB, with quota warnings and vault-full copy. _(m/wallet-app/src/services/walletApi.ts:105-106)_
 - `network-retry-dedupe` — **Share retries dedupe against recent grants.** On a network error after a share POST, the client checks for a just-created (<2 min) matching non-revoked grant before retrying, avoiding duplicate grants. _(m/wallet-app/src/screens/vault/VaultShareScreen.tsx:216-234)_
+- `wallet-device-binding` — **Device identity via X-Orbis-Device-Id header.** Wallet installs are bound per device: /register mints walletId and deviceId, platform must be ios/android/web, and the device id header identifies subsequent requests. _(src/wallet/routes.ts:52-89)_
+- `wallet-remote-wipe` — **Remote wipe surfaces as HTTP 410 WALLET_WIPED.** GET /status returns 410 WALLET_WIPED if any of the user's devices is flagged wiped; the admin wipe endpoint requires a reason and audit-logs admin.wallet.wipe. _(src/wallet/routes.ts:95-108,680-702)_
+- `wallet-payload-cap-50mb` — **Single encrypted payload capped at 50 MB.** Backup and vault PUT endpoints reject ciphertext over 50 MB with 413; the encryption algorithm defaults to A256GCM. _(src/wallet/routes.ts:176,230)_
+- `wallet-server-ciphertext-only` — **Wallet server persists only encrypted blobs.** Vault and backup rows store ciphertext, IV, and algorithm; list endpoints omit ciphertext by default and the vault list never returns it. _(src/wallet/routes.ts:192-194,248)_
+- `wallet-zk-present-endpoint` — **Server verifies on-device ZK presentations.** POST /vc/present verifies a selective-disclosure proof the wallet generated and signed on-device (the holder secret never leaves the device); failures return 403 with per-check detail. _(src/wallet/routes.ts:524-632)_
 
 **ops**
 
 - `health-endpoint` — **/api/health liveness contract.** GET /api/health returns status/version/service/timestamp and is the liveness probe for docker-compose and Dockerfile healthchecks (curl, 30s interval). _(openapi.yaml:15-27; docker-compose.yml:23-28)_
 - `error-handling-contract` — **Uniform error/404 JSON contract.** AppError yields {error:true,message} with its status; unknown errors return a generic 500 with no internals leaked; 404s return 'Resource not found'; all errors log with stack. _(src/middleware/error.ts:1-44)_
 
-## Constraints — accepted limitations (22)
+## Constraints — accepted limitations (34)
 
 **did**
 
 - `did-web-mock-fallback` — **did:web falls back to an empty mock document.** If the HTTPS fetch fails and no local record exists, resolution returns a mock DID Document with empty verification arrays (cached 5 min) — resolution can 'succeed' with no keys. _(src/did/web.ts:188-227)_
 - `resolvedid-not-awaited` — **resolveDID promise not awaited in resolve endpoint.** GET /api/did/resolve/:did truthiness-checks an un-awaited Promise, so did:web resolution results are mishandled at this endpoint — a known defect recorded here until fixed. _(src/index.ts:137-149)_
+- `broken-did-owner-field` — **did/index.ts omits owner_user_id and calls a missing helper.** insertDID calls omit the now-required owner_user_id and did/index.ts:138 calls getPublicKeyFromVerificationMethod which does not exist on did/key — both are tsc errors on main. _(src/did/index.ts:29,56,138)_
 
 **vc**
 
 - `verify-vm-derivation-fragile` — **verificationMethod derived by string-splitting the DID.** Issuance builds the VM id as ${issuerDID}#${lastSegment}, which aligns only with did:key fragments; did:web VMs (uuid fragment) can mismatch at verification. _(src/vc/issue.ts:167; src/did/web.ts:82-84)_
 - `issuance-perf-noop` — **Issuance timing telemetry is a no-op.** issuanceTimeMs measures Date.now() - startTime where both are captured after issuance completes — always ~0ms placeholder telemetry. _(src/index.ts:262-271)_
+- `broken-statuslist-persistence` — **StatusList persistence layer missing (typecheck fails).** src/vc/statuslist.ts imports db.insertStatusList/getStatusListById/updateStatusListEncoded and the StatusListRecord type, none of which exist in src/db/metadata.ts — npm run build fails on main. _(src/vc/statuslist.ts:106-171 vs src/db/metadata.ts)_
 
 **zk**
 
@@ -285,6 +301,7 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 **security**
 
 - `jwt-secret-ephemeral` — **Auto-generated JWT secret invalidates tokens on restart.** If JWT_SECRET is unset a random per-process secret is generated (dev only), invalidating all JWTs on restart; .env.example instructs openssl rand -hex 32 for production. _(src/security/jwt.ts:20-22; .env.example:13-23)_
+- `broken-jwtpayload-admin` — **req.user.admin read but JwtPayload has no admin field.** JwtPayload defines only sub/email/did/iat/exp, yet req.user?.admin is read in wallet routes (5 sites) and index.ts (2 sites): a compile error, and at runtime tokens never carry admin so every wallet admin endpoint returns 403. _(src/security/jwt.ts:39-45 vs src/wallet/routes.ts:643-736; src/index.ts:272,415)_
 
 **data**
 
@@ -293,14 +310,26 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 - `async-write-loss-risk` — **Background writes have no durability guarantee.** Fire-and-forget audit/usage/message/webhook writes only console.error on failure, so failed compliance writes are silently lost — the accepted price of non-blocking IO. _(src/security/audit.ts:126-134; src/gateway/usage.ts:50-54)_
 - `serial-tests` — **Test suites run serially on one DB.** Vitest runs with fileParallelism false and a fresh temp SQLite DB per run; suites share one team-db file and must run sequentially to avoid write races. _(vitest.config.ts:6-18)_
 
+**web**
+
+- `broken-web-lockfile` — **web/package-lock.json out of sync — npm ci fails.** The web testing/lint devDependencies (vitest, @testing-library/react, eslint, jsdom and their trees) are in web/package.json but absent from package-lock.json, so the CI web lane aborts at npm ci. _(web/package.json:24-46 vs web/package-lock.json)_
+
 **wallet**
 
 - `record-key-device-bound` — **Per-record keys live only on the originating device.** A record fetched on a device without its key fails to decrypt (RECORD_KEY_MISSING) — cross-device key sync does not exist yet. _(m/wallet-app/src/services/vaultCrypto.ts:91-98)_
 - `scope-full-or-meta` — **Share scope: full or meta-only.** V1 share scope is limited to full or meta-only; field-level sharing is not yet available. _(m/wallet-app/src/services/walletApi.ts:27)_
 - `usd-only` — **Compensation currency is USD only.** Only USD is supported for share compensation; more currencies are promised later. _(m/wallet-app/src/screens/vault/VaultShareScreen.tsx:193,460)_
 - `ios-portrait-dark-only` — **iOS: no tablet, portrait, dark only.** app.json sets supportsTablet false, portrait orientation, and a dark-only UI. _(m/wallet-app/app.json:6-12)_
+- `wallet-quota-not-enforced` — **50 MB vault quota reported but not enforced.** /status reports quotaLimitBytes of 50 MB and usage as SUM(vault_records.size), but writes only check per-payload size — total quota is not enforced server-side. _(src/wallet/routes.ts:109-119)_
+- `wallet-refresh-esm-gap` — **Refresh handler uses require() in an ESM module.** POST /refresh calls CommonJS require('crypto')/require('jsonwebtoken') in a type:module package and, when JWT_SECRET is unset, signs with a per-call random secret that can never verify later tokens. _(src/wallet/routes.ts:504-519)_
+- `broken-wallet-no-jwt-middleware` — **Wallet routes mounted without JWT middleware.** app.use('/api/wallet', walletRoutes) claims per-route requireJwt in a comment, but no handler attaches it and req.user is never populated — wallet endpoints return 401 Authentication required. _(src/index.ts:758; src/wallet/routes.ts)_
 
-## Directions — roadmap, TODOs, planned evolution (17)
+**ops**
+
+- `main-ci-red` — **Both CI lanes fail on current main.** As of 2026-07-18, main's last 8 CI runs failed: the Bun lane on backend typecheck errors (statuslist persistence, JwtPayload.admin, admin health ActionType, DID owner fields) and the Node web lane on the out-of-sync lockfile. Any PR against main inherits red CI until these are fixed. _(.github/workflows/ci.yml; GitHub Actions history)_
+- `ssi-backend-legacy-duplicate` — **ssi-backend/ is a stale legacy duplicate of src/.** Top-level ssi-backend/ is the pre-expansion lineage (db/did/middleware/trust/vc only — no admin, wallet, security, gateway, didcomm); history shows it was merged into root src/, which is now the superset source of truth. _(ssi-backend/; git log ('ssi-backend wins conflicts as deployed truth'))_
+
+## Directions — roadmap, TODOs, planned evolution (18)
 
 **governance**
 
@@ -339,6 +368,7 @@ Generated 2026-07-18. Do not hand-edit numbers here without updating the JSON.
 **ops**
 
 - `deploy-target-todo` — **Cloud deploy target not configured.** The deploy workflow explicitly ends with 'Deployment target not configured — extend this workflow for your cloud provider', with commented Railway/Fly.io/Kubernetes examples. _(.github/workflows/deploy.yml:69-79)_
+- `site-vercel-golive` — **site/ deploys to Vercel via go-live script.** bun run go-live bundles the SSR handler via vercel-entry.ts into .vercel/output, deploys, and makes the project public using only a VERCEL_TOKEN — no Git integration. _(site/SITE.md:32-58; site/go-live.sh)_
 
 ## Relations
 
