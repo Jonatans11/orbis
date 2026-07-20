@@ -1117,7 +1117,7 @@ const DATA = {
    "domain": "zk",
    "title": "Predicates only valid over hidden fields",
    "statement": "A derived predicate (e.g. age >= 18) must reference a field in hiddenFields with a matching commitment; predicates on revealed fields fail verification.",
-   "source": "src/vc/zk.ts:554-588; tests/zk.test.ts:499-575",
+   "source": "src/vc/zk.ts:544-578; tests/zk.test.ts:499-575",
    "pos": [
     56.6,
     11.4,
@@ -1208,7 +1208,7 @@ const DATA = {
    "domain": "zk",
    "title": "Predicates verified structurally, not cryptographically",
    "statement": "Range predicates are checked only for statement/field/proof presence and a matching commitment; the predicate math is never evaluated, so its truth is trusted, not proven.",
-   "source": "src/vc/zk.ts:554-588",
+   "source": "src/vc/zk.ts:544-578",
    "pos": [
     32.9,
     -38.8,
@@ -1780,7 +1780,7 @@ const DATA = {
    "domain": "security",
    "title": "Secret keys must be 32-byte hex",
    "statement": "Issue, ZK, DIDComm, and status endpoints reject any supplied secret key that does not decode to exactly 32 bytes.",
-   "source": "src/index.ts:241-245,422-426,548-552,806-810",
+   "source": "src/index.ts:342-344,527-528,789-790",
    "pos": [
     -198.6,
     -42.5,
@@ -1832,7 +1832,7 @@ const DATA = {
    "domain": "security",
    "title": "Debug key material suppressed in production",
    "statement": "DID creation only attaches a _debug block (public key hex) when NODE_ENV is not production, explicitly to avoid exposing key material in production.",
-   "source": "src/index.ts:112-118",
+   "source": "src/index.ts:213-218",
    "pos": [
     -149.4,
     55.3,
@@ -1897,7 +1897,7 @@ const DATA = {
    "domain": "security",
    "title": "Remove debug key exposure for production",
    "statement": "An inline comment directs removing the _debug public-key block entirely in production deployments.",
-   "source": "src/index.ts:112-118",
+   "source": "src/index.ts:213-218",
    "pos": [
     -284.6,
     114.6,

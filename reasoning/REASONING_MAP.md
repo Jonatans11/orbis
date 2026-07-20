@@ -193,7 +193,7 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 
 - `holder-must-equal-subject` — **ZK holder must equal credentialSubject.id.** createZKProof throws unless the holder DID matches the credential subject id, binding the presentation to the credential's subject. _(src/vc/zk.ts:167-169)_
 - `zk-field-partition` — **Every field revealed XOR hidden.** Reveal/hide sets must exist in the subject, never overlap, and jointly account for every subject field; commitment count must equal hidden count with 64-hex hashes. _(src/vc/zk.ts:198-203,421-483)_
-- `predicates-over-hidden-only` — **Predicates only valid over hidden fields.** A derived predicate (e.g. age >= 18) must reference a field in hiddenFields with a matching commitment; predicates on revealed fields fail verification. _(src/vc/zk.ts:554-588; tests/zk.test.ts:499-575)_
+- `predicates-over-hidden-only` — **Predicates only valid over hidden fields.** A derived predicate (e.g. age >= 18) must reference a field in hiddenFields with a matching commitment; predicates on revealed fields fail verification. _(src/vc/zk.ts:544-578; tests/zk.test.ts:499-575)_
 - `zk-challenge-replay-guard` — **Challenge binding prevents replay.** A verifier-supplied challenge must equal the challenge embedded in the proof or holder-binding fails; /zk/challenge mints 32-byte random challenges with 5-minute expiry. _(src/vc/zk.ts:521-524; src/index.ts:481-493)_
 - `bbs-blinding-required` — **BBS+ commitments must carry a blinding factor.** When the cryptosuite is bbs-bls-2020, each hidden commitment must include a blindingFactor scalar or verification fails. _(src/vc/zk.ts:474-477)_
 - `zk-verification-checks` — **ZK verification check chain.** Verification runs zk-structure, original-vc signature, hidden-commitments, and holder-binding checks; tampered reveals, tampered VCs, removed commitments, and wrong challenges each fail their named check. _(tests/zk.test.ts:214-409)_
@@ -225,11 +225,11 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 **security**
 
 - `kms-wrong-key-fails` — **Wrong master key must fail decryption.** The AES-256-GCM envelope round-trips, and decryption under a different master key must throw (auth tag mismatch); master keys must decode to exactly 32 bytes. _(tests/kms.test.ts:5-42; src/did/key.ts:199-231)_
-- `secretkey-32-byte-check` — **Secret keys must be 32-byte hex.** Issue, ZK, DIDComm, and status endpoints reject any supplied secret key that does not decode to exactly 32 bytes. _(src/index.ts:241-245,422-426,548-552,806-810)_
+- `secretkey-32-byte-check` — **Secret keys must be 32-byte hex.** Issue, ZK, DIDComm, and status endpoints reject any supplied secret key that does not decode to exactly 32 bytes. _(src/index.ts:342-344,527-528,789-790)_
 - `password-min-8` — **Passwords ≥ 8 chars; emails normalized.** Registration and password change reject passwords under 8 characters; emails are lowercased, trimmed, and unique. _(src/security/jwt.ts:83-108,200-206)_
 - `bearer-token-format` — **Strict Bearer <jwt> header enforcement.** requireJwt rejects requests lacking an Authorization header, not shaped exactly 'Bearer <token>', or carrying an invalid/expired token. _(src/security/jwt.ts:153-183)_
 - `linked-did-format` — **Linked DID must start with did:.** PUT /api/auth/did rejects a DID that is not a string starting with did:. _(src/security/jwt.ts:358-364)_
-- `debug-key-production-guard` — **Debug key material suppressed in production.** DID creation only attaches a _debug block (public key hex) when NODE_ENV is not production, explicitly to avoid exposing key material in production. _(src/index.ts:112-118)_
+- `debug-key-production-guard` — **Debug key material suppressed in production.** DID creation only attaches a _debug block (public key hex) when NODE_ENV is not production, explicitly to avoid exposing key material in production. _(src/index.ts:213-218)_
 - `audit-logging` — **Append-only audit log for sensitive operations.** All sensitive operations (did.*, vc.*, zk.*, trust.*, auth.*, compliance.*, key rotation) log actor type/id, action, entity, result, IP, and timestamp; writes are async and never crash the caller. _(src/security/audit.ts:41-135; tests/audit.test.ts:10-30)_
 - `audit-actor-derivation` — **Actor and client IP derivation.** Actor is user (req.user.sub), else api_key (req.apiKey.id), else unknown; client IP prefers the first x-forwarded-for entry, then req.ip, then 0.0.0.0. _(src/security/audit.ts:194-217)_
 - `audit-db-constraints` — **Audit rows constrained by CHECK enums.** ssi_audit_log enforces actor_type IN (user, api_key, system, unknown) and result IN (success, failure) at the schema level, with entity/timestamp/actor indexes. _(src/security/audit.ts:41-56)_
@@ -283,7 +283,7 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 **zk**
 
 - `bbs-simulated` — **BBS+ is simulated, not real pairing crypto.** The bbs-bls-2020 path simulates BBS+ by hashing 'BBS+Commitment:<value>:<blindingFactor>' with a random-UUID blinding factor and Ed25519-signing — no real pairing-based unlinkability. _(src/vc/zk.ts:215-222,258-263)_
-- `predicate-not-cryptographic` — **Predicates verified structurally, not cryptographically.** Range predicates are checked only for statement/field/proof presence and a matching commitment; the predicate math is never evaluated, so its truth is trusted, not proven. _(src/vc/zk.ts:554-588)_
+- `predicate-not-cryptographic` — **Predicates verified structurally, not cryptographically.** Range predicates are checked only for statement/field/proof presence and a matching commitment; the predicate math is never evaluated, so its truth is trusted, not proven. _(src/vc/zk.ts:544-578)_
 - `zk-hash-not-circuit` — **ZK is hash-commitment based, not a ZK circuit.** Selective disclosure uses SHA-256 + nonce commitments and Merkle proofs rather than a full zero-knowledge circuit; derived-predicate proof strings are simplified. _(tests/zk.test.ts:517-520)_
 
 **didcomm**
@@ -350,7 +350,7 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 
 **security**
 
-- `remove-debug-in-prod` — **Remove debug key exposure for production.** An inline comment directs removing the _debug public-key block entirely in production deployments. _(src/index.ts:112-118)_
+- `remove-debug-in-prod` — **Remove debug key exposure for production.** An inline comment directs removing the _debug public-key block entirely in production deployments. _(src/index.ts:213-218)_
 
 **web**
 
