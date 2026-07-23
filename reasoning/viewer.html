@@ -123,6 +123,76 @@
   }
   #close-panel:hover { color: var(--ink); border-color: var(--muted); }
 
+  /* intro overlay */
+  #intro {
+    position: fixed; inset: 0; z-index: 6; display: grid; place-items: center;
+    background: rgba(7, 11, 20, 0.72); backdrop-filter: blur(4px);
+  }
+  #intro[hidden] { display: none; }
+  #intro .card {
+    max-width: 440px; margin: 20px; background: var(--bg-elev);
+    border: 1px solid var(--line); border-radius: 14px; padding: 28px;
+  }
+  #intro h2 { margin: 0 0 10px; font-size: 18px; }
+  #intro p { font-size: 13px; line-height: 1.6; color: var(--muted); margin: 0 0 10px; }
+  #intro p b { color: var(--ink); font-weight: 600; }
+  #intro .actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  #intro button {
+    background: var(--accent); color: var(--bg); border: 0; border-radius: 8px;
+    padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #intro button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 400; }
+  #intro button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* tours */
+  #tours { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; pointer-events: auto; max-width: 330px; }
+  #tours .chip { border-radius: 6px; font-size: 11px; padding: 4px 10px; }
+  #tourbar {
+    position: fixed; z-index: 5; left: 50%; transform: translateX(-50%);
+    bottom: 20px; width: min(560px, calc(100vw - 32px));
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; display: none;
+  }
+  #tourbar.on { display: block; }
+  #tourbar .t-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  #tourbar .t-title { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  #tourbar .t-step { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+  #tourbar .t-note { font-size: 13px; line-height: 1.55; }
+  #tourbar .t-nav { display: flex; gap: 8px; margin-top: 10px; }
+  #tourbar .t-nav button {
+    background: var(--bg-chip); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 7px; padding: 6px 14px; font-size: 12px; cursor: pointer;
+  }
+  #tourbar .t-nav button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+  #tourbar .t-nav .t-exit { margin-left: auto; color: var(--muted); }
+  #tourbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* list mode */
+  #listpane {
+    position: fixed; z-index: 4; top: 0; left: 0; height: 100%;
+    width: min(360px, 100vw); background: var(--bg-elev);
+    border-right: 1px solid var(--line); backdrop-filter: blur(10px);
+    overflow-y: auto; padding: 20px; box-sizing: border-box;
+    transform: translateX(-105%); transition: transform 0.25s ease;
+  }
+  @media (prefers-reduced-motion: reduce) { #listpane { transition: none; } }
+  #listpane.open { transform: translateX(0); }
+  #listpane h3 {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 18px 0 6px; font-weight: 600;
+  }
+  #listpane .row {
+    display: flex; align-items: baseline; gap: 8px; width: 100%;
+    background: none; border: 0; color: var(--ink); text-align: left;
+    font-size: 12.5px; line-height: 1.45; padding: 5px 4px; cursor: pointer; border-radius: 6px;
+  }
+  #listpane .row:hover, #listpane .row:focus-visible { background: rgba(92,200,232,0.09); outline: none; }
+  #listpane .row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; position: relative; top: 1px; }
+  #close-list {
+    position: absolute; top: 12px; right: 12px; background: none; border: 1px solid var(--line);
+    border-radius: 6px; color: var(--muted); font-size: 13px; width: 26px; height: 26px; cursor: pointer;
+  }
+
   #tooltip {
     position: fixed; z-index: 4; pointer-events: none; display: none;
     background: var(--bg-elev); border: 1px solid var(--line); border-radius: 6px;
@@ -156,6 +226,45 @@
      ORBIS.ID platform — principles at the core, external standards as the
      outer shell.</p>
   <div id="counts"></div>
+  <div id="tours" role="group" aria-label="Guided tours"></div>
+</div>
+
+<div id="intro" hidden>
+  <div class="card" role="dialog" aria-label="About this map">
+    <h2>The Orbis Reasoning Map</h2>
+    <p>Every rule, decision, standard, and value of the ORBIS.ID project —
+       <b>217 of them</b> — in one place, each with the exact file and line it
+       comes from.</p>
+    <p><b>How to read it:</b> the warm-white dots at the <b>center</b> are the
+       project's core values. Each shell outward is more concrete: <b>decisions</b>
+       (cyan), <b>rules</b> enforced in code (green), <b>accepted limitations</b>
+       (coral), <b>external standards &amp; laws</b> (amber), and <b>roadmap
+       items</b> (violet) on the edge.</p>
+    <p><b>Click any dot</b> to see what it says, why, and what it's connected to
+       — or take a two-minute guided tour.</p>
+    <div class="actions">
+      <button id="intro-tour">▶ Start the tour</button>
+      <button id="intro-explore" class="ghost">Explore on my own</button>
+    </div>
+  </div>
+</div>
+
+<aside id="listpane" aria-label="Browse all nodes">
+  <button id="close-list" aria-label="Close list">×</button>
+  <div id="list-body"></div>
+</aside>
+
+<div id="tourbar" role="region" aria-live="polite">
+  <div class="t-head">
+    <span class="t-title" id="t-title"></span>
+    <span class="t-step" id="t-step"></span>
+  </div>
+  <div class="t-note" id="t-note"></div>
+  <div class="t-nav">
+    <button id="t-prev">← Back</button>
+    <button id="t-next" class="primary">Next →</button>
+    <button id="t-exit" class="t-exit">Exit tour</button>
+  </div>
 </div>
 
 <div class="hud" id="legend" role="group" aria-label="Filters">
@@ -171,6 +280,7 @@
 </div>
 
 <div class="hud" id="controls">
+  <button id="list-toggle" aria-label="Browse as a list" title="Browse as a list">☰</button>
   <button id="spin-toggle" aria-label="Pause or resume rotation" title="Pause/resume rotation">⏸</button>
   <button id="rings-toggle" class="active" aria-label="Toggle orbital rings" title="Toggle orbital rings">◎</button>
 </div>
@@ -4452,6 +4562,137 @@ searchEl.addEventListener("keydown", ev => {
     if (first) { select(first.dataset.go); resultsEl.style.display = "none"; searchEl.value = ""; }
   }
 });
+
+// ---- guided tours ----
+const TOURS = [
+  {
+    name: "Start here",
+    steps: [
+      ["self-sovereign-identity", "The founding idea: your identity is something you hold, not an account a company grants you. Everything else in this map serves this."],
+      ["member-owned", "Orbis is owned by its members, not shareholders — members hold 50% of the operating company and control their own data."],
+      ["privacy-by-default", "The platform is built so it physically can't read your data: servers store ciphertext only, and nothing personal goes on chain."],
+      ["keys-not-persisted-server-side", "Your private keys never touch the server. Every signing operation requires you to bring your own key — so a server breach can't steal identities."],
+      ["data-minimization", "You can prove a fact (over 18, licensed) without revealing the underlying data. Fields you weren't asked for are hidden automatically."],
+      ["w3c-did-core", "It's all built on open W3C standards, so an Orbis identity works with the wider SSI world instead of locking you in."],
+      ["team-db-shell-store", "One quirky plumbing fact worth knowing: all storage goes through a 'team-db' command-line tool — the source of several rules you'll meet in the next tour."],
+      ["identity-console", "Where humans touch all of this: the web console for DIDs, credentials, trust and messaging — plus a mobile wallet with biometric locks."],
+    ],
+  },
+  {
+    name: "Hard rules before you code",
+    steps: [
+      ["single-line-sql", "Rule #1 that bites every newcomer: the team-db CLI only accepts single-line SQL. Multi-line statements silently break."],
+      ["keys-not-persisted-server-side", "Never write a private key to the database or logs — the entire security model depends on this."],
+      ["async-exec-writes", "High-frequency writes (audit logs, webhooks, usage) must use non-blocking async exec. execSync on a hot path blocks the whole event loop."],
+      ["predicates-over-hidden-only", "ZK predicates (like 'age >= 18') are only valid over hidden fields. A predicate on a revealed field fails verification — by design."],
+      ["secretkey-32-byte-check", "Every endpoint that accepts a secret key validates it's exactly 32 bytes of hex. Follow the pattern when adding endpoints."],
+      ["debug-key-production-guard", "Key material in responses is gated behind NODE_ENV !== production. Never add a debug field that leaks keys in prod."],
+      ["serial-tests", "Tests share one database file, so suites run serially. Don't enable test parallelism — you'll get phantom write races."],
+      ["metadata-only-store", "The shared store is for non-sensitive metadata only. Personal data never goes in it — encrypt on-device instead."],
+    ],
+  },
+  {
+    name: "What's broken right now",
+    steps: [
+      ["main-ci-red", "The honest state of the repo: both CI lanes on main are failing, and every PR inherits red checks until these are fixed."],
+      ["broken-statuslist-persistence", "The credential-revocation code calls database functions that were never written — the backend typecheck fails here."],
+      ["broken-jwtpayload-admin", "Code checks req.user.admin, but tokens never carry an admin flag. Besides the compile error, every wallet admin endpoint silently returns 403."],
+      ["broken-wallet-no-jwt-middleware", "The wallet API is mounted without its authentication middleware — all wallet endpoints currently answer 401."],
+      ["broken-admin-health-actiontype", "A one-line fix: the admin health check logs an audit action name that isn't in the allowed list."],
+      ["broken-did-owner-field", "DID records gained an owner field, but the DID module was never updated to provide it."],
+      ["broken-web-lockfile", "The web app's lockfile is out of sync with its package.json, so CI's npm ci aborts before tests even run."],
+    ],
+  },
+  {
+    name: "How members own Orbis",
+    steps: [
+      ["member-owned", "The principle: the people who create the network's value own the network."],
+      ["member-ownership", "Concretely: 50% of the operating company belongs to the Member Trust, with quarterly cash distributions to members."],
+      ["five-entity-structure", "Five legal entities make it durable: a perpetual trust holding the IP, the operating company, the member trust, a vested fund, and regional subsidiaries."],
+      ["perpetual-trust", "A South Dakota dynasty trust holds all IP and governance authority forever — creditor-protected, built to outlive any company."],
+      ["distribution-formula", "How money flows to members: 30% by activity, 25% equally, 25% by country volume, 10% to low-income members, 10% country-weighted."],
+      ["orbis-coin", "A 100-billion utility token: 50 coins per verified member, fee discounts, staking, and governance power."],
+      ["multi-tier-democracy", "One member, one vote — including a member veto over any change to privacy rules."],
+      ["roadmap-p1-foundation", "Where it's headed: US + EU launch and 10M members in years 1-2, scaling toward a billion members as a global identity standard."],
+    ],
+  },
+];
+for (const tour of TOURS) tour.steps = tour.steps.filter(s => byId.has(s[0]));
+
+let activeTour = null, tourIdx = 0;
+const tourbar = document.getElementById("tourbar");
+function startTour(t) {
+  activeTour = t; tourIdx = 0; spinEnabled = false; renderSpinBtn();
+  document.getElementById("intro").hidden = true;
+  showTourStep();
+}
+function showTourStep() {
+  const [id, note] = activeTour.steps[tourIdx];
+  select(id);
+  document.getElementById("t-title").textContent = activeTour.name;
+  document.getElementById("t-step").textContent = `${tourIdx + 1} / ${activeTour.steps.length}`;
+  document.getElementById("t-note").textContent = note;
+  document.getElementById("t-prev").disabled = tourIdx === 0;
+  document.getElementById("t-next").textContent = tourIdx === activeTour.steps.length - 1 ? "Finish ✓" : "Next →";
+  tourbar.classList.add("on");
+}
+function exitTour() { activeTour = null; tourbar.classList.remove("on"); deselect(); }
+document.getElementById("t-prev").addEventListener("click", () => { if (tourIdx > 0) { tourIdx--; showTourStep(); } });
+document.getElementById("t-next").addEventListener("click", () => {
+  if (tourIdx < activeTour.steps.length - 1) { tourIdx++; showTourStep(); } else exitTour();
+});
+document.getElementById("t-exit").addEventListener("click", exitTour);
+
+const toursEl = document.getElementById("tours");
+for (const t of TOURS) {
+  const chip = document.createElement("button");
+  chip.className = "chip";
+  chip.innerHTML = `▶ ${t.name}`;
+  chip.addEventListener("click", () => startTour(t));
+  toursEl.appendChild(chip);
+}
+
+// ---- intro overlay ----
+const intro = document.getElementById("intro");
+let introSeen = false;
+try { introSeen = sessionStorage.getItem("orbis-map-intro") === "1"; } catch (e) {}
+if (!introSeen) intro.hidden = false;
+function dismissIntro() {
+  intro.hidden = true;
+  try { sessionStorage.setItem("orbis-map-intro", "1"); } catch (e) {}
+}
+document.getElementById("intro-explore").addEventListener("click", dismissIntro);
+document.getElementById("intro-tour").addEventListener("click", () => { dismissIntro(); startTour(TOURS[0]); });
+
+// ---- list mode ----
+const listpane = document.getElementById("listpane");
+const listBody = document.getElementById("list-body");
+const DOMAIN_LABEL = {
+  core: "Core values", governance: "Governance & ownership", did: "Identifiers (DIDs)",
+  vc: "Credentials", zk: "Selective disclosure (ZK)", trust: "Trust registry",
+  didcomm: "Encrypted messaging", gateway: "Developer gateway", admin: "Administration",
+  security: "Security & auth", data: "Storage & data", web: "Web console & site",
+  wallet: "Mobile wallet", ops: "Operations & CI",
+};
+{
+  let html = "";
+  for (const d of ["core", ...DOMAIN_ORDER.filter(x => x !== "core")]) {
+    const group = nodes.filter(n => n.domain === d);
+    if (!group.length) continue;
+    html += `<h3>${esc(DOMAIN_LABEL[d] || d)}</h3>`;
+    for (const n of group) {
+      html += `<button class="row" data-go="${esc(n.id)}">
+        <span class="dot" style="background:${TYPE_COLOR[n.type]}"></span>${esc(n.title)}</button>`;
+    }
+  }
+  listBody.innerHTML = html;
+  listBody.querySelectorAll("[data-go]").forEach(b =>
+    b.addEventListener("click", () => { select(b.dataset.go); }));
+}
+document.getElementById("list-toggle").addEventListener("click", () =>
+  listpane.classList.toggle("open"));
+document.getElementById("close-list").addEventListener("click", () =>
+  listpane.classList.remove("open"));
 
 tick();
 </script>
