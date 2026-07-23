@@ -1,0 +1,782 @@
+<title>Orbis Reasoning Map</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --bg-elev: rgba(13, 19, 34, 0.92);
+    --bg-chip: rgba(21, 29, 48, 0.85);
+    --ink: #e9edf5;
+    --muted: #8b95aa;
+    --line: rgba(139, 149, 170, 0.22);
+    --accent: #5cc8e8;
+    --law: #e3b655;
+    --decision: #5cc8e8;
+    --rule: #6fd598;
+    --constraint: #e8756b;
+    --direction: #a78be8;
+    --principle: #f2efe6;
+    --sans: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); overflow: hidden;
+  }
+  #space { position: fixed; inset: 0; cursor: grab; touch-action: none; }
+  #space.dragging { cursor: grabbing; }
+
+  .hud { position: fixed; z-index: 2; }
+
+  #masthead { top: 20px; left: 24px; pointer-events: none; max-width: 340px; }
+  #masthead h1 {
+    margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  #masthead h1 span { color: var(--accent); }
+  #masthead p {
+    margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted);
+  }
+  #counts { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+  #legend {
+    bottom: 20px; left: 24px; display: flex; flex-direction: column; gap: 6px;
+    max-height: 60vh; overflow-y: auto; padding-right: 4px;
+  }
+  #legend .hint { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 6px 0 2px; }
+  #domains { display: flex; flex-wrap: wrap; gap: 5px; max-width: 300px; }
+  #domains .chip { padding: 3px 10px; font-size: 11px; border-radius: 6px; }
+  .chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-chip); border: 1px solid var(--line);
+    border-radius: 999px; padding: 5px 12px 5px 8px;
+    font-size: 12px; cursor: pointer; user-select: none;
+    transition: opacity 0.15s, border-color 0.15s;
+  }
+  .chip:hover { border-color: var(--muted); }
+  .chip.off { opacity: 0.35; }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .chip .n { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-left: auto; padding-left: 10px; }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #searchbox { top: 20px; right: 24px; width: min(280px, calc(100vw - 48px)); }
+  #search {
+    width: 100%; box-sizing: border-box;
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--ink); font-family: var(--mono); font-size: 12px; padding: 9px 12px;
+  }
+  #search::placeholder { color: var(--muted); }
+  #search:focus { outline: none; border-color: var(--accent); }
+  #results {
+    margin-top: 6px; background: var(--bg-elev); border: 1px solid var(--line);
+    border-radius: 8px; max-height: 260px; overflow-y: auto; display: none;
+  }
+  #results button {
+    display: block; width: 100%; text-align: left; background: none; border: 0;
+    color: var(--ink); font-family: var(--sans); font-size: 12px;
+    padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--line);
+  }
+  #results button:last-child { border-bottom: 0; }
+  #results button:hover, #results button:focus-visible { background: rgba(92, 200, 232, 0.12); outline: none; }
+  #results .rid { font-family: var(--mono); font-size: 10px; color: var(--muted); display: block; }
+
+  #panel {
+    top: 0; right: 0; height: 100%; width: min(400px, 100vw);
+    background: var(--bg-elev); border-left: 1px solid var(--line);
+    backdrop-filter: blur(10px); box-sizing: border-box;
+    padding: 24px; overflow-y: auto;
+    transform: translateX(105%); transition: transform 0.25s ease;
+    z-index: 3;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #panel { transition: none; }
+  }
+  #panel.open { transform: translateX(0); }
+  #panel .type-tag {
+    display: inline-block; font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 4px; color: var(--bg);
+  }
+  #panel h2 { margin: 10px 0 4px; font-size: 18px; line-height: 1.3; text-wrap: balance; }
+  #panel .nid { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  #panel .stmt { font-size: 13px; line-height: 1.65; margin: 14px 0; }
+  #panel .src {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    background: rgba(0,0,0,0.25); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 10px; word-break: break-all;
+  }
+  #panel h3 {
+    margin: 20px 0 8px; font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); font-weight: 600;
+  }
+  .edge-row {
+    display: flex; align-items: baseline; gap: 8px; width: 100%;
+    background: none; border: 0; border-left: 2px solid var(--line);
+    color: var(--ink); text-align: left; font-size: 12px;
+    padding: 6px 0 6px 10px; margin: 2px 0; cursor: pointer;
+  }
+  .edge-row:hover, .edge-row:focus-visible { border-left-color: var(--accent); background: rgba(92,200,232,0.07); outline: none; }
+  .edge-row .rel { font-family: var(--mono); font-size: 10px; color: var(--muted); flex: none; }
+  #close-panel {
+    position: absolute; top: 14px; right: 14px; background: none; border: 1px solid var(--line);
+    border-radius: 6px; color: var(--muted); font-size: 13px; width: 28px; height: 28px;
+    cursor: pointer;
+  }
+  #close-panel:hover { color: var(--ink); border-color: var(--muted); }
+
+  /* intro overlay */
+  #intro {
+    position: fixed; inset: 0; z-index: 6; display: grid; place-items: center;
+    background: rgba(7, 11, 20, 0.72); backdrop-filter: blur(4px);
+  }
+  #intro[hidden] { display: none; }
+  #intro .card {
+    max-width: 440px; margin: 20px; background: var(--bg-elev);
+    border: 1px solid var(--line); border-radius: 14px; padding: 28px;
+  }
+  #intro h2 { margin: 0 0 10px; font-size: 18px; }
+  #intro p { font-size: 13px; line-height: 1.6; color: var(--muted); margin: 0 0 10px; }
+  #intro p b { color: var(--ink); font-weight: 600; }
+  #intro .actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  #intro button {
+    background: var(--accent); color: var(--bg); border: 0; border-radius: 8px;
+    padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #intro button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 400; }
+  #intro button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* tours */
+  #tours { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; pointer-events: auto; max-width: 330px; }
+  #tours .chip { border-radius: 6px; font-size: 11px; padding: 4px 10px; }
+  #tourbar {
+    position: fixed; z-index: 5; left: 50%; transform: translateX(-50%);
+    bottom: 20px; width: min(560px, calc(100vw - 32px));
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; display: none;
+  }
+  #tourbar.on { display: block; }
+  #tourbar .t-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  #tourbar .t-title { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  #tourbar .t-step { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+  #tourbar .t-note { font-size: 13px; line-height: 1.55; }
+  #tourbar .t-nav { display: flex; gap: 8px; margin-top: 10px; }
+  #tourbar .t-nav button {
+    background: var(--bg-chip); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 7px; padding: 6px 14px; font-size: 12px; cursor: pointer;
+  }
+  #tourbar .t-nav button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+  #tourbar .t-nav .t-exit { margin-left: auto; color: var(--muted); }
+  #tourbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* list mode */
+  #listpane {
+    position: fixed; z-index: 4; top: 0; left: 0; height: 100%;
+    width: min(360px, 100vw); background: var(--bg-elev);
+    border-right: 1px solid var(--line); backdrop-filter: blur(10px);
+    overflow-y: auto; padding: 20px; box-sizing: border-box;
+    transform: translateX(-105%); transition: transform 0.25s ease;
+  }
+  @media (prefers-reduced-motion: reduce) { #listpane { transition: none; } }
+  #listpane.open { transform: translateX(0); }
+  #listpane h3 {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 18px 0 6px; font-weight: 600;
+  }
+  #listpane .row {
+    display: flex; align-items: baseline; gap: 8px; width: 100%;
+    background: none; border: 0; color: var(--ink); text-align: left;
+    font-size: 12.5px; line-height: 1.45; padding: 5px 4px; cursor: pointer; border-radius: 6px;
+  }
+  #listpane .row:hover, #listpane .row:focus-visible { background: rgba(92,200,232,0.09); outline: none; }
+  #listpane .row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; position: relative; top: 1px; }
+  #close-list {
+    position: absolute; top: 12px; right: 12px; background: none; border: 1px solid var(--line);
+    border-radius: 6px; color: var(--muted); font-size: 13px; width: 26px; height: 26px; cursor: pointer;
+  }
+
+  #tooltip {
+    position: fixed; z-index: 4; pointer-events: none; display: none;
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; max-width: 260px;
+  }
+  #tooltip .tid { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  #help {
+    bottom: 20px; right: 24px; font-size: 11px; color: var(--muted);
+    text-align: right; pointer-events: none;
+  }
+  #controls { bottom: 44px; right: 24px; display: flex; gap: 6px; }
+  #controls button {
+    background: var(--bg-chip); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--ink); font-size: 13px; width: 34px; height: 34px; cursor: pointer;
+    display: grid; place-items: center; transition: border-color 0.15s;
+  }
+  #controls button:hover { border-color: var(--accent); }
+  #controls button.active { border-color: var(--accent); color: var(--accent); }
+  #controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 720px) {
+    #masthead p, #help { display: none; }
+  }
+</style>
+
+<canvas id="space"></canvas>
+
+<div class="hud" id="masthead">
+  <h1>Orbis <span>Reasoning Map</span></h1>
+  <p>Every law, decision, rule, constraint, direction, and principle of the
+     ORBIS.ID platform — principles at the core, external standards as the
+     outer shell.</p>
+  <div id="counts"></div>
+  <div id="tours" role="group" aria-label="Guided tours"></div>
+</div>
+
+<div id="intro" hidden>
+  <div class="card" role="dialog" aria-label="About this map">
+    <h2>The Orbis Reasoning Map</h2>
+    <p>Every rule, decision, standard, and value of the ORBIS.ID project —
+       <b>217 of them</b> — in one place, each with the exact file and line it
+       comes from.</p>
+    <p><b>How to read it:</b> the warm-white dots at the <b>center</b> are the
+       project's core values. Each shell outward is more concrete: <b>decisions</b>
+       (cyan), <b>rules</b> enforced in code (green), <b>accepted limitations</b>
+       (coral), <b>external standards &amp; laws</b> (amber), and <b>roadmap
+       items</b> (violet) on the edge.</p>
+    <p><b>Click any dot</b> to see what it says, why, and what it's connected to
+       — or take a two-minute guided tour.</p>
+    <div class="actions">
+      <button id="intro-tour">▶ Start the tour</button>
+      <button id="intro-explore" class="ghost">Explore on my own</button>
+    </div>
+  </div>
+</div>
+
+<aside id="listpane" aria-label="Browse all nodes">
+  <button id="close-list" aria-label="Close list">×</button>
+  <div id="list-body"></div>
+</aside>
+
+<div id="tourbar" role="region" aria-live="polite">
+  <div class="t-head">
+    <span class="t-title" id="t-title"></span>
+    <span class="t-step" id="t-step"></span>
+  </div>
+  <div class="t-note" id="t-note"></div>
+  <div class="t-nav">
+    <button id="t-prev">← Back</button>
+    <button id="t-next" class="primary">Next →</button>
+    <button id="t-exit" class="t-exit">Exit tour</button>
+  </div>
+</div>
+
+<div class="hud" id="legend" role="group" aria-label="Filters">
+  <div class="hint">types</div>
+  <div id="types"></div>
+  <div class="hint">domains</div>
+  <div id="domains"></div>
+</div>
+
+<div class="hud" id="searchbox">
+  <input id="search" type="search" placeholder="search nodes…" aria-label="Search nodes" />
+  <div id="results" role="listbox"></div>
+</div>
+
+<div class="hud" id="controls">
+  <button id="list-toggle" aria-label="Browse as a list" title="Browse as a list">☰</button>
+  <button id="spin-toggle" aria-label="Pause or resume rotation" title="Pause/resume rotation">⏸</button>
+  <button id="rings-toggle" class="active" aria-label="Toggle orbital rings" title="Toggle orbital rings">◎</button>
+</div>
+<div class="hud" id="help">drag to orbit · scroll to zoom · click a node</div>
+
+<aside class="hud" id="panel" aria-live="polite">
+  <button id="close-panel" aria-label="Close details">×</button>
+  <div id="panel-body"></div>
+</aside>
+
+<div id="tooltip"></div>
+
+<script>
+"use strict";
+const DATA = /*__REASONING_MAP_DATA__*/null;
+
+const TYPE_COLOR = {
+  law: "#e3b655", decision: "#5cc8e8", rule: "#6fd598",
+  constraint: "#e8756b", direction: "#a78be8", principle: "#f2efe6",
+};
+const TYPE_ORDER = ["principle", "decision", "rule", "constraint", "law", "direction"];
+
+const nodes = DATA.nodes;
+const byId = new Map(nodes.map(n => [n.id, n]));
+const edges = DATA.edges.filter(e => byId.has(e.source) && byId.has(e.target));
+const neighbors = new Map(nodes.map(n => [n.id, []]));
+for (const e of edges) {
+  neighbors.get(e.source).push({ other: e.target, rel: e.relation, dir: "→" });
+  neighbors.get(e.target).push({ other: e.source, rel: e.relation, dir: "←" });
+}
+
+// ---- state ----
+const DOMAIN_ORDER = [...new Set(nodes.map(n => n.domain))];
+const typeOn = Object.fromEntries(TYPE_ORDER.map(t => [t, true]));
+const domainOn = Object.fromEntries(DOMAIN_ORDER.map(d => [d, true]));
+let yaw = 0.6, pitch = 0.35, dist = 720;
+let spinEnabled = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+let ringsOn = true;
+let selected = null, hovered = null;
+let targetYaw = null, targetPitch = null; // eased focus animation
+
+// ---- canvas ----
+const canvas = document.getElementById("space");
+const ctx = canvas.getContext("2d");
+let W = 0, H = 0, dpr = 1;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+}
+window.addEventListener("resize", resize); resize();
+
+// starfield backdrop (deterministic)
+const stars = [];
+(function () {
+  let s = 42;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 130; i++) stars.push({ x: rnd(), y: rnd(), r: rnd() * 1.1 + 0.2, a: rnd() * 0.5 + 0.1 });
+})();
+
+function project(p) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  let x = p[0] * cy + p[2] * sy;
+  let z = -p[0] * sy + p[2] * cy;
+  let y = p[1] * cp - z * sp;
+  z = p[1] * sp + z * cp;
+  const scale = dist / (dist + z);
+  return { x: W / 2 + x * scale, y: H / 2 + y * scale, z, scale };
+}
+
+const projected = new Map();
+function visible(n) { return typeOn[n.type] && domainOn[n.domain]; }
+
+const SHELLS = [
+  ["principle", 75], ["decision", 155], ["rule", 225],
+  ["constraint", 275], ["law", 335], ["direction", 395],
+];
+function drawRing(r, color) {
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i <= 72; i++) {
+    const a = (i / 72) * Math.PI * 2;
+    const p = project([r * Math.cos(a), 0, r * Math.sin(a)]);
+    if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+}
+
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  // vignette ground
+  const vg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+  vg.addColorStop(0, "rgba(23, 33, 58, 0.55)");
+  vg.addColorStop(1, "rgba(7, 11, 20, 0)");
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+
+  for (const st of stars) {
+    ctx.globalAlpha = st.a;
+    ctx.fillStyle = "#c9d4ea";
+    ctx.beginPath(); ctx.arc(st.x * W, st.y * H, st.r, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  projected.clear();
+  for (const n of nodes) projected.set(n.id, project(n.pos));
+
+  // orbital shell rings
+  if (ringsOn) {
+    ctx.lineWidth = 1;
+    for (const [t, r] of SHELLS) {
+      if (!typeOn[t]) continue;
+      ctx.globalAlpha = 0.10;
+      drawRing(r, TYPE_COLOR[t]);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  const focusSet = selected ? new Set([selected, ...neighbors.get(selected).map(e => e.other)]) : null;
+
+  // edges
+  for (const e of edges) {
+    const a = byId.get(e.source), b = byId.get(e.target);
+    if (!visible(a) || !visible(b)) continue;
+    const pa = projected.get(a.id), pb = projected.get(b.id);
+    const onFocus = focusSet && (e.source === selected || e.target === selected);
+    if (focusSet && !onFocus) ctx.globalAlpha = 0.04;
+    else ctx.globalAlpha = onFocus ? 0.55 : 0.13;
+    ctx.strokeStyle = onFocus ? "#5cc8e8" : "#8b95aa";
+    ctx.lineWidth = onFocus ? 1.2 : 0.6;
+    ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // nodes, back to front
+  const order = [...nodes].filter(visible).sort((a, b) => projected.get(b.id).z - projected.get(a.id).z);
+  for (const n of order) {
+    const p = projected.get(n.id);
+    const base = n.type === "principle" ? 6.5 : 4.5;
+    const r = Math.max(1.5, base * p.scale);
+    const dim = focusSet && !focusSet.has(n.id);
+    const depth = Math.max(0.25, Math.min(1, p.scale * p.scale));
+    const col = TYPE_COLOR[n.type];
+    // soft halo
+    if (!dim) {
+      const halo = ctx.createRadialGradient(p.x, p.y, r * 0.4, p.x, p.y, r * 3);
+      halo.addColorStop(0, col + "55");
+      halo.addColorStop(1, col + "00");
+      ctx.globalAlpha = depth * 0.8;
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 3, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = dim ? 0.15 : depth;
+    const core = ctx.createRadialGradient(p.x - r * 0.3, p.y - r * 0.3, 0, p.x, p.y, r);
+    core.addColorStop(0, "#ffffff");
+    core.addColorStop(0.25, col);
+    core.addColorStop(1, col);
+    ctx.fillStyle = core;
+    if (n.id === selected || n.id === hovered) {
+      ctx.shadowColor = col; ctx.shadowBlur = 22;
+    }
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
+    ctx.shadowBlur = 0;
+    if (n.id === selected) {
+      ctx.strokeStyle = "#e9edf5"; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r + 4, 0, 7); ctx.stroke();
+    }
+    // labels: selected, hovered, neighbors of selected, or principles
+    if (!dim && (n.id === selected || n.id === hovered || (focusSet && focusSet.has(n.id)) || (n.type === "principle" && !focusSet && dist < 480))) {
+      ctx.globalAlpha = n.id === selected || n.id === hovered ? 1 : 0.75;
+      ctx.font = "10px " + "ui-monospace, Menlo, monospace";
+      ctx.fillStyle = "#e9edf5";
+      ctx.fillText(n.title.length > 38 ? n.title.slice(0, 37) + "…" : n.title, p.x + r + 5, p.y + 3);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function tick() {
+  if (targetYaw !== null) {
+    yaw += (targetYaw - yaw) * 0.12; pitch += (targetPitch - pitch) * 0.12;
+    if (Math.abs(targetYaw - yaw) < 0.002 && Math.abs(targetPitch - pitch) < 0.002) { targetYaw = targetPitch = null; }
+  } else if (spinEnabled && !dragging && !selected) {
+    yaw += 0.0016;
+  }
+  draw();
+  requestAnimationFrame(tick);
+}
+
+// ---- interaction ----
+let dragging = false, moved = false, lastX = 0, lastY = 0, pinchD = 0;
+canvas.addEventListener("pointerdown", ev => {
+  dragging = true; moved = false; lastX = ev.clientX; lastY = ev.clientY;
+  canvas.classList.add("dragging"); canvas.setPointerCapture(ev.pointerId);
+});
+canvas.addEventListener("pointermove", ev => {
+  if (dragging) {
+    const dx = ev.clientX - lastX, dy = ev.clientY - lastY;
+    if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+    yaw += dx * 0.005; pitch = Math.max(-1.4, Math.min(1.4, pitch + dy * 0.005));
+    targetYaw = targetPitch = null;
+    lastX = ev.clientX; lastY = ev.clientY;
+  } else {
+    hovered = pick(ev.clientX, ev.clientY);
+    const tip = document.getElementById("tooltip");
+    if (hovered) {
+      const n = byId.get(hovered);
+      tip.style.display = "block";
+      tip.innerHTML = `<span class="tid">${esc(n.type)} · ${esc(n.domain)} · ${esc(n.id)}</span><br>${esc(n.title)}`;
+      tip.style.left = Math.min(ev.clientX + 14, W - 280) + "px";
+      tip.style.top = (ev.clientY + 14) + "px";
+      canvas.style.cursor = "pointer";
+    } else {
+      tip.style.display = "none";
+      canvas.style.cursor = dragging ? "grabbing" : "grab";
+    }
+  }
+});
+canvas.addEventListener("pointerup", ev => {
+  dragging = false; canvas.classList.remove("dragging");
+  if (!moved) {
+    const hit = pick(ev.clientX, ev.clientY);
+    if (hit) select(hit); else deselect();
+  }
+});
+canvas.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  dist = Math.max(260, Math.min(2200, dist + ev.deltaY * 0.8));
+}, { passive: false });
+
+canvas.addEventListener("touchstart", ev => {
+  if (ev.touches.length === 2) pinchD = Math.hypot(
+    ev.touches[0].clientX - ev.touches[1].clientX, ev.touches[0].clientY - ev.touches[1].clientY);
+});
+canvas.addEventListener("touchmove", ev => {
+  if (ev.touches.length === 2) {
+    const d = Math.hypot(ev.touches[0].clientX - ev.touches[1].clientX, ev.touches[0].clientY - ev.touches[1].clientY);
+    dist = Math.max(260, Math.min(2200, dist - (d - pinchD) * 2));
+    pinchD = d;
+  }
+});
+
+function pick(cx, cy) {
+  let best = null, bestD = 14;
+  for (const n of nodes) {
+    if (!visible(n)) continue;
+    const p = projected.get(n.id);
+    if (!p) continue;
+    const d = Math.hypot(p.x - cx, p.y - cy);
+    if (d < bestD) { bestD = d; best = n.id; }
+  }
+  return best;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---- selection & panel ----
+function select(id) {
+  selected = id;
+  const n = byId.get(id);
+  // rotate the camera so the node faces front
+  const [x, , z] = n.pos;
+  if (x || z) targetYaw = Math.atan2(-x, z) + Math.PI, targetPitch = pitch;
+  const rel = neighbors.get(id);
+  const body = document.getElementById("panel-body");
+  body.innerHTML = `
+    <span class="type-tag" style="background:${TYPE_COLOR[n.type]}">${esc(n.type)}</span>
+    <span class="type-tag" style="background:transparent;border:1px solid var(--line);color:var(--muted)">${esc(n.domain || "")}</span>
+    <h2>${esc(n.title)}</h2>
+    <div class="nid">${esc(n.id)}</div>
+    <p class="stmt">${esc(n.statement)}</p>
+    <div class="src">${esc(n.source || "—")}</div>
+    ${rel.length ? "<h3>Connections</h3>" : ""}
+    ${rel.map(e => {
+      const o = byId.get(e.other);
+      return `<button class="edge-row" data-go="${esc(e.other)}">
+        <span class="rel">${esc(e.dir)} ${esc(e.rel)}</span>
+        <span style="color:${TYPE_COLOR[o.type]}">●</span> ${esc(o.title)}</button>`;
+    }).join("")}`;
+  body.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => select(b.dataset.go)));
+  document.getElementById("panel").classList.add("open");
+}
+function deselect() {
+  selected = null;
+  document.getElementById("panel").classList.remove("open");
+}
+document.getElementById("close-panel").addEventListener("click", deselect);
+window.addEventListener("keydown", ev => { if (ev.key === "Escape") deselect(); });
+
+// ---- legend / filters ----
+const typesEl = document.getElementById("types");
+for (const t of TYPE_ORDER) {
+  const count = nodes.filter(n => n.type === t).length;
+  const chip = document.createElement("button");
+  chip.className = "chip"; chip.setAttribute("aria-pressed", "true");
+  chip.innerHTML = `<span class="dot" style="background:${TYPE_COLOR[t]}"></span>${t}s<span class="n">${count}</span>`;
+  chip.addEventListener("click", () => {
+    typeOn[t] = !typeOn[t];
+    chip.classList.toggle("off", !typeOn[t]);
+    chip.setAttribute("aria-pressed", String(typeOn[t]));
+    if (selected && !typeOn[byId.get(selected).type]) deselect();
+  });
+  typesEl.appendChild(chip);
+}
+const domainsEl = document.getElementById("domains");
+for (const d of DOMAIN_ORDER) {
+  const count = nodes.filter(n => n.domain === d).length;
+  const chip = document.createElement("button");
+  chip.className = "chip"; chip.setAttribute("aria-pressed", "true");
+  chip.innerHTML = `${d}<span class="n">${count}</span>`;
+  chip.addEventListener("click", () => {
+    domainOn[d] = !domainOn[d];
+    chip.classList.toggle("off", !domainOn[d]);
+    chip.setAttribute("aria-pressed", String(domainOn[d]));
+    if (selected && !domainOn[byId.get(selected).domain]) deselect();
+  });
+  domainsEl.appendChild(chip);
+}
+
+// ---- view controls ----
+const spinBtn = document.getElementById("spin-toggle");
+function renderSpinBtn() {
+  spinBtn.textContent = spinEnabled ? "⏸" : "▶";
+  spinBtn.classList.toggle("active", spinEnabled);
+}
+spinBtn.addEventListener("click", () => { spinEnabled = !spinEnabled; renderSpinBtn(); });
+renderSpinBtn();
+const ringsBtn = document.getElementById("rings-toggle");
+ringsBtn.addEventListener("click", () => {
+  ringsOn = !ringsOn;
+  ringsBtn.classList.toggle("active", ringsOn);
+});
+document.getElementById("counts").textContent =
+  `${nodes.length} nodes · ${edges.length} edges · ${DATA.meta && DATA.meta.generated ? "as of " + DATA.meta.generated : ""}`;
+
+// ---- search ----
+const searchEl = document.getElementById("search");
+const resultsEl = document.getElementById("results");
+searchEl.addEventListener("input", () => {
+  const q = searchEl.value.trim().toLowerCase();
+  if (!q) { resultsEl.style.display = "none"; resultsEl.innerHTML = ""; return; }
+  const hits = nodes.filter(n =>
+    n.id.includes(q) || n.title.toLowerCase().includes(q) ||
+    n.statement.toLowerCase().includes(q) || (n.domain || "").includes(q)
+  ).slice(0, 12);
+  resultsEl.innerHTML = hits.map(n =>
+    `<button data-go="${esc(n.id)}"><span style="color:${TYPE_COLOR[n.type]}">●</span> ${esc(n.title)}<span class="rid">${esc(n.id)}</span></button>`
+  ).join("") || `<button disabled>no matches</button>`;
+  resultsEl.style.display = "block";
+  resultsEl.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
+    select(b.dataset.go); resultsEl.style.display = "none"; searchEl.value = "";
+  }));
+});
+searchEl.addEventListener("keydown", ev => {
+  if (ev.key === "Enter") {
+    const first = resultsEl.querySelector("[data-go]");
+    if (first) { select(first.dataset.go); resultsEl.style.display = "none"; searchEl.value = ""; }
+  }
+});
+
+// ---- guided tours ----
+const TOURS = [
+  {
+    name: "Start here",
+    steps: [
+      ["self-sovereign-identity", "The founding idea: your identity is something you hold, not an account a company grants you. Everything else in this map serves this."],
+      ["member-owned", "Orbis is owned by its members, not shareholders — members hold 50% of the operating company and control their own data."],
+      ["privacy-by-default", "The platform is built so it physically can't read your data: servers store ciphertext only, and nothing personal goes on chain."],
+      ["keys-not-persisted-server-side", "Your private keys never touch the server. Every signing operation requires you to bring your own key — so a server breach can't steal identities."],
+      ["data-minimization", "You can prove a fact (over 18, licensed) without revealing the underlying data. Fields you weren't asked for are hidden automatically."],
+      ["w3c-did-core", "It's all built on open W3C standards, so an Orbis identity works with the wider SSI world instead of locking you in."],
+      ["team-db-shell-store", "One quirky plumbing fact worth knowing: all storage goes through a 'team-db' command-line tool — the source of several rules you'll meet in the next tour."],
+      ["identity-console", "Where humans touch all of this: the web console for DIDs, credentials, trust and messaging — plus a mobile wallet with biometric locks."],
+    ],
+  },
+  {
+    name: "Hard rules before you code",
+    steps: [
+      ["single-line-sql", "Rule #1 that bites every newcomer: the team-db CLI only accepts single-line SQL. Multi-line statements silently break."],
+      ["keys-not-persisted-server-side", "Never write a private key to the database or logs — the entire security model depends on this."],
+      ["async-exec-writes", "High-frequency writes (audit logs, webhooks, usage) must use non-blocking async exec. execSync on a hot path blocks the whole event loop."],
+      ["predicates-over-hidden-only", "ZK predicates (like 'age >= 18') are only valid over hidden fields. A predicate on a revealed field fails verification — by design."],
+      ["secretkey-32-byte-check", "Every endpoint that accepts a secret key validates it's exactly 32 bytes of hex. Follow the pattern when adding endpoints."],
+      ["debug-key-production-guard", "Key material in responses is gated behind NODE_ENV !== production. Never add a debug field that leaks keys in prod."],
+      ["serial-tests", "Tests share one database file, so suites run serially. Don't enable test parallelism — you'll get phantom write races."],
+      ["metadata-only-store", "The shared store is for non-sensitive metadata only. Personal data never goes in it — encrypt on-device instead."],
+    ],
+  },
+  {
+    name: "What's broken right now",
+    steps: [
+      ["main-ci-red", "The honest state of the repo: both CI lanes on main are failing, and every PR inherits red checks until these are fixed."],
+      ["broken-statuslist-persistence", "The credential-revocation code calls database functions that were never written — the backend typecheck fails here."],
+      ["broken-jwtpayload-admin", "Code checks req.user.admin, but tokens never carry an admin flag. Besides the compile error, every wallet admin endpoint silently returns 403."],
+      ["broken-wallet-no-jwt-middleware", "The wallet API is mounted without its authentication middleware — all wallet endpoints currently answer 401."],
+      ["broken-admin-health-actiontype", "A one-line fix: the admin health check logs an audit action name that isn't in the allowed list."],
+      ["broken-did-owner-field", "DID records gained an owner field, but the DID module was never updated to provide it."],
+      ["broken-web-lockfile", "The web app's lockfile is out of sync with its package.json, so CI's npm ci aborts before tests even run."],
+    ],
+  },
+  {
+    name: "How members own Orbis",
+    steps: [
+      ["member-owned", "The principle: the people who create the network's value own the network."],
+      ["member-ownership", "Concretely: 50% of the operating company belongs to the Member Trust, with quarterly cash distributions to members."],
+      ["five-entity-structure", "Five legal entities make it durable: a perpetual trust holding the IP, the operating company, the member trust, a vested fund, and regional subsidiaries."],
+      ["perpetual-trust", "A South Dakota dynasty trust holds all IP and governance authority forever — creditor-protected, built to outlive any company."],
+      ["distribution-formula", "How money flows to members: 30% by activity, 25% equally, 25% by country volume, 10% to low-income members, 10% country-weighted."],
+      ["orbis-coin", "A 100-billion utility token: 50 coins per verified member, fee discounts, staking, and governance power."],
+      ["multi-tier-democracy", "One member, one vote — including a member veto over any change to privacy rules."],
+      ["roadmap-p1-foundation", "Where it's headed: US + EU launch and 10M members in years 1-2, scaling toward a billion members as a global identity standard."],
+    ],
+  },
+];
+for (const tour of TOURS) tour.steps = tour.steps.filter(s => byId.has(s[0]));
+
+let activeTour = null, tourIdx = 0;
+const tourbar = document.getElementById("tourbar");
+function startTour(t) {
+  activeTour = t; tourIdx = 0; spinEnabled = false; renderSpinBtn();
+  document.getElementById("intro").hidden = true;
+  showTourStep();
+}
+function showTourStep() {
+  const [id, note] = activeTour.steps[tourIdx];
+  select(id);
+  document.getElementById("t-title").textContent = activeTour.name;
+  document.getElementById("t-step").textContent = `${tourIdx + 1} / ${activeTour.steps.length}`;
+  document.getElementById("t-note").textContent = note;
+  document.getElementById("t-prev").disabled = tourIdx === 0;
+  document.getElementById("t-next").textContent = tourIdx === activeTour.steps.length - 1 ? "Finish ✓" : "Next →";
+  tourbar.classList.add("on");
+}
+function exitTour() { activeTour = null; tourbar.classList.remove("on"); deselect(); }
+document.getElementById("t-prev").addEventListener("click", () => { if (tourIdx > 0) { tourIdx--; showTourStep(); } });
+document.getElementById("t-next").addEventListener("click", () => {
+  if (tourIdx < activeTour.steps.length - 1) { tourIdx++; showTourStep(); } else exitTour();
+});
+document.getElementById("t-exit").addEventListener("click", exitTour);
+
+const toursEl = document.getElementById("tours");
+for (const t of TOURS) {
+  const chip = document.createElement("button");
+  chip.className = "chip";
+  chip.innerHTML = `▶ ${t.name}`;
+  chip.addEventListener("click", () => startTour(t));
+  toursEl.appendChild(chip);
+}
+
+// ---- intro overlay ----
+const intro = document.getElementById("intro");
+let introSeen = false;
+try { introSeen = sessionStorage.getItem("orbis-map-intro") === "1"; } catch (e) {}
+if (!introSeen) intro.hidden = false;
+function dismissIntro() {
+  intro.hidden = true;
+  try { sessionStorage.setItem("orbis-map-intro", "1"); } catch (e) {}
+}
+document.getElementById("intro-explore").addEventListener("click", dismissIntro);
+document.getElementById("intro-tour").addEventListener("click", () => { dismissIntro(); startTour(TOURS[0]); });
+
+// ---- list mode ----
+const listpane = document.getElementById("listpane");
+const listBody = document.getElementById("list-body");
+const DOMAIN_LABEL = {
+  core: "Core values", governance: "Governance & ownership", did: "Identifiers (DIDs)",
+  vc: "Credentials", zk: "Selective disclosure (ZK)", trust: "Trust registry",
+  didcomm: "Encrypted messaging", gateway: "Developer gateway", admin: "Administration",
+  security: "Security & auth", data: "Storage & data", web: "Web console & site",
+  wallet: "Mobile wallet", ops: "Operations & CI",
+};
+{
+  let html = "";
+  for (const d of ["core", ...DOMAIN_ORDER.filter(x => x !== "core")]) {
+    const group = nodes.filter(n => n.domain === d);
+    if (!group.length) continue;
+    html += `<h3>${esc(DOMAIN_LABEL[d] || d)}</h3>`;
+    for (const n of group) {
+      html += `<button class="row" data-go="${esc(n.id)}">
+        <span class="dot" style="background:${TYPE_COLOR[n.type]}"></span>${esc(n.title)}</button>`;
+    }
+  }
+  listBody.innerHTML = html;
+  listBody.querySelectorAll("[data-go]").forEach(b =>
+    b.addEventListener("click", () => { select(b.dataset.go); }));
+}
+document.getElementById("list-toggle").addEventListener("click", () =>
+  listpane.classList.toggle("open"));
+document.getElementById("close-list").addEventListener("click", () =>
+  listpane.classList.remove("open"));
+
+tick();
+</script>

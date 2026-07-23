@@ -1,0 +1,4698 @@
+<title>Orbis Reasoning Map</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --bg-elev: rgba(13, 19, 34, 0.92);
+    --bg-chip: rgba(21, 29, 48, 0.85);
+    --ink: #e9edf5;
+    --muted: #8b95aa;
+    --line: rgba(139, 149, 170, 0.22);
+    --accent: #5cc8e8;
+    --law: #e3b655;
+    --decision: #5cc8e8;
+    --rule: #6fd598;
+    --constraint: #e8756b;
+    --direction: #a78be8;
+    --principle: #f2efe6;
+    --sans: "Avenir Next", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); overflow: hidden;
+  }
+  #space { position: fixed; inset: 0; cursor: grab; touch-action: none; }
+  #space.dragging { cursor: grabbing; }
+
+  .hud { position: fixed; z-index: 2; }
+
+  #masthead { top: 20px; left: 24px; pointer-events: none; max-width: 340px; }
+  #masthead h1 {
+    margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  #masthead h1 span { color: var(--accent); }
+  #masthead p {
+    margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted);
+  }
+  #counts { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+  #legend {
+    bottom: 20px; left: 24px; display: flex; flex-direction: column; gap: 6px;
+    max-height: 60vh; overflow-y: auto; padding-right: 4px;
+  }
+  #legend .hint { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 6px 0 2px; }
+  #domains { display: flex; flex-wrap: wrap; gap: 5px; max-width: 300px; }
+  #domains .chip { padding: 3px 10px; font-size: 11px; border-radius: 6px; }
+  .chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-chip); border: 1px solid var(--line);
+    border-radius: 999px; padding: 5px 12px 5px 8px;
+    font-size: 12px; cursor: pointer; user-select: none;
+    transition: opacity 0.15s, border-color 0.15s;
+  }
+  .chip:hover { border-color: var(--muted); }
+  .chip.off { opacity: 0.35; }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .chip .n { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-left: auto; padding-left: 10px; }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #searchbox { top: 20px; right: 24px; width: min(280px, calc(100vw - 48px)); }
+  #search {
+    width: 100%; box-sizing: border-box;
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--ink); font-family: var(--mono); font-size: 12px; padding: 9px 12px;
+  }
+  #search::placeholder { color: var(--muted); }
+  #search:focus { outline: none; border-color: var(--accent); }
+  #results {
+    margin-top: 6px; background: var(--bg-elev); border: 1px solid var(--line);
+    border-radius: 8px; max-height: 260px; overflow-y: auto; display: none;
+  }
+  #results button {
+    display: block; width: 100%; text-align: left; background: none; border: 0;
+    color: var(--ink); font-family: var(--sans); font-size: 12px;
+    padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--line);
+  }
+  #results button:last-child { border-bottom: 0; }
+  #results button:hover, #results button:focus-visible { background: rgba(92, 200, 232, 0.12); outline: none; }
+  #results .rid { font-family: var(--mono); font-size: 10px; color: var(--muted); display: block; }
+
+  #panel {
+    top: 0; right: 0; height: 100%; width: min(400px, 100vw);
+    background: var(--bg-elev); border-left: 1px solid var(--line);
+    backdrop-filter: blur(10px); box-sizing: border-box;
+    padding: 24px; overflow-y: auto;
+    transform: translateX(105%); transition: transform 0.25s ease;
+    z-index: 3;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #panel { transition: none; }
+  }
+  #panel.open { transform: translateX(0); }
+  #panel .type-tag {
+    display: inline-block; font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 4px; color: var(--bg);
+  }
+  #panel h2 { margin: 10px 0 4px; font-size: 18px; line-height: 1.3; text-wrap: balance; }
+  #panel .nid { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  #panel .stmt { font-size: 13px; line-height: 1.65; margin: 14px 0; }
+  #panel .src {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    background: rgba(0,0,0,0.25); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 10px; word-break: break-all;
+  }
+  #panel h3 {
+    margin: 20px 0 8px; font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); font-weight: 600;
+  }
+  .edge-row {
+    display: flex; align-items: baseline; gap: 8px; width: 100%;
+    background: none; border: 0; border-left: 2px solid var(--line);
+    color: var(--ink); text-align: left; font-size: 12px;
+    padding: 6px 0 6px 10px; margin: 2px 0; cursor: pointer;
+  }
+  .edge-row:hover, .edge-row:focus-visible { border-left-color: var(--accent); background: rgba(92,200,232,0.07); outline: none; }
+  .edge-row .rel { font-family: var(--mono); font-size: 10px; color: var(--muted); flex: none; }
+  #close-panel {
+    position: absolute; top: 14px; right: 14px; background: none; border: 1px solid var(--line);
+    border-radius: 6px; color: var(--muted); font-size: 13px; width: 28px; height: 28px;
+    cursor: pointer;
+  }
+  #close-panel:hover { color: var(--ink); border-color: var(--muted); }
+
+  /* intro overlay */
+  #intro {
+    position: fixed; inset: 0; z-index: 6; display: grid; place-items: center;
+    background: rgba(7, 11, 20, 0.72); backdrop-filter: blur(4px);
+  }
+  #intro[hidden] { display: none; }
+  #intro .card {
+    max-width: 440px; margin: 20px; background: var(--bg-elev);
+    border: 1px solid var(--line); border-radius: 14px; padding: 28px;
+  }
+  #intro h2 { margin: 0 0 10px; font-size: 18px; }
+  #intro p { font-size: 13px; line-height: 1.6; color: var(--muted); margin: 0 0 10px; }
+  #intro p b { color: var(--ink); font-weight: 600; }
+  #intro .actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  #intro button {
+    background: var(--accent); color: var(--bg); border: 0; border-radius: 8px;
+    padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #intro button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 400; }
+  #intro button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* tours */
+  #tours { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; pointer-events: auto; max-width: 330px; }
+  #tours .chip { border-radius: 6px; font-size: 11px; padding: 4px 10px; }
+  #tourbar {
+    position: fixed; z-index: 5; left: 50%; transform: translateX(-50%);
+    bottom: 20px; width: min(560px, calc(100vw - 32px));
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; display: none;
+  }
+  #tourbar.on { display: block; }
+  #tourbar .t-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  #tourbar .t-title { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  #tourbar .t-step { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+  #tourbar .t-note { font-size: 13px; line-height: 1.55; }
+  #tourbar .t-nav { display: flex; gap: 8px; margin-top: 10px; }
+  #tourbar .t-nav button {
+    background: var(--bg-chip); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 7px; padding: 6px 14px; font-size: 12px; cursor: pointer;
+  }
+  #tourbar .t-nav button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+  #tourbar .t-nav .t-exit { margin-left: auto; color: var(--muted); }
+  #tourbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* list mode */
+  #listpane {
+    position: fixed; z-index: 4; top: 0; left: 0; height: 100%;
+    width: min(360px, 100vw); background: var(--bg-elev);
+    border-right: 1px solid var(--line); backdrop-filter: blur(10px);
+    overflow-y: auto; padding: 20px; box-sizing: border-box;
+    transform: translateX(-105%); transition: transform 0.25s ease;
+  }
+  @media (prefers-reduced-motion: reduce) { #listpane { transition: none; } }
+  #listpane.open { transform: translateX(0); }
+  #listpane h3 {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 18px 0 6px; font-weight: 600;
+  }
+  #listpane .row {
+    display: flex; align-items: baseline; gap: 8px; width: 100%;
+    background: none; border: 0; color: var(--ink); text-align: left;
+    font-size: 12.5px; line-height: 1.45; padding: 5px 4px; cursor: pointer; border-radius: 6px;
+  }
+  #listpane .row:hover, #listpane .row:focus-visible { background: rgba(92,200,232,0.09); outline: none; }
+  #listpane .row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; position: relative; top: 1px; }
+  #close-list {
+    position: absolute; top: 12px; right: 12px; background: none; border: 1px solid var(--line);
+    border-radius: 6px; color: var(--muted); font-size: 13px; width: 26px; height: 26px; cursor: pointer;
+  }
+
+  #tooltip {
+    position: fixed; z-index: 4; pointer-events: none; display: none;
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; max-width: 260px;
+  }
+  #tooltip .tid { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  #help {
+    bottom: 20px; right: 24px; font-size: 11px; color: var(--muted);
+    text-align: right; pointer-events: none;
+  }
+  #controls { bottom: 44px; right: 24px; display: flex; gap: 6px; }
+  #controls button {
+    background: var(--bg-chip); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--ink); font-size: 13px; width: 34px; height: 34px; cursor: pointer;
+    display: grid; place-items: center; transition: border-color 0.15s;
+  }
+  #controls button:hover { border-color: var(--accent); }
+  #controls button.active { border-color: var(--accent); color: var(--accent); }
+  #controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 720px) {
+    #masthead p, #help { display: none; }
+  }
+</style>
+
+<canvas id="space"></canvas>
+
+<div class="hud" id="masthead">
+  <h1>Orbis <span>Reasoning Map</span></h1>
+  <p>Every law, decision, rule, constraint, direction, and principle of the
+     ORBIS.ID platform — principles at the core, external standards as the
+     outer shell.</p>
+  <div id="counts"></div>
+  <div id="tours" role="group" aria-label="Guided tours"></div>
+</div>
+
+<div id="intro" hidden>
+  <div class="card" role="dialog" aria-label="About this map">
+    <h2>The Orbis Reasoning Map</h2>
+    <p>Every rule, decision, standard, and value of the ORBIS.ID project —
+       <b>217 of them</b> — in one place, each with the exact file and line it
+       comes from.</p>
+    <p><b>How to read it:</b> the warm-white dots at the <b>center</b> are the
+       project's core values. Each shell outward is more concrete: <b>decisions</b>
+       (cyan), <b>rules</b> enforced in code (green), <b>accepted limitations</b>
+       (coral), <b>external standards &amp; laws</b> (amber), and <b>roadmap
+       items</b> (violet) on the edge.</p>
+    <p><b>Click any dot</b> to see what it says, why, and what it's connected to
+       — or take a two-minute guided tour.</p>
+    <div class="actions">
+      <button id="intro-tour">▶ Start the tour</button>
+      <button id="intro-explore" class="ghost">Explore on my own</button>
+    </div>
+  </div>
+</div>
+
+<aside id="listpane" aria-label="Browse all nodes">
+  <button id="close-list" aria-label="Close list">×</button>
+  <div id="list-body"></div>
+</aside>
+
+<div id="tourbar" role="region" aria-live="polite">
+  <div class="t-head">
+    <span class="t-title" id="t-title"></span>
+    <span class="t-step" id="t-step"></span>
+  </div>
+  <div class="t-note" id="t-note"></div>
+  <div class="t-nav">
+    <button id="t-prev">← Back</button>
+    <button id="t-next" class="primary">Next →</button>
+    <button id="t-exit" class="t-exit">Exit tour</button>
+  </div>
+</div>
+
+<div class="hud" id="legend" role="group" aria-label="Filters">
+  <div class="hint">types</div>
+  <div id="types"></div>
+  <div class="hint">domains</div>
+  <div id="domains"></div>
+</div>
+
+<div class="hud" id="searchbox">
+  <input id="search" type="search" placeholder="search nodes…" aria-label="Search nodes" />
+  <div id="results" role="listbox"></div>
+</div>
+
+<div class="hud" id="controls">
+  <button id="list-toggle" aria-label="Browse as a list" title="Browse as a list">☰</button>
+  <button id="spin-toggle" aria-label="Pause or resume rotation" title="Pause/resume rotation">⏸</button>
+  <button id="rings-toggle" class="active" aria-label="Toggle orbital rings" title="Toggle orbital rings">◎</button>
+</div>
+<div class="hud" id="help">drag to orbit · scroll to zoom · click a node</div>
+
+<aside class="hud" id="panel" aria-live="polite">
+  <button id="close-panel" aria-label="Close details">×</button>
+  <div id="panel-body"></div>
+</aside>
+
+<div id="tooltip"></div>
+
+<script>
+"use strict";
+const DATA = {
+ "meta": {
+  "project": "ORBIS.ID",
+  "description": "Reasoning map of the ORBIS.ID self-sovereign identity platform: every known law/standard, decision, rule, constraint, direction, and principle, with sources and typed relations. Authoritative for agents; see CLAUDE.md and .claude/agents/reason.md.",
+  "generated": "2026-07-20",
+  "nodeTypes": [
+   "law",
+   "decision",
+   "rule",
+   "constraint",
+   "direction",
+   "principle"
+  ],
+  "relations": [
+   "implements",
+   "enforces",
+   "constrains",
+   "enables",
+   "derives-from",
+   "conflicts-with",
+   "part-of",
+   "motivates"
+  ],
+  "domains": [
+   "governance",
+   "did",
+   "vc",
+   "zk",
+   "trust",
+   "didcomm",
+   "gateway",
+   "admin",
+   "security",
+   "data",
+   "ops",
+   "web",
+   "wallet",
+   "core"
+  ],
+  "layout": "Radial shells by type (principles r=75 at core, decisions 155, rules 225, constraints 275, laws 335, directions 395); 12 domain sectors around the Y axis."
+ },
+ "nodes": [
+  {
+   "id": "member-ownership",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Members own 50% of the operating company",
+   "statement": "Global Holdings LLC is split 50% Member Trust, 49% XFabrix, 1% SSI Trust; members receive quarterly cash distributions and accumulate wealth in the Liberty Fund.",
+   "source": "web/src/pages/Landing.tsx:17-22,190-192",
+   "pos": [
+    127.4,
+    -43.4,
+    -51.7
+   ]
+  },
+  {
+   "id": "perpetual-trust",
+   "type": "decision",
+   "domain": "governance",
+   "title": "South Dakota Dynasty Trust holds IP and governance in perpetuity",
+   "statement": "The ORBIS.ID SSI Trust holds all IP, perpetual governance authority, and a 51% coin reserve; it is creditor-protected and built to exist in perpetuity.",
+   "source": "web/src/pages/Landing.tsx:19,39-44,187-189",
+   "pos": [
+    143,
+    36.7,
+    -46.3
+   ]
+  },
+  {
+   "id": "five-entity-structure",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Five-entity legal structure",
+   "statement": "ORBIS.ID SSI Trust (SD), Global Holdings LLC (DE, 50% member-owned), Member Trust (SD, 100% privacy control), Liberty Fund LP (DE, vested 5-15 yrs), and regional subsidiaries in the Netherlands, Singapore, Delaware, UAE, and Mauritius.",
+   "source": "web/src/pages/Landing.tsx:39-45,190-193",
+   "pos": [
+    138.4,
+    -36.7,
+    -29.5
+   ]
+  },
+  {
+   "id": "global-compliance",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Multi-jurisdictional compliance from day one",
+   "statement": "The platform commits to GDPR, MiCA, CCPA/CPRA, PIPL, LGPD, eIDAS 2.0, and the GENIUS Act, with hubs across Europe, Asia, the Americas, the Middle East, and Africa.",
+   "source": "web/src/pages/Landing.tsx:20,54,196",
+   "pos": [
+    154.6,
+    1,
+    -15.8
+   ]
+  },
+  {
+   "id": "distribution-formula",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Quarterly member distribution formula",
+   "statement": "Distributions split 30% individual activity, 25% equal share, 25% country transaction volume, 10% low-income members, 10% country-weighted equity; 50% of distributions auto-invest into the Liberty Fund (vested 5-15 years).",
+   "source": "web/src/pages/Landing.tsx:31-37,244-245",
+   "pos": [
+    142.4,
+    -36.2,
+    3.3
+   ]
+  },
+  {
+   "id": "orbis-coin",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Orbis Coin: 100-billion utility token",
+   "statement": "50 coins per verified member, 20% fee discount, governance power, and staking; declared MiCA and GENIUS Act compliant.",
+   "source": "web/src/pages/Landing.tsx:12,266",
+   "pos": [
+    152.2,
+    23.7,
+    22.5
+   ]
+  },
+  {
+   "id": "multi-tier-democracy",
+   "type": "decision",
+   "domain": "governance",
+   "title": "One member, one vote democracy",
+   "statement": "Members elect the Member Trust Board and SSI Trust directors, can veto privacy changes, and can submit proposals.",
+   "source": "web/src/pages/Landing.tsx:267",
+   "pos": [
+    149.1,
+    16.1,
+    42.1
+   ]
+  },
+  {
+   "id": "headline-commitments",
+   "type": "decision",
+   "domain": "governance",
+   "title": "Headline commitments: 50% / 100% / 100B / 5",
+   "statement": "The platform publicly commits to 50% member economic ownership, 100% member control of data privacy, a 100-billion coin supply, and 5 regional hubs.",
+   "source": "web/src/pages/Landing.tsx:10-15",
+   "pos": [
+    133.6,
+    40.6,
+    67.1
+   ]
+  },
+  {
+   "id": "mica-genius-compliance",
+   "type": "law",
+   "domain": "governance",
+   "title": "MiCA & GENIUS Act (crypto-asset regulation)",
+   "statement": "Orbis Coin is declared compliant with the EU Markets in Crypto-Assets regulation and the US GENIUS Act.",
+   "source": "web/src/pages/Landing.tsx:266,54",
+   "pos": [
+    332.3,
+    57,
+    14.6
+   ]
+  },
+  {
+   "id": "roadmap-p1-foundation",
+   "type": "direction",
+   "domain": "governance",
+   "title": "Phase 01 (Years 1-2): Foundation",
+   "statement": "US and EU launch, 10M members, first partnerships.",
+   "source": "web/src/pages/Landing.tsx:48",
+   "pos": [
+    341.5,
+    -80.6,
+    -138
+   ]
+  },
+  {
+   "id": "roadmap-p2-growth",
+   "type": "direction",
+   "domain": "governance",
+   "title": "Phase 02 (Years 3-5): Growth",
+   "statement": "Expansion to Asia-Pacific, Middle East, and Latin America; 100M members; break-even.",
+   "source": "web/src/pages/Landing.tsx:49",
+   "pos": [
+    368,
+    -80.6,
+    -36.6
+   ]
+  },
+  {
+   "id": "roadmap-p3-acceleration",
+   "type": "direction",
+   "domain": "governance",
+   "title": "Phase 03 (Years 6-10): Acceleration",
+   "statement": "Global presence, 500M members, dominant market position.",
+   "source": "web/src/pages/Landing.tsx:50",
+   "pos": [
+    338.4,
+    170.1,
+    42.1
+   ]
+  },
+  {
+   "id": "roadmap-p4-maturity",
+   "type": "direction",
+   "domain": "governance",
+   "title": "Phase 04 (Years 11+): Maturity",
+   "statement": "1B+ members, the global standard for identity, perpetual operation.",
+   "source": "web/src/pages/Landing.tsx:51",
+   "pos": [
+    311.3,
+    174,
+    126.7
+   ]
+  },
+  {
+   "id": "self-sovereign-identity",
+   "type": "principle",
+   "domain": "core",
+   "title": "Self-sovereign identity: identity you hold",
+   "statement": "Identifiers are self-certifying and holders control their own keys and proofs; the server orchestrates but does not custody secrets by default. Includes data sovereignty: local storage, selective disclosure, right to be forgotten.",
+   "source": "src/index.ts:1-8; web/src/pages/Landing.tsx:25,268",
+   "pos": [
+    25.3,
+    56.5,
+    0
+   ]
+  },
+  {
+   "id": "aligned-economics",
+   "type": "principle",
+   "domain": "core",
+   "title": "Members earn from platform success",
+   "statement": "Economic alignment: members share the platform's upside through the distribution formula, Orbis Coin, and vested Liberty Fund accumulation.",
+   "source": "web/src/pages/Landing.tsx:21,244-245",
+   "pos": [
+    -31.4,
+    49.4,
+    -28.7
+   ]
+  },
+  {
+   "id": "member-owned",
+   "type": "principle",
+   "domain": "core",
+   "title": "Member-owned, not corporate-controlled",
+   "statement": "The people who create the network's value own it — the platform's founding premise.",
+   "source": "web/src/pages/Landing.tsx:110,169-170,312",
+   "pos": [
+    4.6,
+    42.4,
+    52.9
+   ]
+  },
+  {
+   "id": "privacy-by-default",
+   "type": "principle",
+   "domain": "core",
+   "title": "Privacy-preserving by design",
+   "statement": "No personal data on chain; ORBIS stores ciphertext only; members hold 100% control of their data privacy.",
+   "source": "web/src/pages/Landing.tsx:223,268,313; m/wallet-app/src/features/vault/copy.ts:9-11",
+   "pos": [
+    36.9,
+    35.3,
+    -48.1
+   ]
+  },
+  {
+   "id": "user-consent",
+   "type": "principle",
+   "domain": "core",
+   "title": "Nothing shared without explicit consent",
+   "statement": "Every disclosure requires the holder's explicit approval of who, what, how long, and at what price — and is revocable at any time.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:55-56",
+   "pos": [
+    -65.2,
+    28.2,
+    11.5
+   ]
+  },
+  {
+   "id": "data-minimization",
+   "type": "principle",
+   "domain": "core",
+   "title": "Reveal only what is asked",
+   "statement": "Selective disclosure proves a fact (over-18, licensed, accredited) without revealing underlying data; fields not requested are hidden automatically.",
+   "source": "web/src/pages/Landing.tsx:27; src/vc/zk.ts:1-15",
+   "pos": [
+    59.2,
+    21.2,
+    37.7
+   ]
+  },
+  {
+   "id": "on-device-proving",
+   "type": "principle",
+   "domain": "core",
+   "title": "Favor holder-side, on-device proving",
+   "statement": "ZK proofs and DIDComm require the holder to supply their own secret key per request, binding proofs to holder control instead of server-side key custody.",
+   "source": "src/vc/zk.ts:85-104,167-176,486-552",
+   "pos": [
+    -18.9,
+    14.1,
+    -70.4
+   ]
+  },
+  {
+   "id": "unlinkability-goal",
+   "type": "principle",
+   "domain": "core",
+   "title": "Favor unlinkable, non-correlatable credentials",
+   "statement": "The BBS+ option is described as offering unlinkable (non-correlated) credentials — a design preference for privacy against correlation, currently aspirational.",
+   "source": "src/vc/zk.ts:9-13,480",
+   "pos": [
+    -34.3,
+    7.1,
+    66.1
+   ]
+  },
+  {
+   "id": "user-presence",
+   "type": "principle",
+   "domain": "core",
+   "title": "High-value crypto ops require physical presence",
+   "statement": "Unlock, signing, ZK proving, and share confirmation require active biometric presence (FaceID/TouchID/fingerprint).",
+   "source": "m/wallet-app/src/context/AuthContext.tsx; NEXT_STEPS_ASSESSMENT.md:36",
+   "pos": [
+    70.4,
+    0,
+    -25.7
+   ]
+  },
+  {
+   "id": "auditability",
+   "type": "principle",
+   "domain": "core",
+   "title": "Every sensitive operation is auditable",
+   "statement": "Every credential access and security event is logged with actor, entity, result, IP, and timestamp; audit trails are exportable and the access log is visible only to the member.",
+   "source": "src/security/audit.ts:1-13; m/wallet-app/src/features/vault/copy.ts:42",
+   "pos": [
+    -68.8,
+    -7.1,
+    -28.4
+   ]
+  },
+  {
+   "id": "standards-interop",
+   "type": "principle",
+   "domain": "core",
+   "title": "Standards-based and interoperable",
+   "statement": "The platform builds on W3C DIDs/VCs, DIF protocols, and eIDAS so it interoperates with global SSI systems rather than creating a silo.",
+   "source": "web/src/pages/Landing.tsx:220-223",
+   "pos": [
+    30.9,
+    -14.1,
+    66
+   ]
+  },
+  {
+   "id": "honest-ux",
+   "type": "principle",
+   "domain": "core",
+   "title": "Honest UX: never claim what hasn't happened",
+   "statement": "V1 copy never says money moved before it does and no UI is built against non-existent capability.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:2-6",
+   "pos": [
+    21,
+    -21.2,
+    -67
+   ]
+  },
+  {
+   "id": "non-blocking-io",
+   "type": "principle",
+   "domain": "core",
+   "title": "Never block the event loop on logging or writes",
+   "statement": "Analytics, audit, verification, webhook, and message writes are pushed to background processes so compliance reporting never blocks critical operations.",
+   "source": "src/db/metadata.ts:36-49; src/security/audit.ts:116-135",
+   "pos": [
+    -57.3,
+    -28.2,
+    33.2
+   ]
+  },
+  {
+   "id": "multi-process-consistency",
+   "type": "principle",
+   "domain": "core",
+   "title": "Database is source of truth over in-memory cache",
+   "statement": "Rate-limit state is loaded from the DB on every request for perfect multi-process consistency, deliberately trading round-trips for correctness.",
+   "source": "src/gateway/ratelimit.ts:88-92,166-170",
+   "pos": [
+    59.2,
+    -35.3,
+    13
+   ]
+  },
+  {
+   "id": "least-privilege",
+   "type": "principle",
+   "domain": "core",
+   "title": "Least-privilege runtime",
+   "statement": "Deployment minimizes privilege: dedicated non-root user, systemd hardening flags, docker no-new-privileges, read-only mounts.",
+   "source": "deploy/orbis-ssi-backend.service:8-22; docker-compose.yml:30-39",
+   "pos": [
+    -30.6,
+    -42.4,
+    -43.5
+   ]
+  },
+  {
+   "id": "graceful-degradation",
+   "type": "principle",
+   "domain": "core",
+   "title": "Degrade gracefully rather than crash",
+   "statement": "Resolution, storage, and audit failures degrade (mock docs, empty arrays, degraded health status, non-fatal catches) rather than failing the request.",
+   "source": "src/did/web.ts:188-227; src/index.ts:49-77",
+   "pos": [
+    -5.5,
+    -49.4,
+    42.2
+   ]
+  },
+  {
+   "id": "key-reveal-once",
+   "type": "principle",
+   "domain": "core",
+   "title": "Secrets revealed once, never re-shown",
+   "statement": "Raw API keys are returned only at creation; every list and read path omits the hash and never re-exposes raw keys.",
+   "source": "src/gateway/apikey.ts:131-148",
+   "pos": [
+    19.4,
+    -56.5,
+    -16.3
+   ]
+  },
+  {
+   "id": "w3c-did-core",
+   "type": "law",
+   "domain": "did",
+   "title": "W3C DID Core data model",
+   "statement": "DID Documents use the https://www.w3.org/ns/did/v1 context with standard verificationMethod, authentication, assertionMethod, keyAgreement, capabilityInvocation, and capabilityDelegation properties.",
+   "source": "src/did/key.ts:29-38; src/did/web.ts:99-110; src/did/peer.ts:116-127",
+   "pos": [
+    330.9,
+    61.5,
+    20.5
+   ]
+  },
+  {
+   "id": "did-key-spec",
+   "type": "law",
+   "domain": "did",
+   "title": "W3C did:key method",
+   "statement": "did:key encodes an Ed25519 public key as z-base58btc(0xed01 multicodec + raw key); resolution is deterministic with no network access.",
+   "source": "src/did/key.ts:66-152",
+   "pos": [
+    257.5,
+    -172.3,
+    47.4
+   ]
+  },
+  {
+   "id": "did-web-spec",
+   "type": "law",
+   "domain": "did",
+   "title": "W3C did:web method",
+   "statement": "did:web:<domain>[:<path>] maps to a DID Document served at https://<domain>/.well-known/did.json (or /<path>/did.json), fetched over HTTPS.",
+   "source": "src/did/web.ts:51-163",
+   "pos": [
+    287.5,
+    -65.3,
+    126.2
+   ]
+  },
+  {
+   "id": "did-peer-spec",
+   "type": "law",
+   "domain": "did",
+   "title": "DIF Peer DID method 2",
+   "statement": "Offline, self-certifying did:peer:2.E<enc>.V<sign>.S<service> identifiers encoding signing (Ed25519), key-agreement (X25519), and a base64url DIDComm service element.",
+   "source": "src/did/peer.ts:30-128",
+   "pos": [
+    195.9,
+    -147.9,
+    137.3
+   ]
+  },
+  {
+   "id": "multicodec-multibase",
+   "type": "law",
+   "domain": "did",
+   "title": "Multicodec + multibase key encoding",
+   "statement": "Public keys carry multicodec varint prefixes (Ed25519 0xed01, X25519 0xec01) then base58btc multibase (z prefix) via the multiformats library.",
+   "source": "src/did/key.ts:11-15,72; src/did/peer.ts:12-16",
+   "pos": [
+    256.4,
+    42.7,
+    213.8
+   ]
+  },
+  {
+   "id": "ed25519-verification-key-2020",
+   "type": "law",
+   "domain": "did",
+   "title": "Ed25519VerificationKey2020 method type",
+   "statement": "All verification methods declare type Ed25519VerificationKey2020 with publicKeyMultibase and the ed25519-2020 security context.",
+   "source": "src/did/key.ts:76-87; src/did/web.ts:92-103",
+   "pos": [
+    189.3,
+    -95.6,
+    225.6
+   ]
+  },
+  {
+   "id": "two-did-methods-plus-peer",
+   "type": "decision",
+   "domain": "did",
+   "title": "Support did:key + did:web (did:peer for DIDComm only)",
+   "statement": "The registry restricts creatable/resolvable methods to key and web, with did:peer reserved for offline DIDComm channels.",
+   "source": "src/did/index.ts:11,79-90; src/index.ts:90-104",
+   "pos": [
+    148,
+    42.6,
+    4.2
+   ]
+  },
+  {
+   "id": "did-web-ttl-cache",
+   "type": "decision",
+   "domain": "did",
+   "title": "5-minute TTL cache for did:web resolution",
+   "statement": "did:web resolution caches documents in-memory with a 5-minute TTL and a 5-second HTTPS abort timeout to keep resolution non-blocking.",
+   "source": "src/did/web.ts:35-44,146-175",
+   "pos": [
+    97.3,
+    -69,
+    53
+   ]
+  },
+  {
+   "id": "did-format-guard",
+   "type": "rule",
+   "domain": "did",
+   "title": "DIDs must match known method prefixes",
+   "statement": "Resolution and creation reject inputs not matching did:, did:key:z, did:web:, or did:peer:2.; unknown methods return null/400.",
+   "source": "src/did/index.ts:79-90; src/did/key.ts:108-115",
+   "pos": [
+    188.4,
+    102.5,
+    6.4
+   ]
+  },
+  {
+   "id": "ed25519-multicodec-guard",
+   "type": "rule",
+   "domain": "did",
+   "title": "Reject non-Ed25519 or wrong-length keys",
+   "statement": "Decoders require the 0xed01 multicodec prefix and a 32-byte public key; mismatches return null.",
+   "source": "src/did/key.ts:120-126,162,180-183",
+   "pos": [
+    154.9,
+    -99.5,
+    46.6
+   ]
+  },
+  {
+   "id": "did-web-doc-id-match",
+   "type": "rule",
+   "domain": "did",
+   "title": "Fetched did:web document id must match the DID",
+   "statement": "A remotely fetched did.json is only accepted if doc.id equals the requested DID; otherwise resolution falls through to the local DB then a mock.",
+   "source": "src/did/web.ts:177-186",
+   "pos": [
+    143.2,
+    -100.9,
+    70.5
+   ]
+  },
+  {
+   "id": "did-registry-lifecycle",
+   "type": "rule",
+   "domain": "did",
+   "title": "DID lifecycle: active → revoked",
+   "statement": "Created DIDs persist with status active; resolve returns the stored document; revoke sets status revoked; tests pin this lifecycle.",
+   "source": "tests/ssi.test.ts:142-216",
+   "pos": [
+    150.6,
+    98.6,
+    120.5
+   ]
+  },
+  {
+   "id": "did-key-shape-tests",
+   "type": "rule",
+   "domain": "did",
+   "title": "did:key document shape pinned by tests",
+   "statement": "Tests enforce: ^did:key:z prefix, 32-byte keys, single Ed25519VerificationKey2020 VM with id ${did}#${suffix}, controller = did, deterministic generation from seed, and null for invalid input.",
+   "source": "tests/ssi.test.ts:38-98",
+   "pos": [
+    134.3,
+    28.1,
+    179.7
+   ]
+  },
+  {
+   "id": "did-web-mock-fallback",
+   "type": "constraint",
+   "domain": "did",
+   "title": "did:web falls back to an empty mock document",
+   "statement": "If the HTTPS fetch fails and no local record exists, resolution returns a mock DID Document with empty verification arrays (cached 5 min) — resolution can 'succeed' with no keys.",
+   "source": "src/did/web.ts:188-227",
+   "pos": [
+    217.4,
+    -105.6,
+    11.3
+   ]
+  },
+  {
+   "id": "resolvedid-not-awaited",
+   "type": "constraint",
+   "domain": "did",
+   "title": "resolveDID promise not awaited in resolve endpoint",
+   "statement": "GET /api/did/resolve/:did truthiness-checks an un-awaited Promise, so did:web resolution results are mishandled at this endpoint — a known defect recorded here until fixed.",
+   "source": "src/index.ts:137-149",
+   "pos": [
+    223.1,
+    87,
+    130.1
+   ]
+  },
+  {
+   "id": "w3c-vc-data-model-2",
+   "type": "law",
+   "domain": "vc",
+   "title": "W3C Verifiable Credentials Data Model 2.0",
+   "statement": "Credentials use the https://www.w3.org/ns/credentials/v2 context with issuer, issuanceDate, credentialSubject, optional expirationDate and credentialSchema, and urn:uuid ids.",
+   "source": "src/vc/issue.ts:21-34,88-118",
+   "pos": [
+    243.8,
+    151.3,
+    144.3
+   ]
+  },
+  {
+   "id": "ed25519-signature-2020",
+   "type": "law",
+   "domain": "vc",
+   "title": "Ed25519Signature2020 proof suite",
+   "statement": "VC proofs use type Ed25519Signature2020, cryptosuite ed25519-2020, proofPurpose assertionMethod, signing over canonicalized credential + proof options, multibase-encoded.",
+   "source": "src/vc/issue.ts:141,161-213",
+   "pos": [
+    194.4,
+    31.8,
+    274.3
+   ]
+  },
+  {
+   "id": "statuslist-2021",
+   "type": "law",
+   "domain": "vc",
+   "title": "W3C StatusList2021 revocation/suspension",
+   "statement": "Status is a gzipped, base64url-encoded bitstring (StatusList2021Credential / StatusList2021Entry); bit=1 means revoked or suspended; purposes are revocation and suspension.",
+   "source": "src/vc/statuslist.ts:46-93,167-196",
+   "pos": [
+    51.5,
+    -15.3,
+    328
+   ]
+  },
+  {
+   "id": "custom-canonicalization",
+   "type": "decision",
+   "domain": "vc",
+   "title": "Custom deterministic-JSON canonicalization",
+   "statement": "Instead of JSON-LD RDF canonicalization, issuance and verification use a home-grown sorted-key deterministic stringify, then SHA-256, then Ed25519 — issuer and verifier must share this exact algorithm.",
+   "source": "src/vc/issue.ts:178-213; src/vc/verify.ts:209-246",
+   "pos": [
+    117.2,
+    -38.4,
+    78.4
+   ]
+  },
+  {
+   "id": "webcrypto-sha256",
+   "type": "decision",
+   "domain": "vc",
+   "title": "WebCrypto SHA-256 for hashing",
+   "statement": "Signature and commitment hashing use crypto.subtle.digest('SHA-256'); the simple ZK verifier uses Node createHash instead.",
+   "source": "src/vc/issue.ts:192-196; src/vc/verify-zk.ts:89-91",
+   "pos": [
+    30.5,
+    -39.3,
+    137.1
+   ]
+  },
+  {
+   "id": "vc-verify-check-chain",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Verification is an all-must-pass check chain",
+   "statement": "verifyCredential runs structure → expiration → issuer-DID resolution → proof signature → optional trust registry → optional required types → StatusList revocation; verified is true only if every check passes.",
+   "source": "src/vc/verify.ts:48-112",
+   "pos": [
+    190.4,
+    12.2,
+    122
+   ]
+  },
+  {
+   "id": "expiry-check",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Expired credentials fail verification",
+   "statement": "If expirationDate is present and past (or unparseable) the check fails; absent expiration passes as non-expiring.",
+   "source": "src/vc/verify.ts:144-161",
+   "pos": [
+    150.8,
+    -65.8,
+    126.1
+   ]
+  },
+  {
+   "id": "proof-vm-must-match",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Proof verified only against its named verification method",
+   "statement": "The proof's verificationMethod must exist in the resolved DID document; the public key is taken from that specific VM and the signature must validate over recomputed canonical data.",
+   "source": "src/vc/verify.ts:177-246",
+   "pos": [
+    145.9,
+    62.3,
+    157.5
+   ]
+  },
+  {
+   "id": "revocation-check",
+   "type": "rule",
+   "domain": "vc",
+   "title": "StatusList2021 revocation gate",
+   "statement": "If a StatusList2021Entry credentialStatus exists, verification reads the bit at statusListIndex; bit=1 fails verification and flips a previously-valid VC to unverified. Unsupported status types pass through.",
+   "source": "src/vc/verify.ts:285-320; tests/statuslist.test.ts:71-109",
+   "pos": [
+    132.4,
+    40.9,
+    179.2
+   ]
+  },
+  {
+   "id": "status-update-validation",
+   "type": "rule",
+   "domain": "vc",
+   "title": "StatusList updates validated",
+   "statement": "Updates require a listId, a non-negative numeric index within list bounds, and a boolean status.",
+   "source": "src/index.ts:574-600; src/vc/statuslist.ts:63-82",
+   "pos": [
+    107.2,
+    -24.7,
+    192.1
+   ]
+  },
+  {
+   "id": "vc-issuance-contract",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Issuance contract pinned by tests",
+   "statement": "Issued VCs must carry a urn:uuid id, the requested types, correct issuer/subject/claims, an Ed25519Signature2020 assertionMethod proof, and support expirationDate, additionalContexts, and credentialSchema; issuance under 5s.",
+   "source": "tests/ssi.test.ts:220-316",
+   "pos": [
+    85.4,
+    -68.4,
+    174.6
+   ]
+  },
+  {
+   "id": "vc-metadata-logging",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Issuance and verification leave metadata trails",
+   "statement": "Issuance persists credential metadata (issuer, subject, id, status active); every verification appends a verification log row.",
+   "source": "tests/ssi.test.ts:774-827",
+   "pos": [
+    56.7,
+    44.3,
+    214.5
+   ]
+  },
+  {
+   "id": "vc-claims-fidelity",
+   "type": "rule",
+   "domain": "vc",
+   "title": "Claims survive round-trips with full fidelity",
+   "statement": "Claims preserve mixed types (string/number/bool/null/nested/array); empty claims yield a subject with only id; 10k-character values survive.",
+   "source": "tests/ssi.test.ts:831-887",
+   "pos": [
+    48.9,
+    6,
+    219.7
+   ]
+  },
+  {
+   "id": "verify-vm-derivation-fragile",
+   "type": "constraint",
+   "domain": "vc",
+   "title": "verificationMethod derived by string-splitting the DID",
+   "statement": "Issuance builds the VM id as ${issuerDID}#${lastSegment}, which aligns only with did:key fragments; did:web VMs (uuid fragment) can mismatch at verification.",
+   "source": "src/vc/issue.ts:167; src/did/web.ts:82-84",
+   "pos": [
+    225.3,
+    83,
+    128.3
+   ]
+  },
+  {
+   "id": "issuance-perf-noop",
+   "type": "constraint",
+   "domain": "vc",
+   "title": "Issuance timing telemetry is a no-op",
+   "statement": "issuanceTimeMs measures Date.now() - startTime where both are captured after issuance completes — always ~0ms placeholder telemetry.",
+   "source": "src/index.ts:262-271",
+   "pos": [
+    142.7,
+    -80.2,
+    194.9
+   ]
+  },
+  {
+   "id": "credentialstatus-backcompat",
+   "type": "direction",
+   "domain": "vc",
+   "title": "credentialStatus injection kept for back-compat",
+   "statement": "The issue endpoint supports injecting a credentialStatus after issuance 'for backward compatibility' — a transitional path.",
+   "source": "src/index.ts:257-260",
+   "pos": [
+    192.2,
+    193.9,
+    255.2
+   ]
+  },
+  {
+   "id": "dif-presentation-exchange",
+   "type": "law",
+   "domain": "zk",
+   "title": "DIF Presentation Exchange",
+   "statement": "Verifiers express required claims via a PresentationDefinition (input_descriptors, constraints, JSONPath fields, filters); the holder evaluates it and auto-generates a matching disclosure.",
+   "source": "src/vc/presentation-exchange.ts:1-117",
+   "pos": [
+    180.2,
+    35.7,
+    283.5
+   ]
+  },
+  {
+   "id": "bbs-bls-2020",
+   "type": "law",
+   "domain": "zk",
+   "title": "BBS+ / BbsBlsSignatureProof2020 suite (declared)",
+   "statement": "A second ZK cryptosuite bbs-bls-2020 is declared for pairing-based BLS12-381 unlinkable disclosure, selectable per request.",
+   "source": "src/vc/zk.ts:10-13,142-144,215-222",
+   "pos": [
+    -85.4,
+    -52.8,
+    309.8
+   ]
+  },
+  {
+   "id": "orbis-zk-suite",
+   "type": "decision",
+   "domain": "zk",
+   "title": "Custom OrbisZKSelectiveDisclosure2025 suite",
+   "statement": "The default ZK suite (cryptosuite orbis-zk-sd-2025, context https://orbis.id/ns/zkp/v1) hides fields behind SHA-256(value+nonce) 64-hex commitments inside a VerifiablePresentation, with optional Merkle inclusion and derived predicates.",
+   "source": "src/vc/zk.ts:1-15,102-104; tests/zk.test.ts:59-60",
+   "pos": [
+    71.8,
+    62,
+    116.5
+   ]
+  },
+  {
+   "id": "separate-simple-zk-endpoint",
+   "type": "decision",
+   "domain": "zk",
+   "title": "Separate lightweight hash/Merkle verifier",
+   "statement": "verify-zk is a distinct, presentation-free endpoint for direct SHA-256 hash-commitment checks and Merkle-inclusion proofs, avoiding full-presentation overhead.",
+   "source": "src/vc/verify-zk.ts:110-383",
+   "pos": [
+    21.3,
+    75.1,
+    123.8
+   ]
+  },
+  {
+   "id": "on-device-zk",
+   "type": "decision",
+   "domain": "zk",
+   "title": "On-device ZK proving via wallet.presentVc",
+   "statement": "The wallet's presentVc client method proves selective disclosure on-device, aiming for an Apple/Google-style permission screen showing revealed vs hidden fields before consent.",
+   "source": "PROGRESS_REVIEW.md:25; NEXT_STEPS_ASSESSMENT.md:35",
+   "pos": [
+    -42.5,
+    16.7,
+    149.5
+   ]
+  },
+  {
+   "id": "holder-must-equal-subject",
+   "type": "rule",
+   "domain": "zk",
+   "title": "ZK holder must equal credentialSubject.id",
+   "statement": "createZKProof throws unless the holder DID matches the credential subject id, binding the presentation to the credential's subject.",
+   "source": "src/vc/zk.ts:167-169",
+   "pos": [
+    86.2,
+    -83.2,
+    158.6
+   ]
+  },
+  {
+   "id": "zk-field-partition",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Every field revealed XOR hidden",
+   "statement": "Reveal/hide sets must exist in the subject, never overlap, and jointly account for every subject field; commitment count must equal hidden count with 64-hex hashes.",
+   "source": "src/vc/zk.ts:198-203,421-483",
+   "pos": [
+    75.2,
+    -90,
+    156.8
+   ]
+  },
+  {
+   "id": "predicates-over-hidden-only",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Predicates only valid over hidden fields",
+   "statement": "A derived predicate (e.g. age >= 18) must reference a field in hiddenFields with a matching commitment; predicates on revealed fields fail verification.",
+   "source": "src/vc/zk.ts:544-578; tests/zk.test.ts:499-575",
+   "pos": [
+    56.6,
+    11.4,
+    218.9
+   ]
+  },
+  {
+   "id": "zk-challenge-replay-guard",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Challenge binding prevents replay",
+   "statement": "A verifier-supplied challenge must equal the challenge embedded in the proof or holder-binding fails; /zk/challenge mints 32-byte random challenges with 5-minute expiry.",
+   "source": "src/vc/zk.ts:521-524; src/index.ts:481-493",
+   "pos": [
+    30.3,
+    -32.5,
+    214.1
+   ]
+  },
+  {
+   "id": "bbs-blinding-required",
+   "type": "rule",
+   "domain": "zk",
+   "title": "BBS+ commitments must carry a blinding factor",
+   "statement": "When the cryptosuite is bbs-bls-2020, each hidden commitment must include a blindingFactor scalar or verification fails.",
+   "source": "src/vc/zk.ts:474-477",
+   "pos": [
+    15.2,
+    59.6,
+    216.2
+   ]
+  },
+  {
+   "id": "zk-verification-checks",
+   "type": "rule",
+   "domain": "zk",
+   "title": "ZK verification check chain",
+   "statement": "Verification runs zk-structure, original-vc signature, hidden-commitments, and holder-binding checks; tampered reveals, tampered VCs, removed commitments, and wrong challenges each fail their named check.",
+   "source": "tests/zk.test.ts:214-409",
+   "pos": [
+    -8.6,
+    -21.4,
+    220
+   ]
+  },
+  {
+   "id": "zk-commitment-math",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Commitment math pinned by tests",
+   "statement": "sha256Hex is deterministic 64-hex; hashWithNonce differs by nonce; hash commitments verify only on exact match; Merkle roots and inclusion proofs recompute correctly and reject wrong siblings.",
+   "source": "tests/verify-zk.test.ts:19-333",
+   "pos": [
+    -42.4,
+    -26.7,
+    214.3
+   ]
+  },
+  {
+   "id": "presentation-auto-disclosure",
+   "type": "rule",
+   "domain": "zk",
+   "title": "Requested fields revealed, everything else hidden",
+   "statement": "generatePresentationFromQuery auto-reveals fields requested by the presentation definition and auto-hides all others; the generated presentation must verify.",
+   "source": "tests/presentation-exchange.test.ts:12-77",
+   "pos": [
+    -72.8,
+    50,
+    207.8
+   ]
+  },
+  {
+   "id": "bbs-simulated",
+   "type": "constraint",
+   "domain": "zk",
+   "title": "BBS+ is simulated, not real pairing crypto",
+   "statement": "The bbs-bls-2020 path simulates BBS+ by hashing 'BBS+Commitment:<value>:<blindingFactor>' with a random-UUID blinding factor and Ed25519-signing — no real pairing-based unlinkability.",
+   "source": "src/vc/zk.ts:215-222,258-263",
+   "pos": [
+    115.8,
+    -75.1,
+    215.1
+   ]
+  },
+  {
+   "id": "predicate-not-cryptographic",
+   "type": "constraint",
+   "domain": "zk",
+   "title": "Predicates verified structurally, not cryptographically",
+   "statement": "Range predicates are checked only for statement/field/proof presence and a matching commitment; the predicate math is never evaluated, so its truth is trusted, not proven.",
+   "source": "src/vc/zk.ts:544-578",
+   "pos": [
+    32.9,
+    -38.8,
+    262.6
+   ]
+  },
+  {
+   "id": "zk-hash-not-circuit",
+   "type": "constraint",
+   "domain": "zk",
+   "title": "ZK is hash-commitment based, not a ZK circuit",
+   "statement": "Selective disclosure uses SHA-256 + nonce commitments and Merkle proofs rather than a full zero-knowledge circuit; derived-predicate proof strings are simplified.",
+   "source": "tests/zk.test.ts:517-520",
+   "pos": [
+    -81.8,
+    -79.8,
+    226.4
+   ]
+  },
+  {
+   "id": "eidas-trusted-lists",
+   "type": "law",
+   "domain": "trust",
+   "title": "eIDAS 2.0 QTSP trusted lists",
+   "statement": "The trust registry classifies DIDs as QTSP/Non-QTSP with granted/withdrawn/deprecated status; verifyEidasTrust gates a DID as an eIDAS Qualified Trust Service Provider if it is an active trusted issuer.",
+   "source": "src/trust/registry.ts:160-180; tests/eidas.test.ts:9-36",
+   "pos": [
+    -123.3,
+    -1.1,
+    312
+   ]
+  },
+  {
+   "id": "trust-registry-model",
+   "type": "decision",
+   "domain": "trust",
+   "title": "Trust registry with category + status lifecycle",
+   "statement": "Trust entries carry category issuer/verifier/both and status active/suspended/revoked, are uniquely keyed by DID, and list authorized credential types.",
+   "source": "openapi.yaml:294-457; src/trust/registry.ts",
+   "pos": [
+    -59.2,
+    -19.3,
+    138
+   ]
+  },
+  {
+   "id": "trust-registry-active-check",
+   "type": "rule",
+   "domain": "trust",
+   "title": "Trusted issuer must be active and type-authorized",
+   "statement": "Trust checks fail if the issuer is absent, not active, or lacks the required authorizedCredentialTypes; category must be issuer or both.",
+   "source": "src/vc/verify.ts:248-272; src/trust/registry.ts:141-158",
+   "pos": [
+    17.7,
+    3.9,
+    224.3
+   ]
+  },
+  {
+   "id": "trust-registry-lifecycle",
+   "type": "rule",
+   "domain": "trust",
+   "title": "Registry lifecycle pinned by tests",
+   "statement": "Duplicate DIDs are rejected; suspend↔reactivate toggles trust; revoke/remove drop trust; revoking an issuer flips previously-valid VCs to unverified when trust checking is on.",
+   "source": "tests/ssi.test.ts:441-770",
+   "pos": [
+    -121.5,
+    -82.9,
+    133.9
+   ]
+  },
+  {
+   "id": "didcomm-v2",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm Messaging v2",
+   "statement": "The messaging layer implements DIF DIDComm v2: authcrypt/anoncrypt encrypted envelopes, standard plaintext message structure, and the application/didcomm-encrypted+json media type.",
+   "source": "src/didcomm/envelope.ts:1-13,196-232; src/didcomm/types.ts:1-61",
+   "pos": [
+    -113.3,
+    133.4,
+    275.2
+   ]
+  },
+  {
+   "id": "didcomm-basicmessage",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm BasicMessage 2.0",
+   "statement": "Implements https://didcomm.org/basicmessage/2.0/message for plain text messaging.",
+   "source": "src/didcomm/types.ts:63-90",
+   "pos": [
+    -174,
+    8.4,
+    286.4
+   ]
+  },
+  {
+   "id": "didcomm-trust-ping",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm Trust Ping 2.0",
+   "statement": "Implements ping and ping_response for connectivity checks; response_requested defaults true.",
+   "source": "src/didcomm/types.ts:92-147",
+   "pos": [
+    -174.5,
+    -118.6,
+    213.5
+   ]
+  },
+  {
+   "id": "didcomm-oob",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm Out-of-Band 2.0 invitations",
+   "statement": "Encodes inviter DID plus a DIDCommMessaging service (accept didcomm/v2) into a URL parameter for QR/side-channel delivery.",
+   "source": "src/didcomm/types.ts:149-195; src/didcomm/outofband.ts:1-92",
+   "pos": [
+    -188.4,
+    -142.8,
+    161.3
+   ]
+  },
+  {
+   "id": "didcomm-mediation",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "DIDComm Coordinate Mediation 2.0",
+   "statement": "Routing grants and message forwarding/queueing for offline edge clients.",
+   "source": "src/didcomm/mediation.ts:1-89",
+   "pos": [
+    -237.9,
+    138.8,
+    169.5
+   ]
+  },
+  {
+   "id": "x25519-key-agreement",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "X25519 ECDH key agreement",
+   "statement": "Key agreement uses ECDH over X25519 with the standard edwards25519→curve25519 conversion; peer DIDs carry X25519KeyAgreementKey2020 entries in keyAgreement.",
+   "source": "src/didcomm/envelope.ts:15-51; src/did/peer.ts:89-98",
+   "pos": [
+    -302.9,
+    37.3,
+    141.9
+   ]
+  },
+  {
+   "id": "jose-jwe-headers",
+   "type": "law",
+   "domain": "didcomm",
+   "title": "JOSE/JWE-style protected headers (nominal)",
+   "statement": "Envelope headers advertise alg ECDH-ES+A256KW and enc A256GCM following the JWE shape — but the actual cipher is a custom substitute.",
+   "source": "src/didcomm/envelope.ts:194-209",
+   "pos": [
+    -287.1,
+    -91.2,
+    79
+   ]
+  },
+  {
+   "id": "encrypt-then-mac",
+   "type": "rule",
+   "domain": "didcomm",
+   "title": "Encrypt-then-MAC with constant-time tag check",
+   "statement": "Envelopes compute ciphertext then an HMAC-SHA256 tag over protected||ciphertext; decryption recomputes and compares byte-by-byte before decrypting.",
+   "source": "src/didcomm/envelope.ts:218-223,325-344",
+   "pos": [
+    -74.4,
+    91.1,
+    184.3
+   ]
+  },
+  {
+   "id": "inbox-access-rule",
+   "type": "rule",
+   "domain": "didcomm",
+   "title": "Inbox vs history query scoping",
+   "statement": "The inbox returns only messages where to_did = did; history returns messages where the DID is sender OR recipient, newest first; status lifecycle sent→delivered→read.",
+   "source": "src/db/metadata.ts:291-297; src/didcomm/index.ts:174-199",
+   "pos": [
+    -185.3,
+    93.6,
+    66.5
+   ]
+  },
+  {
+   "id": "envelope-crypto-substitution",
+   "type": "constraint",
+   "domain": "didcomm",
+   "title": "Custom SHA-256 stream cipher substitutes AEAD",
+   "statement": "Instead of XChaCha20-Poly1305/A256GCM, the envelope uses a self-rolled SHA-256-counter XOR keystream with hand-rolled HMAC and HKDF-like derivation — explicitly a simplified interim construction.",
+   "source": "src/didcomm/envelope.ts:53-153",
+   "pos": [
+    -102.6,
+    115.8,
+    216.5
+   ]
+  },
+  {
+   "id": "single-recipient-envelope",
+   "type": "constraint",
+   "domain": "didcomm",
+   "title": "Single-recipient envelopes only",
+   "statement": "Encryption targets one recipient (msg.to[0]); the recipients array has a single entry and decryption reads recipients[0].",
+   "source": "src/didcomm/index.ts:109; src/didcomm/envelope.ts:236-261",
+   "pos": [
+    -167.5,
+    -18.5,
+    213.3
+   ]
+  },
+  {
+   "id": "non-random-message-id",
+   "type": "constraint",
+   "domain": "didcomm",
+   "title": "Message IDs use Math.random UUIDs",
+   "statement": "DIDComm message IDs come from a Math.random-based UUIDv4, not crypto-random — an accepted shortcut for correlation IDs (the gateway uses randomBytes by contrast).",
+   "source": "src/didcomm/types.ts:199-214",
+   "pos": [
+    -216.6,
+    88.3,
+    137.4
+   ]
+  },
+  {
+   "id": "mediation-fetch-not-atomic",
+   "type": "constraint",
+   "domain": "didcomm",
+   "title": "Queue fetch-then-clear is non-atomic",
+   "statement": "fetchAndClearQueue reads queued rows synchronously then marks them delivered via a background write; the read and status flip are not transactional.",
+   "source": "src/didcomm/mediation.ts:80-89",
+   "pos": [
+    -260.9,
+    26.5,
+    86.9
+   ]
+  },
+  {
+   "id": "xchacha-todo",
+   "type": "direction",
+   "domain": "didcomm",
+   "title": "Move to real XChaCha20-Poly1305 AEAD",
+   "statement": "Comments direct that production DIDComm should use XChaCha20-Poly1305 via @noble/ciphers; the current construction is interim.",
+   "source": "src/didcomm/envelope.ts:55-62",
+   "pos": [
+    -154,
+    31,
+    365.7
+   ]
+  },
+  {
+   "id": "oob-base-url-todo",
+   "type": "direction",
+   "domain": "didcomm",
+   "title": "Make the OOB base URL configurable",
+   "statement": "OOB_BASE_URL is hardcoded to https://orbis.id/oob with a note that production should make it configurable.",
+   "source": "src/didcomm/outofband.ts:17-21,43",
+   "pos": [
+    -275.6,
+    -76.1,
+    250.3
+   ]
+  },
+  {
+   "id": "wallet-didcomm-ux",
+   "type": "direction",
+   "domain": "didcomm",
+   "title": "Chat-like DIDComm UI in the wallet",
+   "statement": "Planned: a chat-like interface for DIDComm v2 messages translating OOB invitations into simple Accept Connection prompts, with deep biometric coupling for high-value operations.",
+   "source": "NEXT_STEPS_ASSESSMENT.md:35-37",
+   "pos": [
+    -339.9,
+    153.9,
+    90.2
+   ]
+  },
+  {
+   "id": "apikey-sha256-hashing",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "API keys stored as SHA-256 hashes",
+   "statement": "Raw keys are orb_-prefixed 24 random bytes (base64url); only the SHA-256 hex hash persists; lookup re-hashes the presented key; the raw key is revealed exactly once at creation.",
+   "source": "src/gateway/apikey.ts:43-96",
+   "pos": [
+    -89.9,
+    -65.1,
+    72.2
+   ]
+  },
+  {
+   "id": "token-bucket-ratelimit",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Token-bucket rate limiting persisted in DB",
+   "statement": "Rate limiting is a token bucket persisted per API key, reloaded from the DB on every request for multi-process consistency (no in-memory cache).",
+   "source": "src/gateway/ratelimit.ts:1-133",
+   "pos": [
+    -133.5,
+    42.7,
+    65.3
+   ]
+  },
+  {
+   "id": "ratelimit-plan-tiers",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Tiered quotas: free 100 / developer 1000 / enterprise 10000",
+   "statement": "Plans map to bucket sizes refilling maxTokens per 60s; the plan column is added via a runtime ALTER TABLE migration.",
+   "source": "src/gateway/ratelimit.ts:14-30",
+   "pos": [
+    -101.8,
+    -71.5,
+    33
+   ]
+  },
+  {
+   "id": "webhook-design",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Webhook fan-out with delivery log and retry",
+   "statement": "Webhooks subscribe to credential.issued/credential.verified; delivery is an HTTP POST with X-Webhook-* headers, 10s timeout, 2xx = success; every attempt is logged and retryable by delivery id.",
+   "source": "src/gateway/webhooks.ts:120-244",
+   "pos": [
+    -153,
+    -5.3,
+    17.1
+   ]
+  },
+  {
+   "id": "bearer-auth-scheme",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Bearer-token API authentication",
+   "statement": "Auth extracts the key from Authorization: Bearer <key>, requiring exactly two space-separated parts.",
+   "source": "src/gateway/middleware.ts:29-50",
+   "pos": [
+    -129,
+    -52.7,
+    0.3
+   ]
+  },
+  {
+   "id": "dashboard-server-render",
+   "type": "decision",
+   "domain": "gateway",
+   "title": "Server-rendered developer dashboard",
+   "statement": "/api/developer/dashboard returns a single server-built HTML page (inline CSS, vanilla JS) showing keys, stats, webhook deliveries with retry, audit trail, and recent requests.",
+   "source": "src/gateway/routes.ts:40-72,407-703",
+   "pos": [
+    -150.2,
+    -12.4,
+    -25.7
+   ]
+  },
+  {
+   "id": "scope-enforcement",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Per-request scope enforcement",
+   "statement": "requireAuth rejects missing/malformed auth (401), unknown/revoked keys (401), and keys lacking a required scope (403); scopes are membership checks against a fixed set (did:read/write, vc:issue/verify, trust:read/write).",
+   "source": "src/gateway/middleware.ts:29-72",
+   "pos": [
+    -182.5,
+    14.7,
+    133.6
+   ]
+  },
+  {
+   "id": "revoked-key-invalid",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Revoked keys resolve to null",
+   "statement": "findApiKey returns null when revoked_at is set, so revoked keys fail auth; revocation only sets revoked_at where currently null.",
+   "source": "src/gateway/apikey.ts:113-128",
+   "pos": [
+    -161.7,
+    102.6,
+    98.7
+   ]
+  },
+  {
+   "id": "ratelimit-after-auth",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Rate limiting runs after auth, keyed by key id",
+   "statement": "The rate-limit middleware passes through unauthenticated requests and otherwise decrements the bucket for the API key, returning 429 with Retry-After when empty.",
+   "source": "src/gateway/middleware.ts:74-100,145-147",
+   "pos": [
+    -153.1,
+    -92.5,
+    73.5
+   ]
+  },
+  {
+   "id": "ratelimit-header-hardcoded",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "X-RateLimit-Limit hardcoded to 100",
+   "statement": "The middleware always emits X-RateLimit-Limit: 100 regardless of plan tier, so the advertised limit disagrees with the enforced quota for developer/enterprise keys.",
+   "source": "src/gateway/middleware.ts:86",
+   "pos": [
+    -187.6,
+    83.9,
+    77.2
+   ]
+  },
+  {
+   "id": "usage-after-routes",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Usage middleware wraps res.json, logs async",
+   "statement": "Usage tracking monkey-patches res.json to capture status and response time, logs in the background, must be registered after routes, and skips unauthenticated requests.",
+   "source": "src/gateway/middleware.ts:102-140",
+   "pos": [
+    -219.7,
+    10.9,
+    53.3
+   ]
+  },
+  {
+   "id": "usage-analytics",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Usage stats aggregate per key and endpoint",
+   "statement": "Stats aggregate total/success/error counts, average response time, and per-endpoint breakdown; unknown keys yield zeros; aggregate stats expose totalRequests and activeKeys.",
+   "source": "tests/gateway.test.ts:121-157",
+   "pos": [
+    -223.2,
+    29.1,
+    28.7
+   ]
+  },
+  {
+   "id": "webhook-url-validation",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Webhook URL and event validation",
+   "statement": "Registration rejects URLs not starting with http(s):// and event lists outside credential.issued/credential.verified; deletion and listing are scoped to the owning API key.",
+   "source": "src/gateway/webhooks.ts:66-117",
+   "pos": [
+    -204.9,
+    80.3,
+    10.6
+   ]
+  },
+  {
+   "id": "html-escaping",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Dashboard HTML escaping",
+   "statement": "Dashboard cell values pass through escHtml to reduce stored XSS in rendered key names, emails, and paths.",
+   "source": "src/gateway/routes.ts:701-703",
+   "pos": [
+    -195.9,
+    -65.2,
+    -21
+   ]
+  },
+  {
+   "id": "admin-key-seed-once",
+   "type": "rule",
+   "domain": "gateway",
+   "title": "Admin API key seeded only when none exist",
+   "statement": "On boot the server seeds a full-scope orb_ admin key (sha256-hashed, printed once) only if the api_keys table is empty.",
+   "source": "src/index.ts:1132-1165",
+   "pos": [
+    -206,
+    -46.3,
+    -43.4
+   ]
+  },
+  {
+   "id": "full-scope-public-registration",
+   "type": "constraint",
+   "domain": "gateway",
+   "title": "Public self-registration grants all scopes",
+   "statement": "The unauthenticated /api/developer/register endpoint issues a key with the full scope set from just a name and email, with no verification.",
+   "source": "src/gateway/routes.ts:79-113",
+   "pos": [
+    -164.8,
+    -107.1,
+    137.5
+   ]
+  },
+  {
+   "id": "webhook-schema-drift",
+   "type": "constraint",
+   "domain": "gateway",
+   "title": "Webhook delivery schema mismatch",
+   "statement": "initDatabase creates webhook_deliveries with columns event/status_code/response_body but the webhook code reads/writes event_type/response_status — an internal schema inconsistency.",
+   "source": "src/db/metadata.ts:104 vs src/gateway/webhooks.ts:163,187",
+   "pos": [
+    -274.1,
+    13.4,
+    -35.6
+   ]
+  },
+  {
+   "id": "noble-crypto",
+   "type": "decision",
+   "domain": "security",
+   "title": "Audited @noble libraries for all curve crypto",
+   "statement": "All Ed25519 keygen/sign/verify and curve conversion use the audited @noble/ed25519 and @noble/curves async APIs.",
+   "source": "src/did/key.ts:10,50-63; src/vc/issue.ts:8,199",
+   "pos": [
+    -117.6,
+    77.7,
+    -38.5
+   ]
+  },
+  {
+   "id": "keys-not-persisted-server-side",
+   "type": "decision",
+   "domain": "security",
+   "title": "Private keys never persist server-side",
+   "statement": "DID creation returns the keypair to the caller; the DB stores only public material; issuance, ZK proving, and DIDComm all require the caller to pass the secret key per request.",
+   "source": "src/did/index.ts:29-64; src/vc/issue.ts:49-56; src/index.ts:206-245",
+   "pos": [
+    -121.5,
+    -35.9,
+    -73.5
+   ]
+  },
+  {
+   "id": "aes-256-gcm-envelope",
+   "type": "decision",
+   "domain": "security",
+   "title": "AES-256-GCM KMS envelope encryption",
+   "statement": "Optional envelope encryption wraps a raw private key with a 32-byte master key using AES-256-GCM (random 12-byte IV, auth tag), returning hex ciphertext/iv/tag.",
+   "source": "src/did/key.ts:189-246",
+   "pos": [
+    -94.8,
+    35.7,
+    -117.9
+   ]
+  },
+  {
+   "id": "jwt-bcrypt-auth",
+   "type": "decision",
+   "domain": "security",
+   "title": "JWT + bcrypt user authentication",
+   "statement": "User auth uses bcrypt (12 rounds) password hashing and 24h HS256 JWTs; a requireJwt Bearer middleware protects routes.",
+   "source": "src/security/jwt.ts:12-23,101-183",
+   "pos": [
+    -66.2,
+    -2.9,
+    -139.4
+   ]
+  },
+  {
+   "id": "kms-wrong-key-fails",
+   "type": "rule",
+   "domain": "security",
+   "title": "Wrong master key must fail decryption",
+   "statement": "The AES-256-GCM envelope round-trips, and decryption under a different master key must throw (auth tag mismatch); master keys must decode to exactly 32 bytes.",
+   "source": "tests/kms.test.ts:5-42; src/did/key.ts:199-231",
+   "pos": [
+    -192.6,
+    88.5,
+    -52.6
+   ]
+  },
+  {
+   "id": "secretkey-32-byte-check",
+   "type": "rule",
+   "domain": "security",
+   "title": "Secret keys must be 32-byte hex",
+   "statement": "Issue, ZK, DIDComm, and status endpoints reject any supplied secret key that does not decode to exactly 32 bytes.",
+   "source": "src/index.ts:342-344,527-528,789-790",
+   "pos": [
+    -198.6,
+    -42.5,
+    -75.5
+   ]
+  },
+  {
+   "id": "password-min-8",
+   "type": "rule",
+   "domain": "security",
+   "title": "Passwords ≥ 8 chars; emails normalized",
+   "statement": "Registration and password change reject passwords under 8 characters; emails are lowercased, trimmed, and unique.",
+   "source": "src/security/jwt.ts:83-108,200-206",
+   "pos": [
+    -194.9,
+    11.2,
+    -114.7
+   ]
+  },
+  {
+   "id": "bearer-token-format",
+   "type": "rule",
+   "domain": "security",
+   "title": "Strict Bearer <jwt> header enforcement",
+   "statement": "requireJwt rejects requests lacking an Authorization header, not shaped exactly 'Bearer <token>', or carrying an invalid/expired token.",
+   "source": "src/security/jwt.ts:153-183",
+   "pos": [
+    -169.2,
+    67,
+    -130.1
+   ]
+  },
+  {
+   "id": "linked-did-format",
+   "type": "rule",
+   "domain": "security",
+   "title": "Linked DID must start with did:",
+   "statement": "PUT /api/auth/did rejects a DID that is not a string starting with did:.",
+   "source": "src/security/jwt.ts:358-364",
+   "pos": [
+    -162.5,
+    49.4,
+    -148.9
+   ]
+  },
+  {
+   "id": "debug-key-production-guard",
+   "type": "rule",
+   "domain": "security",
+   "title": "Debug key material suppressed in production",
+   "statement": "DID creation only attaches a _debug block (public key hex) when NODE_ENV is not production, explicitly to avoid exposing key material in production.",
+   "source": "src/index.ts:213-218",
+   "pos": [
+    -149.4,
+    55.3,
+    -158.1
+   ]
+  },
+  {
+   "id": "audit-logging",
+   "type": "rule",
+   "domain": "security",
+   "title": "Append-only audit log for sensitive operations",
+   "statement": "All sensitive operations (did.*, vc.*, zk.*, trust.*, auth.*, compliance.*, key rotation) log actor type/id, action, entity, result, IP, and timestamp; writes are async and never crash the caller.",
+   "source": "src/security/audit.ts:41-135; tests/audit.test.ts:10-30",
+   "pos": [
+    -122.7,
+    85.8,
+    -160
+   ]
+  },
+  {
+   "id": "audit-actor-derivation",
+   "type": "rule",
+   "domain": "security",
+   "title": "Actor and client IP derivation",
+   "statement": "Actor is user (req.user.sub), else api_key (req.apiKey.id), else unknown; client IP prefers the first x-forwarded-for entry, then req.ip, then 0.0.0.0.",
+   "source": "src/security/audit.ts:194-217",
+   "pos": [
+    -80.6,
+    -98.9,
+    -139.7
+   ]
+  },
+  {
+   "id": "audit-db-constraints",
+   "type": "rule",
+   "domain": "security",
+   "title": "Audit rows constrained by CHECK enums",
+   "statement": "ssi_audit_log enforces actor_type IN (user, api_key, system, unknown) and result IN (success, failure) at the schema level, with entity/timestamp/actor indexes.",
+   "source": "src/security/audit.ts:41-56",
+   "pos": [
+    -78.1,
+    103.9,
+    -170.1
+   ]
+  },
+  {
+   "id": "jwt-secret-ephemeral",
+   "type": "constraint",
+   "domain": "security",
+   "title": "Auto-generated JWT secret invalidates tokens on restart",
+   "statement": "If JWT_SECRET is unset a random per-process secret is generated (dev only), invalidating all JWTs on restart; .env.example instructs openssl rand -hex 32 for production.",
+   "source": "src/security/jwt.ts:20-22; .env.example:13-23",
+   "pos": [
+    -251.2,
+    78.5,
+    -76
+   ]
+  },
+  {
+   "id": "remove-debug-in-prod",
+   "type": "direction",
+   "domain": "security",
+   "title": "Remove debug key exposure for production",
+   "statement": "An inline comment directs removing the _debug public-key block entirely in production deployments.",
+   "source": "src/index.ts:213-218",
+   "pos": [
+    -284.6,
+    114.6,
+    -243.5
+   ]
+  },
+  {
+   "id": "team-db-shell-store",
+   "type": "decision",
+   "domain": "data",
+   "title": "Persistence via team-db shell CLI",
+   "statement": "All persistence shells out to a team-db CLI (Turso/SQLite semantics) returning JSON rows, rather than a DB driver; each module carries its own db() helper.",
+   "source": "src/db/metadata.ts:11-49; scripts/team-db:1-44",
+   "pos": [
+    -105.7,
+    -16.3,
+    -108.9
+   ]
+  },
+  {
+   "id": "turso-shared-store",
+   "type": "decision",
+   "domain": "data",
+   "title": "Shared Turso/SQLite store, no DB container",
+   "statement": "The backend uses the shared team-db so docker-compose runs without a database container; the host binary is bind-mounted read-only.",
+   "source": "docker-compose.yml:3-8,30-32",
+   "pos": [
+    -88.5,
+    7.5,
+    -128.2
+   ]
+  },
+  {
+   "id": "teamdb-python-shim",
+   "type": "decision",
+   "domain": "data",
+   "title": "Python SQLite shim for local development",
+   "statement": "A local shim (scripts/team-db, python3) fulfills the team-db contract against a local SQLite file (TEAM_DB_PATH, default ./.data/team.db) so backend and tests run anywhere.",
+   "source": "scripts/team-db:1-44; .env.example:26-30",
+   "pos": [
+    -63.8,
+    61.9,
+    -121.9
+   ]
+  },
+  {
+   "id": "runtime-migration",
+   "type": "decision",
+   "domain": "data",
+   "title": "Idempotent runtime schema migration",
+   "statement": "initDatabase creates all tables with IF NOT EXISTS and runs a try/catch-guarded ALTER TABLE for the plan column, since team-db runs one statement per call.",
+   "source": "src/db/metadata.ts:69-115",
+   "pos": [
+    -39.4,
+    -57.6,
+    -117.7
+   ]
+  },
+  {
+   "id": "async-exec-writes",
+   "type": "decision",
+   "domain": "data",
+   "title": "Non-blocking async exec for write/log paths",
+   "statement": "Read paths use synchronous execSync; high-volume writes (usage logs, audit logs, messages, webhook deliveries) use non-blocking exec callbacks so logging never blocks the event loop.",
+   "source": "src/db/metadata.ts:42-63; src/gateway/usage.ts:37-55",
+   "pos": [
+    -21.2,
+    3.2,
+    -153.5
+   ]
+  },
+  {
+   "id": "env-var-contract",
+   "type": "decision",
+   "domain": "data",
+   "title": "Environment variable contract",
+   "statement": "The contract: PORT (3001), NODE_ENV, JWT_SECRET, ENCRYPTION_KEY, DATABASE_URL, TEAM_DB_PATH; CI adds TEAM_DB_SYNC_URL; deploy adds REGISTRY/IMAGE_NAME.",
+   "source": ".env.example:1-31; .github/workflows/ci.yml:13-14",
+   "pos": [
+    12.1,
+    46,
+    -146
+   ]
+  },
+  {
+   "id": "metadata-only-store",
+   "type": "rule",
+   "domain": "data",
+   "title": "No personal data in the metadata store",
+   "statement": "The team-db store holds only non-sensitive indexed metadata (DID/credential/trust metadata); personal data never touches this store.",
+   "source": "src/db/metadata.ts:4-9",
+   "pos": [
+    -148.7,
+    -34.5,
+    -157
+   ]
+  },
+  {
+   "id": "sql-quote-escaping",
+   "type": "rule",
+   "domain": "data",
+   "title": "Single-quote doubling as SQL escaping",
+   "statement": "Values are interpolated via a quote() helper that null-checks and doubles single quotes (SQLite escaping) — string escaping, not parameterization.",
+   "source": "src/db/metadata.ts:258-262",
+   "pos": [
+    -73.7,
+    66.7,
+    -199.5
+   ]
+  },
+  {
+   "id": "single-line-sql",
+   "type": "constraint",
+   "domain": "data",
+   "title": "team-db accepts single-line SQL only",
+   "statement": "The CLI supports neither multi-line SQL nor multiple statements per call, so every query is whitespace-collapsed to one line and each DDL statement is a separate invocation.",
+   "source": "src/db/metadata.ts:8-9,17-34",
+   "pos": [
+    -169.2,
+    106.5,
+    -177.6
+   ]
+  },
+  {
+   "id": "raw-sql-interpolation",
+   "type": "constraint",
+   "domain": "data",
+   "title": "SQL built by string interpolation",
+   "statement": "With no parameter binding available through the CLI, all queries interpolate values directly, relying on quote-doubling — an accepted injection surface (some paths escape only ad hoc).",
+   "source": "src/gateway/webhooks.ts:130; src/vc/verify-zk.ts:401; src/index.ts:1149-1152",
+   "pos": [
+    -112.6,
+    113.3,
+    -213.6
+   ]
+  },
+  {
+   "id": "async-write-loss-risk",
+   "type": "constraint",
+   "domain": "data",
+   "title": "Background writes have no durability guarantee",
+   "statement": "Fire-and-forget audit/usage/message/webhook writes only console.error on failure, so failed compliance writes are silently lost — the accepted price of non-blocking IO.",
+   "source": "src/security/audit.ts:126-134; src/gateway/usage.ts:50-54",
+   "pos": [
+    -67.9,
+    -37.7,
+    -256.2
+   ]
+  },
+  {
+   "id": "serial-tests",
+   "type": "constraint",
+   "domain": "data",
+   "title": "Test suites run serially on one DB",
+   "statement": "Vitest runs with fileParallelism false and a fresh temp SQLite DB per run; suites share one team-db file and must run sequentially to avoid write races.",
+   "source": "vitest.config.ts:6-18",
+   "pos": [
+    6,
+    -116.4,
+    -203.2
+   ]
+  },
+  {
+   "id": "web-stack-react18",
+   "type": "decision",
+   "domain": "web",
+   "title": "Web stack: React 18 + Vite 6 + Tailwind CSS 4",
+   "statement": "The frontend uses React 18.3, Vite 6, Tailwind CSS 4 (@tailwindcss/vite), react-router-dom 7, lucide-react, and TypeScript 5.7.",
+   "source": "web/package.json:13-27",
+   "pos": [
+    24,
+    58.7,
+    -137.7
+   ]
+  },
+  {
+   "id": "vite-proxy-api",
+   "type": "decision",
+   "domain": "web",
+   "title": "Dev server proxies /api to the backend",
+   "statement": "The Vite dev server (:5173) proxies /api to http://localhost:3001 with changeOrigin, so all web API calls are relative.",
+   "source": "web/vite.config.ts:10-16",
+   "pos": [
+    41.1,
+    -62.5,
+    -111.2
+   ]
+  },
+  {
+   "id": "identity-console",
+   "type": "decision",
+   "domain": "web",
+   "title": "Identity Console at /app",
+   "statement": "The console (ConsoleLayout) has routes for Overview, DIDs, Credentials, Trust, Messages, Developer, Audit, and Status Lists; the public marketing site lives at /.",
+   "source": "web/src/App.tsx:13-30",
+   "pos": [
+    62.3,
+    -6.1,
+    -140.6
+   ]
+  },
+  {
+   "id": "statuslist-ui-console",
+   "type": "decision",
+   "domain": "web",
+   "title": "Dedicated StatusList2021 UI console",
+   "statement": "The console includes a StatusList2021 panel to create lists and set/check revocation bits by index.",
+   "source": "web/src/pages/console/StatusLists.tsx:98-200",
+   "pos": [
+    82,
+    -20.7,
+    -125.8
+   ]
+  },
+  {
+   "id": "web-console-validation",
+   "type": "rule",
+   "domain": "web",
+   "title": "Console input validation",
+   "statement": "Console inputs expect did:key:z…/did:web:… formats, a 32-byte hex issuer secret in a password field, valid JSON bodies with explicit error messages, and required status-list fields.",
+   "source": "web/src/pages/console/*.tsx",
+   "pos": [
+    34.5,
+    99.6,
+    -187.9
+   ]
+  },
+  {
+   "id": "uiux-guided-tours",
+   "type": "direction",
+   "domain": "web",
+   "title": "Guided tours and visual trust indicators",
+   "statement": "Planned: react-joyride onboarding tours, visual verified/hidden-field indicators, and Recharts/Chart.js gateway analytics dashboards.",
+   "source": "NEXT_STEPS_ASSESSMENT.md:19-21",
+   "pos": [
+    58.3,
+    49.1,
+    -391
+   ]
+  },
+  {
+   "id": "admin-trust-mgmt",
+   "type": "direction",
+   "domain": "web",
+   "title": "Deeper admin control surfaces",
+   "statement": "Planned: bulk eIDAS trusted-list import/export, granular trust-request approval workflow, audit/compliance filter/search/export views, temporary key suspension, and rate-limit metric views.",
+   "source": "NEXT_STEPS_ASSESSMENT.md:27-29",
+   "pos": [
+    311.9,
+    129.4,
+    -193.4
+   ]
+  },
+  {
+   "id": "wcag-accessibility",
+   "type": "law",
+   "domain": "wallet",
+   "title": "WCAG accessibility treated as required",
+   "statement": "The wallet uses accessibilityRole/Label throughout, announces wizard steps via AccessibilityInfo, marks radio states, and keeps 44px minimum touch targets.",
+   "source": "m/wallet-app/src/screens/vault/VaultShareScreen.tsx:97-103,375-397,604",
+   "pos": [
+    171.1,
+    -128.8,
+    -202.4
+   ]
+  },
+  {
+   "id": "expo-conventions",
+   "type": "law",
+   "domain": "wallet",
+   "title": "Expo managed-workflow conventions",
+   "statement": "The wallet follows Expo managed-workflow requirements: app.json plugins, iOS infoPlist usage strings, Android permissions, expo-secure-store keychain, expo-local-authentication, expo-camera, new architecture enabled.",
+   "source": "m/wallet-app/app.json:11-65",
+   "pos": [
+    292.6,
+    139.1,
+    -19.7
+   ]
+  },
+  {
+   "id": "expo-sdk-57",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Mobile wallet on Expo SDK 57",
+   "statement": "The wallet uses Expo SDK 57 (React Native 0.86 / React 19), React Navigation 7, strict TypeScript, dark default theme — note the web app remains on React 18.",
+   "source": "m/wallet-app/README.md:3-16; m/wallet-app/app.json:8",
+   "pos": [
+    102.3,
+    11.3,
+    -117.5
+   ]
+  },
+  {
+   "id": "biometric-gating",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Biometrics gate the wallet",
+   "statement": "expo-local-authentication (FaceID/TouchID/fingerprint) gates the app through an auth state machine: loading → onboarding → locked → unlocked, with opt-in unlock in Settings.",
+   "source": "m/wallet-app/src/services/biometrics.ts; src/context/AuthContext.tsx:1-88",
+   "pos": [
+    84.9,
+    79.1,
+    -86.9
+   ]
+  },
+  {
+   "id": "e2e-share-encryption",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "End-to-end encrypted vault sharing",
+   "statement": "Vault records are encrypted on-device with a per-record AES-256-GCM key (AAD-bound to record id) wrapped under a keychain-held device master key; sharing seals only that record's key for the grantee's X25519 key (ECDH-ES) — the server sees ciphertext only.",
+   "source": "m/wallet-app/src/services/vaultCrypto.ts:1-116",
+   "pos": [
+    88.1,
+    -68.5,
+    -66.8
+   ]
+  },
+  {
+   "id": "wallet-api-base-url",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Wallet talks to https://orbis.ctonew.app",
+   "statement": "The wallet's live backend base URL is https://orbis.ctonew.app, overridable via app.json extra.apiBaseUrl, with a JWT bearer held in the secure store.",
+   "source": "m/wallet-app/src/services/api.ts:12-43",
+   "pos": [
+    97.8,
+    -67.4,
+    -56.7
+   ]
+  },
+  {
+   "id": "consent-wizard",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Every share answers WHO / WHAT / HOW LONG / PRICE",
+   "statement": "A 4-step wizard collects recipient, scope, duration, and price before any grant, reviews it in a plain-language sentence, and confirms with biometrics before sealing on-device.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:2-6; VaultShareScreen.tsx:41,173-195",
+   "pos": [
+    131.8,
+    53.9,
+    -174.8
+   ]
+  },
+  {
+   "id": "share-requires-keyagreement",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Shares blocked without a resolvable X25519 key",
+   "statement": "Sharing is blocked if the grantee DID has no resolvable key-agreement key; shares are DID-bound — never 'anyone with the link'.",
+   "source": "m/wallet-app/src/screens/vault/VaultShareScreen.tsx:117-122,296-297",
+   "pos": [
+    123.3,
+    -77.1,
+    -140.1
+   ]
+  },
+  {
+   "id": "grant-max-90-days",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Grant expiry capped at 90 days",
+   "statement": "Custom grant durations must be 1-90 days (MAX_GRANT_DAYS=90); the server rejects longer expiries.",
+   "source": "m/wallet-app/src/services/walletApi.ts:107; VaultShareScreen.tsx:141-162",
+   "pos": [
+    156.8,
+    -11.2,
+    -158.3
+   ]
+  },
+  {
+   "id": "vault-regate",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Vault re-gates after 5 minutes",
+   "statement": "The vault requires fresh biometric auth when the last auth is older than 5 minutes (VAULT_AUTH_TTL_MS); devices without enrolled biometrics fall through to the app lock.",
+   "source": "m/wallet-app/src/features/vault/session.ts:1-36",
+   "pos": [
+    177.3,
+    -14.3,
+    -135.2
+   ]
+  },
+  {
+   "id": "honest-money-copy",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Money copy says 'requested', never 'earned'",
+   "statement": "Compensation copy uses the verb 'request compensation' and status 'pending' only; never earned/paid/balance until money actually moves, and no payout-method UI is built.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:2-6,17-19",
+   "pos": [
+    184.1,
+    32.6,
+    -127
+   ]
+  },
+  {
+   "id": "title-plaintext-only",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Only record titles are plaintext server-side",
+   "statement": "The only plaintext the server sees is record metadata (title ≤120 chars + type); the title helper warns to keep personal details out; the body is ciphertext.",
+   "source": "m/wallet-app/src/services/walletApi.ts:29-33",
+   "pos": [
+    196.1,
+    26.7,
+    -109.3
+   ]
+  },
+  {
+   "id": "blob-quota-limits",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "512 KB per record, 50 MB per vault",
+   "statement": "Per-record blobs are capped at 512 KB and total vault quota at 50 MB, with quota warnings and vault-full copy.",
+   "source": "m/wallet-app/src/services/walletApi.ts:105-106",
+   "pos": [
+    174.8,
+    92.9,
+    -91.8
+   ]
+  },
+  {
+   "id": "network-retry-dedupe",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Share retries dedupe against recent grants",
+   "statement": "On a network error after a share POST, the client checks for a just-created (<2 min) matching non-revoked grant before retrying, avoiding duplicate grants.",
+   "source": "m/wallet-app/src/screens/vault/VaultShareScreen.tsx:216-234",
+   "pos": [
+    203.4,
+    -22.5,
+    -85.7
+   ]
+  },
+  {
+   "id": "record-key-device-bound",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "Per-record keys live only on the originating device",
+   "statement": "A record fetched on a device without its key fails to decrypt (RECORD_KEY_MISSING) — cross-device key sync does not exist yet.",
+   "source": "m/wallet-app/src/services/vaultCrypto.ts:91-98",
+   "pos": [
+    167.3,
+    7.5,
+    -218.4
+   ]
+  },
+  {
+   "id": "scope-full-or-meta",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "Share scope: full or meta-only",
+   "statement": "V1 share scope is limited to full or meta-only; field-level sharing is not yet available.",
+   "source": "m/wallet-app/src/services/walletApi.ts:27",
+   "pos": [
+    185.4,
+    55.4,
+    -196.1
+   ]
+  },
+  {
+   "id": "usd-only",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "Compensation currency is USD only",
+   "statement": "Only USD is supported for share compensation; more currencies are promised later.",
+   "source": "m/wallet-app/src/screens/vault/VaultShareScreen.tsx:193,460",
+   "pos": [
+    202.5,
+    104.2,
+    -141.2
+   ]
+  },
+  {
+   "id": "ios-portrait-dark-only",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "iOS: no tablet, portrait, dark only",
+   "statement": "app.json sets supportsTablet false, portrait orientation, and a dark-only UI.",
+   "source": "m/wallet-app/app.json:6-12",
+   "pos": [
+    201.7,
+    124.7,
+    -114.8
+   ]
+  },
+  {
+   "id": "wallet-phase1",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "Wallet Phase 1 complete; follow-ups pending",
+   "statement": "Done: scaffold, tokens, nav shell, email auth, biometric unlock, keychain, QR. Pending: social login, push-notification registration, on-device DID creation.",
+   "source": "m/wallet-app/README.md:43-54",
+   "pos": [
+    222.7,
+    166.5,
+    -262.1
+   ]
+  },
+  {
+   "id": "social-login-pending",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "Social login stubbed until OAuth IDs supplied",
+   "statement": "signInWithProvider (Google/Apple/Microsoft via expo-auth-session) throws until the owner supplies OAuth client IDs.",
+   "source": "m/wallet-app/src/services/auth.ts:35-39",
+   "pos": [
+    304.6,
+    89.3,
+    -237.3
+   ]
+  },
+  {
+   "id": "share-field-level",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "Field-level selective sharing coming",
+   "statement": "Sharing specific fields is 'coming soon'; it will relax the full/meta-only scope constraint.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:29",
+   "pos": [
+    347.9,
+    51.8,
+    -183.7
+   ]
+  },
+  {
+   "id": "payments-pending",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "Payments and payouts not yet live",
+   "statement": "Compensation is recorded per share and payable when payouts launch; USD only for now.",
+   "source": "m/wallet-app/src/features/vault/copy.ts:31-32",
+   "pos": [
+    341.8,
+    -108.2,
+    -78
+   ]
+  },
+  {
+   "id": "ondevice-did-pending",
+   "type": "direction",
+   "domain": "wallet",
+   "title": "On-device DID creation pending",
+   "statement": "Creating DIDs on-device in the wallet is a Phase 1 follow-up not yet implemented.",
+   "source": "m/wallet-app/README.md:54",
+   "pos": [
+    351.4,
+    -106.6,
+    -15.4
+   ]
+  },
+  {
+   "id": "openapi-31",
+   "type": "law",
+   "domain": "ops",
+   "title": "OpenAPI 3.1 API contract",
+   "statement": "The full public API surface is specified as an OpenAPI 3.1.0 document served at /openapi.yaml.",
+   "source": "openapi.yaml:1-7; src/gateway/routes.ts:531",
+   "pos": [
+    26.8,
+    -124,
+    -268.9
+   ]
+  },
+  {
+   "id": "bun-runtime",
+   "type": "decision",
+   "domain": "ops",
+   "title": "Bun 1.3 runtime with multi-stage Docker",
+   "statement": "Production containers run on Bun 1.3 via a two-stage Dockerfile (deps → runtime) with curl only for the healthcheck; CI standardizes on Bun 1.3 too.",
+   "source": "Dockerfile:1-35; .github/workflows/ci.yml:25-28",
+   "pos": [
+    -38.7,
+    -49.8,
+    -125.9
+   ]
+  },
+  {
+   "id": "systemd-node-tsx",
+   "type": "decision",
+   "domain": "ops",
+   "title": "systemd deployment via node --import tsx",
+   "statement": "A systemd unit runs the service as a dedicated orbis user under /opt/orbis-ssi-backend with node --import tsx, hardening flags, restart-on-failure, and journal logging — a different runtime than the Docker path.",
+   "source": "deploy/orbis-ssi-backend.service:1-25",
+   "pos": [
+    -20.7,
+    17.6,
+    -153.9
+   ]
+  },
+  {
+   "id": "ci-pipeline",
+   "type": "decision",
+   "domain": "ops",
+   "title": "CI: typecheck + tests + gated Docker build",
+   "statement": "CI runs on pushes to main/feat/fix/chore branches and PRs to main: Bun install, tsc --noEmit, vitest, then a Docker build that runs only on push and depends on tests passing.",
+   "source": ".github/workflows/ci.yml:1-72",
+   "pos": [
+    18.8,
+    -8.7,
+    -152.1
+   ]
+  },
+  {
+   "id": "deploy-pipeline",
+   "type": "decision",
+   "domain": "ops",
+   "title": "Deploy: push image to GHCR on main",
+   "statement": "On push to main, tests run then a Docker image is built and pushed to ghcr.io with sha/branch/semver/latest tags; the actual cloud deploy step is a documented placeholder.",
+   "source": ".github/workflows/deploy.yml:1-79",
+   "pos": [
+    47.2,
+    62.4,
+    -128.8
+   ]
+  },
+  {
+   "id": "port-3001",
+   "type": "decision",
+   "domain": "ops",
+   "title": "Fixed port 3001 contract",
+   "statement": "The service listens on 3001 across the env default, docker-compose mapping and healthcheck, Dockerfile EXPOSE, and the OpenAPI local server URL.",
+   "source": ".env.example:7-8; Dockerfile:27-31; openapi.yaml:11-13",
+   "pos": [
+    58.7,
+    -70.4,
+    -91.6
+   ]
+  },
+  {
+   "id": "health-endpoint",
+   "type": "rule",
+   "domain": "ops",
+   "title": "/api/health liveness contract",
+   "statement": "GET /api/health returns status/version/service/timestamp and is the liveness probe for docker-compose and Dockerfile healthchecks (curl, 30s interval).",
+   "source": "openapi.yaml:15-27; docker-compose.yml:23-28",
+   "pos": [
+    -73.5,
+    39.7,
+    -209.7
+   ]
+  },
+  {
+   "id": "error-handling-contract",
+   "type": "rule",
+   "domain": "ops",
+   "title": "Uniform error/404 JSON contract",
+   "statement": "AppError yields {error:true,message} with its status; unknown errors return a generic 500 with no internals leaked; 404s return 'Resource not found'; all errors log with stack.",
+   "source": "src/middleware/error.ts:1-44",
+   "pos": [
+    98.7,
+    -61.1,
+    -174
+   ]
+  },
+  {
+   "id": "deploy-target-todo",
+   "type": "direction",
+   "domain": "ops",
+   "title": "Cloud deploy target not configured",
+   "statement": "The deploy workflow explicitly ends with 'Deployment target not configured — extend this workflow for your cloud provider', with commented Railway/Fly.io/Kubernetes examples.",
+   "source": ".github/workflows/deploy.yml:69-79",
+   "pos": [
+    -128.2,
+    19.5,
+    -374.1
+   ]
+  },
+  {
+   "id": "admin-jwt-db-gate",
+   "type": "rule",
+   "domain": "admin",
+   "title": "Admin endpoints gated by JWT + DB admin flag",
+   "statement": "requireAdmin parses the Bearer token, verifies it, re-loads the user row from ssi_users, and rejects unless user.admin === 1; suspended users are refused with 403.",
+   "source": "src/admin/auth.ts:97-149",
+   "pos": [
+    -221.2,
+    25.9,
+    39
+   ]
+  },
+  {
+   "id": "admin-db-flag-source-of-truth",
+   "type": "decision",
+   "domain": "admin",
+   "title": "Admin status read from DB per request, not from JWT",
+   "statement": "Admin authority is re-verified against ssi_users.admin on every request rather than trusting a token claim, so revoking admin takes effect immediately.",
+   "source": "src/admin/auth.ts:124-136",
+   "pos": [
+    -150.7,
+    28.1,
+    29
+   ]
+  },
+  {
+   "id": "admin-owner-seed",
+   "type": "decision",
+   "domain": "admin",
+   "title": "Owner auto-seeded as admin on startup",
+   "statement": "seedAdminUser ensures ADMIN_EMAIL (default jonatan@orbis.id) exists with admin=1, status active, verified; if present it force-repairs the admin flag and status.",
+   "source": "src/admin/auth.ts:158-214",
+   "pos": [
+    -148.8,
+    7.1,
+    -44.1
+   ]
+  },
+  {
+   "id": "admin-seed-random-password",
+   "type": "constraint",
+   "domain": "admin",
+   "title": "Seeded admin gets a random un-recoverable password",
+   "statement": "The owner account is created with a randomBytes(24) temp password printed once to stdout; there is no reset flow, so a missed log line means out-of-band recovery.",
+   "source": "src/admin/auth.ts:185-199",
+   "pos": [
+    -267.7,
+    52,
+    47.1
+   ]
+  },
+  {
+   "id": "admin-migrations-noop",
+   "type": "constraint",
+   "domain": "admin",
+   "title": "Admin schema migrations are deliberate no-ops",
+   "statement": "ensureAdminColumns/ensureApiKeyColumns/ensureSystemWebhooksTable do nothing because team-db's Turso layer throws a parse error on duplicate ALTER TABLE ADD COLUMN before try/catch can help; future columns must be added manually via the CLI.",
+   "source": "src/admin/auth.ts:51-86",
+   "pos": [
+    -252.7,
+    -44.7,
+    -73.4
+   ]
+  },
+  {
+   "id": "admin-all-actions-audited",
+   "type": "rule",
+   "domain": "admin",
+   "title": "Every admin route is audit-logged",
+   "statement": "All admin handlers call adminAudit (actor user, id from req.user.sub, client IP) on both success and failure paths.",
+   "source": "src/admin/routes.ts:67-85,111,155,230,287",
+   "pos": [
+    -193.2,
+    97.9,
+    9.2
+   ]
+  },
+  {
+   "id": "admin-cannot-suspend-admin-or-self",
+   "type": "rule",
+   "domain": "admin",
+   "title": "Admins cannot suspend other admins or themselves",
+   "statement": "PUT /users/:id/suspend returns 403 when the target is another admin and 400 when the target is the caller.",
+   "source": "src/admin/routes.ts:141-151",
+   "pos": [
+    -163.2,
+    -98,
+    -14.3
+   ]
+  },
+  {
+   "id": "admin-apikey-valid-scopes",
+   "type": "rule",
+   "domain": "admin",
+   "title": "Admin-issued API keys restricted to a fixed scope set",
+   "statement": "POST /api/admin/api-keys requires allowed_scopes within {did:read, did:write, vc:issue, vc:verify, trust:read, trust:write, admin:manage}, tier in {basic, pro, enterprise}, ISO-8601 expiry; the raw orb_ key is returned once with only its SHA-256 stored.",
+   "source": "src/admin/routes.ts:51-63,424-491",
+   "pos": [
+    -216.8,
+    30.7,
+    -59.3
+   ]
+  },
+  {
+   "id": "admin-apikey-expiry-derived",
+   "type": "rule",
+   "domain": "admin",
+   "title": "API-key expired status computed at read time",
+   "statement": "The list endpoint recomputes effective status to expired when expires_at is past, independent of the stored status column.",
+   "source": "src/admin/routes.ts:515-522",
+   "pos": [
+    -204.7,
+    38.1,
+    -87.3
+   ]
+  },
+  {
+   "id": "admin-webhook-https-events",
+   "type": "rule",
+   "domain": "admin",
+   "title": "System webhooks must be HTTPS with known events",
+   "statement": "POST /integrations/webhook-config rejects non-https URLs and any event outside {credential.issued, credential.verified, did.created, trust.updated, all}.",
+   "source": "src/admin/routes.ts:790-828",
+   "pos": [
+    -151,
+    -115.5,
+    -91
+   ]
+  },
+  {
+   "id": "admin-pagination-caps",
+   "type": "rule",
+   "domain": "admin",
+   "title": "Admin list endpoints clamp pagination",
+   "statement": "Audit-log limit clamps to 1-1000 (default 100); credential/DID lists clamp to 1-500 (default 50); offsets floor at 0.",
+   "source": "src/admin/routes.ts:207-208,337-338,383-384",
+   "pos": [
+    -173.7,
+    58.6,
+    -130.3
+   ]
+  },
+  {
+   "id": "admin-health-detailed",
+   "type": "decision",
+   "domain": "admin",
+   "title": "Detailed health probe over DB, encryption, auth, storage",
+   "statement": "GET /health/detailed checks a DB round-trip, JWT_SECRET presence, a sign/verify round-trip, and per-table row counts, aggregating to healthy/degraded/unhealthy.",
+   "source": "src/admin/routes.ts:858-957",
+   "pos": [
+    -117.8,
+    21.1,
+    -99.6
+   ]
+  },
+  {
+   "id": "wallet-server-tables",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Wallet server owns 9 tables in the shared store",
+   "statement": "initWalletTables creates wallet_devices, wallet_backup_items, vault_records, vault_grants, grant_access_log, refresh_tokens, wallet_push_tokens, wallet_message_queue, and oauth_identities.",
+   "source": "src/wallet/db.ts:31-41",
+   "pos": [
+    146.3,
+    -3.7,
+    -50.5
+   ]
+  },
+  {
+   "id": "wallet-device-binding",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Device identity via X-Orbis-Device-Id header",
+   "statement": "Wallet installs are bound per device: /register mints walletId and deviceId, platform must be ios/android/web, and the device id header identifies subsequent requests.",
+   "source": "src/wallet/routes.ts:52-89",
+   "pos": [
+    203.7,
+    50.7,
+    -83.1
+   ]
+  },
+  {
+   "id": "wallet-remote-wipe",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Remote wipe surfaces as HTTP 410 WALLET_WIPED",
+   "statement": "GET /status returns 410 WALLET_WIPED if any of the user's devices is flagged wiped; the admin wipe endpoint requires a reason and audit-logs admin.wallet.wipe.",
+   "source": "src/wallet/routes.ts:95-108,680-702",
+   "pos": [
+    211,
+    -27.7,
+    -58.2
+   ]
+  },
+  {
+   "id": "wallet-payload-cap-50mb",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Single encrypted payload capped at 50 MB",
+   "statement": "Backup and vault PUT endpoints reject ciphertext over 50 MB with 413; the encryption algorithm defaults to A256GCM.",
+   "source": "src/wallet/routes.ts:176,230",
+   "pos": [
+    200.8,
+    -53.1,
+    -48.2
+   ]
+  },
+  {
+   "id": "wallet-quota-not-enforced",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "50 MB vault quota reported but not enforced",
+   "statement": "/status reports quotaLimitBytes of 50 MB and usage as SUM(vault_records.size), but writes only check per-payload size — total quota is not enforced server-side.",
+   "source": "src/wallet/routes.ts:109-119",
+   "pos": [
+    228.5,
+    112.7,
+    -79.5
+   ]
+  },
+  {
+   "id": "wallet-server-ciphertext-only",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Wallet server persists only encrypted blobs",
+   "statement": "Vault and backup rows store ciphertext, IV, and algorithm; list endpoints omit ciphertext by default and the vault list never returns it.",
+   "source": "src/wallet/routes.ts:192-194,248",
+   "pos": [
+    202.5,
+    81.8,
+    -33.1
+   ]
+  },
+  {
+   "id": "wallet-consent-toggle",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Per-record consent flag: private ↔ monetizable",
+   "statement": "PATCH /vault/:recordId/consent toggles between private (default) and monetizable (opt-in to compensation requests); toggling never auto-shares — explicit per-grant consent is still required — and the change is audit-logged.",
+   "source": "src/wallet/routes.ts:293-345",
+   "pos": [
+    137.1,
+    56.5,
+    -31.2
+   ]
+  },
+  {
+   "id": "wallet-grants-dual-role",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Unified grant list spans grantor and grantee roles",
+   "statement": "GET /grants unions grants the user owns with grants received by their DID, deriving status active/expired/revoked and an is_paid flag.",
+   "source": "src/wallet/routes.ts:412-459",
+   "pos": [
+    141.7,
+    54.5,
+    -14.7
+   ]
+  },
+  {
+   "id": "wallet-zk-present-endpoint",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Server verifies on-device ZK presentations",
+   "statement": "POST /vc/present verifies a selective-disclosure proof the wallet generated and signed on-device (the holder secret never leaves the device); failures return 403 with per-check detail.",
+   "source": "src/wallet/routes.ts:524-632",
+   "pos": [
+    223,
+    33.7,
+    -14.5
+   ]
+  },
+  {
+   "id": "wallet-refresh-esm-gap",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "Refresh handler uses require() in an ESM module",
+   "statement": "POST /refresh calls CommonJS require('crypto')/require('jsonwebtoken') in a type:module package and, when JWT_SECRET is unset, signs with a per-call random secret that can never verify later tokens.",
+   "source": "src/wallet/routes.ts:504-519",
+   "pos": [
+    270.4,
+    14.3,
+    -52.1
+   ]
+  },
+  {
+   "id": "did-owner-scoping",
+   "type": "decision",
+   "domain": "did",
+   "title": "DID records are owner-scoped",
+   "statement": "DIDRecord now requires owner_user_id so /api/did/list is scoped per user rather than global — introduced on main after the map's first extraction.",
+   "source": "src/db/metadata.ts (DIDRecord); git c9e36d9",
+   "pos": [
+    90,
+    56.6,
+    108.8
+   ]
+  },
+  {
+   "id": "broken-statuslist-persistence",
+   "type": "constraint",
+   "domain": "vc",
+   "title": "StatusList persistence layer missing (typecheck fails)",
+   "statement": "src/vc/statuslist.ts imports db.insertStatusList/getStatusListById/updateStatusListEncoded and the StatusListRecord type, none of which exist in src/db/metadata.ts — npm run build fails on main.",
+   "source": "src/vc/statuslist.ts:106-171 vs src/db/metadata.ts",
+   "pos": [
+    51,
+    -84.3,
+    232.7
+   ]
+  },
+  {
+   "id": "broken-jwtpayload-admin",
+   "type": "constraint",
+   "domain": "security",
+   "title": "req.user.admin read but JwtPayload has no admin field",
+   "statement": "JwtPayload defines only sub/email/did/iat/exp, yet req.user?.admin is read in wallet routes (5 sites) and index.ts (2 sites): a compile error, and at runtime tokens never carry admin so every wallet admin endpoint returns 403.",
+   "source": "src/security/jwt.ts:39-45 vs src/wallet/routes.ts:643-736; src/index.ts:272,415",
+   "pos": [
+    -117.6,
+    7.4,
+    -249.9
+   ]
+  },
+  {
+   "id": "broken-wallet-no-jwt-middleware",
+   "type": "constraint",
+   "domain": "wallet",
+   "title": "Wallet routes mounted without JWT middleware",
+   "statement": "app.use('/api/wallet', walletRoutes) claims per-route requireJwt in a comment, but no handler attaches it and req.user is never populated — wallet endpoints return 401 Authentication required.",
+   "source": "src/index.ts:758; src/wallet/routes.ts",
+   "pos": [
+    259.8,
+    78.5,
+    -28.2
+   ]
+  },
+  {
+   "id": "broken-admin-health-actiontype",
+   "type": "constraint",
+   "domain": "admin",
+   "title": "admin.health.detailed is not a valid ActionType",
+   "statement": "The audit action literal 'admin.health.detailed' is not in the ActionType union in security/audit.ts, so admin/routes.ts fails the backend typecheck.",
+   "source": "src/admin/routes.ts:943,954",
+   "pos": [
+    -210.8,
+    -3.4,
+    -175.2
+   ]
+  },
+  {
+   "id": "broken-did-owner-field",
+   "type": "constraint",
+   "domain": "did",
+   "title": "did/index.ts omits owner_user_id and calls a missing helper",
+   "statement": "insertDID calls omit the now-required owner_user_id and did/index.ts:138 calls getPublicKeyFromVerificationMethod which does not exist on did/key — both are tsc errors on main.",
+   "source": "src/did/index.ts:29,56,138",
+   "pos": [
+    161.6,
+    -58.9,
+    197
+   ]
+  },
+  {
+   "id": "broken-web-lockfile",
+   "type": "constraint",
+   "domain": "web",
+   "title": "web/package-lock.json out of sync — npm ci fails",
+   "statement": "The web testing/lint devDependencies (vitest, @testing-library/react, eslint, jsdom and their trees) are in web/package.json but absent from package-lock.json, so the CI web lane aborts at npm ci.",
+   "source": "web/package.json:24-46 vs web/package-lock.json",
+   "pos": [
+    146.4,
+    29.5,
+    -233.7
+   ]
+  },
+  {
+   "id": "main-ci-red",
+   "type": "constraint",
+   "domain": "ops",
+   "title": "Both CI lanes fail on current main",
+   "statement": "As of 2026-07-18, main's last 8 CI runs failed: the Bun lane on backend typecheck errors (statuslist persistence, JwtPayload.admin, admin health ActionType, DID owner fields) and the Node web lane on the out-of-sync lockfile. Any PR against main inherits red CI until these are fixed.",
+   "source": ".github/workflows/ci.yml; GitHub Actions history",
+   "pos": [
+    -61.1,
+    -76.4,
+    -236.7
+   ]
+  },
+  {
+   "id": "site-tanstack-marketing",
+   "type": "decision",
+   "domain": "web",
+   "title": "site/ is a standalone TanStack Start marketing site",
+   "statement": "site/ is an SSR TanStack Start (React 19 + Vite + Tailwind) app on port 3000, Bun-run, driven by site.json — a 'coming soon' placeholder meant to grow into the dynamic public site, distinct from the web/ console SPA.",
+   "source": "site/SITE.md:1-40; site/package.json",
+   "pos": [
+    85.2,
+    -60.6,
+    -85.4
+   ]
+  },
+  {
+   "id": "site-vercel-golive",
+   "type": "direction",
+   "domain": "ops",
+   "title": "site/ deploys to Vercel via go-live script",
+   "statement": "bun run go-live bundles the SSR handler via vercel-entry.ts into .vercel/output, deploys, and makes the project public using only a VERCEL_TOKEN — no Git integration.",
+   "source": "site/SITE.md:32-58; site/go-live.sh",
+   "pos": [
+    206.4,
+    -18.7,
+    -334.2
+   ]
+  },
+  {
+   "id": "ssi-backend-legacy-duplicate",
+   "type": "constraint",
+   "domain": "ops",
+   "title": "ssi-backend/ is a stale legacy duplicate of src/",
+   "statement": "Top-level ssi-backend/ is the pre-expansion lineage (db/did/middleware/trust/vc only — no admin, wallet, security, gateway, didcomm); history shows it was merged into root src/, which is now the superset source of truth.",
+   "source": "ssi-backend/; git log ('ssi-backend wins conflicts as deployed truth')",
+   "pos": [
+    94.5,
+    123.7,
+    -168.5
+   ]
+  },
+  {
+   "id": "web-vitest-harness",
+   "type": "decision",
+   "domain": "web",
+   "title": "Web frontend tests: Vitest + jsdom + Testing Library",
+   "statement": "Vitest is configured with globals, jsdom environment, a jest-dom setup file, and css:true; scripts test/test:watch/test:coverage.",
+   "source": "web/vite.config.ts:1-16; web/src/test/setup.ts",
+   "pos": [
+    104.6,
+    70.6,
+    -78.2
+   ]
+  },
+  {
+   "id": "web-smoke-test",
+   "type": "rule",
+   "domain": "web",
+   "title": "Landing smoke test uses getAllByText",
+   "statement": "App.test.tsx renders Landing in a MemoryRouter and asserts getAllByText(/ORBIS\\.ID/i).length >= 1 — deliberately not getByText, because the wordmark appears multiple times.",
+   "source": "web/src/test/App.test.tsx:6-27",
+   "pos": [
+    166.6,
+    -69.1,
+    -100.9
+   ]
+  },
+  {
+   "id": "web-eslint-flat-config",
+   "type": "decision",
+   "domain": "web",
+   "title": "Flat ESLint config with typescript-eslint + react-hooks",
+   "statement": "web/eslint.config.js extends js and typescript-eslint recommended plus react-hooks rules, warns on no-unused-vars (ignoring _-prefixed) and no-explicit-any, ignoring dist/.",
+   "source": "web/eslint.config.js:1-24",
+   "pos": [
+    128,
+    32.7,
+    -81.3
+   ]
+  },
+  {
+   "id": "sql-execfilesync-no-shell",
+   "type": "rule",
+   "domain": "data",
+   "title": "SQL executed via execFileSync argv, no shell",
+   "statement": "New admin/wallet modules pass SQL as an argv element to execFileSync('team-db', [sql]) — avoiding shell interpolation so bcrypt hashes and whitespace survive — with quote-doubling as the only injection guard.",
+   "source": "src/admin/auth.ts:23-41; src/wallet/routes.ts:21-35",
+   "pos": [
+    15.7,
+    10.7,
+    -224.7
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "source": "member-ownership",
+   "relation": "implements",
+   "target": "member-owned"
+  },
+  {
+   "source": "perpetual-trust",
+   "relation": "part-of",
+   "target": "five-entity-structure"
+  },
+  {
+   "source": "five-entity-structure",
+   "relation": "implements",
+   "target": "member-ownership"
+  },
+  {
+   "source": "global-compliance",
+   "relation": "part-of",
+   "target": "mica-genius-compliance"
+  },
+  {
+   "source": "global-compliance",
+   "relation": "part-of",
+   "target": "eidas-trusted-lists"
+  },
+  {
+   "source": "global-compliance",
+   "relation": "motivates",
+   "target": "auditability"
+  },
+  {
+   "source": "distribution-formula",
+   "relation": "implements",
+   "target": "aligned-economics"
+  },
+  {
+   "source": "orbis-coin",
+   "relation": "constrains",
+   "target": "mica-genius-compliance"
+  },
+  {
+   "source": "orbis-coin",
+   "relation": "implements",
+   "target": "aligned-economics"
+  },
+  {
+   "source": "multi-tier-democracy",
+   "relation": "enables",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "multi-tier-democracy",
+   "relation": "implements",
+   "target": "member-owned"
+  },
+  {
+   "source": "headline-commitments",
+   "relation": "derives-from",
+   "target": "member-ownership"
+  },
+  {
+   "source": "roadmap-p2-growth",
+   "relation": "derives-from",
+   "target": "roadmap-p1-foundation"
+  },
+  {
+   "source": "roadmap-p3-acceleration",
+   "relation": "derives-from",
+   "target": "roadmap-p2-growth"
+  },
+  {
+   "source": "roadmap-p4-maturity",
+   "relation": "derives-from",
+   "target": "roadmap-p3-acceleration"
+  },
+  {
+   "source": "roadmap-p4-maturity",
+   "relation": "motivates",
+   "target": "perpetual-trust"
+  },
+  {
+   "source": "user-consent",
+   "relation": "derives-from",
+   "target": "self-sovereign-identity"
+  },
+  {
+   "source": "data-minimization",
+   "relation": "derives-from",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "on-device-proving",
+   "relation": "derives-from",
+   "target": "self-sovereign-identity"
+  },
+  {
+   "source": "unlinkability-goal",
+   "relation": "motivates",
+   "target": "bbs-bls-2020"
+  },
+  {
+   "source": "unlinkability-goal",
+   "relation": "derives-from",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "w3c-did-core",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "did-key-spec",
+   "relation": "implements",
+   "target": "w3c-did-core"
+  },
+  {
+   "source": "did-key-spec",
+   "relation": "derives-from",
+   "target": "multicodec-multibase"
+  },
+  {
+   "source": "did-web-spec",
+   "relation": "implements",
+   "target": "w3c-did-core"
+  },
+  {
+   "source": "did-peer-spec",
+   "relation": "implements",
+   "target": "w3c-did-core"
+  },
+  {
+   "source": "did-peer-spec",
+   "relation": "enables",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "ed25519-verification-key-2020",
+   "relation": "part-of",
+   "target": "ed25519-signature-2020"
+  },
+  {
+   "source": "two-did-methods-plus-peer",
+   "relation": "implements",
+   "target": "did-key-spec"
+  },
+  {
+   "source": "two-did-methods-plus-peer",
+   "relation": "implements",
+   "target": "did-web-spec"
+  },
+  {
+   "source": "two-did-methods-plus-peer",
+   "relation": "implements",
+   "target": "did-peer-spec"
+  },
+  {
+   "source": "did-web-ttl-cache",
+   "relation": "implements",
+   "target": "non-blocking-io"
+  },
+  {
+   "source": "did-format-guard",
+   "relation": "enforces",
+   "target": "two-did-methods-plus-peer"
+  },
+  {
+   "source": "ed25519-multicodec-guard",
+   "relation": "enforces",
+   "target": "did-key-spec"
+  },
+  {
+   "source": "did-web-doc-id-match",
+   "relation": "enforces",
+   "target": "did-web-spec"
+  },
+  {
+   "source": "did-key-shape-tests",
+   "relation": "enforces",
+   "target": "did-key-spec"
+  },
+  {
+   "source": "did-web-mock-fallback",
+   "relation": "constrains",
+   "target": "did-web-spec"
+  },
+  {
+   "source": "did-web-mock-fallback",
+   "relation": "derives-from",
+   "target": "graceful-degradation"
+  },
+  {
+   "source": "resolvedid-not-awaited",
+   "relation": "conflicts-with",
+   "target": "did-web-spec"
+  },
+  {
+   "source": "w3c-vc-data-model-2",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "ed25519-signature-2020",
+   "relation": "part-of",
+   "target": "w3c-vc-data-model-2"
+  },
+  {
+   "source": "statuslist-2021",
+   "relation": "part-of",
+   "target": "w3c-vc-data-model-2"
+  },
+  {
+   "source": "custom-canonicalization",
+   "relation": "conflicts-with",
+   "target": "ed25519-signature-2020"
+  },
+  {
+   "source": "custom-canonicalization",
+   "relation": "constrains",
+   "target": "standards-interop"
+  },
+  {
+   "source": "vc-verify-check-chain",
+   "relation": "enforces",
+   "target": "w3c-vc-data-model-2"
+  },
+  {
+   "source": "expiry-check",
+   "relation": "part-of",
+   "target": "vc-verify-check-chain"
+  },
+  {
+   "source": "proof-vm-must-match",
+   "relation": "part-of",
+   "target": "vc-verify-check-chain"
+  },
+  {
+   "source": "proof-vm-must-match",
+   "relation": "enforces",
+   "target": "ed25519-signature-2020"
+  },
+  {
+   "source": "revocation-check",
+   "relation": "enforces",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "revocation-check",
+   "relation": "part-of",
+   "target": "vc-verify-check-chain"
+  },
+  {
+   "source": "status-update-validation",
+   "relation": "enforces",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "vc-issuance-contract",
+   "relation": "enforces",
+   "target": "w3c-vc-data-model-2"
+  },
+  {
+   "source": "vc-metadata-logging",
+   "relation": "implements",
+   "target": "auditability"
+  },
+  {
+   "source": "verify-vm-derivation-fragile",
+   "relation": "conflicts-with",
+   "target": "proof-vm-must-match"
+  },
+  {
+   "source": "credentialstatus-backcompat",
+   "relation": "constrains",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "dif-presentation-exchange",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "dif-presentation-exchange",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "orbis-zk-suite",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "orbis-zk-suite",
+   "relation": "enables",
+   "target": "on-device-proving"
+  },
+  {
+   "source": "separate-simple-zk-endpoint",
+   "relation": "part-of",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "on-device-zk",
+   "relation": "implements",
+   "target": "on-device-proving"
+  },
+  {
+   "source": "on-device-zk",
+   "relation": "implements",
+   "target": "user-consent"
+  },
+  {
+   "source": "on-device-zk",
+   "relation": "implements",
+   "target": "dif-presentation-exchange"
+  },
+  {
+   "source": "holder-must-equal-subject",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "zk-field-partition",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "predicates-over-hidden-only",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "zk-challenge-replay-guard",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "bbs-blinding-required",
+   "relation": "enforces",
+   "target": "bbs-bls-2020"
+  },
+  {
+   "source": "zk-verification-checks",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "zk-commitment-math",
+   "relation": "enforces",
+   "target": "separate-simple-zk-endpoint"
+  },
+  {
+   "source": "presentation-auto-disclosure",
+   "relation": "enforces",
+   "target": "dif-presentation-exchange"
+  },
+  {
+   "source": "presentation-auto-disclosure",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "bbs-simulated",
+   "relation": "constrains",
+   "target": "bbs-bls-2020"
+  },
+  {
+   "source": "bbs-simulated",
+   "relation": "conflicts-with",
+   "target": "unlinkability-goal"
+  },
+  {
+   "source": "predicate-not-cryptographic",
+   "relation": "constrains",
+   "target": "predicates-over-hidden-only"
+  },
+  {
+   "source": "zk-hash-not-circuit",
+   "relation": "constrains",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "eidas-trusted-lists",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "trust-registry-active-check",
+   "relation": "enforces",
+   "target": "trust-registry-model"
+  },
+  {
+   "source": "trust-registry-active-check",
+   "relation": "part-of",
+   "target": "vc-verify-check-chain"
+  },
+  {
+   "source": "trust-registry-lifecycle",
+   "relation": "enforces",
+   "target": "trust-registry-model"
+  },
+  {
+   "source": "didcomm-v2",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "didcomm-basicmessage",
+   "relation": "part-of",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "didcomm-trust-ping",
+   "relation": "part-of",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "didcomm-oob",
+   "relation": "part-of",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "didcomm-mediation",
+   "relation": "part-of",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "x25519-key-agreement",
+   "relation": "enables",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "jose-jwe-headers",
+   "relation": "conflicts-with",
+   "target": "envelope-crypto-substitution"
+  },
+  {
+   "source": "encrypt-then-mac",
+   "relation": "enforces",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "envelope-crypto-substitution",
+   "relation": "constrains",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "single-recipient-envelope",
+   "relation": "constrains",
+   "target": "didcomm-v2"
+  },
+  {
+   "source": "mediation-fetch-not-atomic",
+   "relation": "derives-from",
+   "target": "async-exec-writes"
+  },
+  {
+   "source": "xchacha-todo",
+   "relation": "constrains",
+   "target": "envelope-crypto-substitution"
+  },
+  {
+   "source": "wallet-didcomm-ux",
+   "relation": "implements",
+   "target": "user-presence"
+  },
+  {
+   "source": "apikey-sha256-hashing",
+   "relation": "implements",
+   "target": "key-reveal-once"
+  },
+  {
+   "source": "token-bucket-ratelimit",
+   "relation": "implements",
+   "target": "multi-process-consistency"
+  },
+  {
+   "source": "ratelimit-plan-tiers",
+   "relation": "part-of",
+   "target": "token-bucket-ratelimit"
+  },
+  {
+   "source": "webhook-design",
+   "relation": "derives-from",
+   "target": "async-exec-writes"
+  },
+  {
+   "source": "bearer-auth-scheme",
+   "relation": "enables",
+   "target": "scope-enforcement"
+  },
+  {
+   "source": "scope-enforcement",
+   "relation": "enforces",
+   "target": "bearer-auth-scheme"
+  },
+  {
+   "source": "scope-enforcement",
+   "relation": "implements",
+   "target": "least-privilege"
+  },
+  {
+   "source": "revoked-key-invalid",
+   "relation": "part-of",
+   "target": "scope-enforcement"
+  },
+  {
+   "source": "ratelimit-after-auth",
+   "relation": "enforces",
+   "target": "token-bucket-ratelimit"
+  },
+  {
+   "source": "ratelimit-header-hardcoded",
+   "relation": "conflicts-with",
+   "target": "ratelimit-plan-tiers"
+  },
+  {
+   "source": "usage-after-routes",
+   "relation": "implements",
+   "target": "non-blocking-io"
+  },
+  {
+   "source": "webhook-url-validation",
+   "relation": "part-of",
+   "target": "webhook-design"
+  },
+  {
+   "source": "html-escaping",
+   "relation": "part-of",
+   "target": "dashboard-server-render"
+  },
+  {
+   "source": "admin-key-seed-once",
+   "relation": "implements",
+   "target": "key-reveal-once"
+  },
+  {
+   "source": "full-scope-public-registration",
+   "relation": "conflicts-with",
+   "target": "least-privilege"
+  },
+  {
+   "source": "webhook-schema-drift",
+   "relation": "conflicts-with",
+   "target": "webhook-design"
+  },
+  {
+   "source": "noble-crypto",
+   "relation": "implements",
+   "target": "ed25519-signature-2020"
+  },
+  {
+   "source": "keys-not-persisted-server-side",
+   "relation": "implements",
+   "target": "self-sovereign-identity"
+  },
+  {
+   "source": "keys-not-persisted-server-side",
+   "relation": "implements",
+   "target": "on-device-proving"
+  },
+  {
+   "source": "kms-wrong-key-fails",
+   "relation": "enforces",
+   "target": "aes-256-gcm-envelope"
+  },
+  {
+   "source": "secretkey-32-byte-check",
+   "relation": "enforces",
+   "target": "keys-not-persisted-server-side"
+  },
+  {
+   "source": "password-min-8",
+   "relation": "part-of",
+   "target": "jwt-bcrypt-auth"
+  },
+  {
+   "source": "bearer-token-format",
+   "relation": "part-of",
+   "target": "jwt-bcrypt-auth"
+  },
+  {
+   "source": "linked-did-format",
+   "relation": "enforces",
+   "target": "did-format-guard"
+  },
+  {
+   "source": "debug-key-production-guard",
+   "relation": "enforces",
+   "target": "keys-not-persisted-server-side"
+  },
+  {
+   "source": "audit-logging",
+   "relation": "implements",
+   "target": "auditability"
+  },
+  {
+   "source": "audit-logging",
+   "relation": "implements",
+   "target": "non-blocking-io"
+  },
+  {
+   "source": "audit-actor-derivation",
+   "relation": "part-of",
+   "target": "audit-logging"
+  },
+  {
+   "source": "audit-db-constraints",
+   "relation": "part-of",
+   "target": "audit-logging"
+  },
+  {
+   "source": "jwt-secret-ephemeral",
+   "relation": "constrains",
+   "target": "jwt-bcrypt-auth"
+  },
+  {
+   "source": "remove-debug-in-prod",
+   "relation": "constrains",
+   "target": "debug-key-production-guard"
+  },
+  {
+   "source": "turso-shared-store",
+   "relation": "part-of",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "teamdb-python-shim",
+   "relation": "implements",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "runtime-migration",
+   "relation": "derives-from",
+   "target": "single-line-sql"
+  },
+  {
+   "source": "runtime-migration",
+   "relation": "enables",
+   "target": "ratelimit-plan-tiers"
+  },
+  {
+   "source": "async-exec-writes",
+   "relation": "implements",
+   "target": "non-blocking-io"
+  },
+  {
+   "source": "metadata-only-store",
+   "relation": "implements",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "metadata-only-store",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "sql-quote-escaping",
+   "relation": "constrains",
+   "target": "raw-sql-interpolation"
+  },
+  {
+   "source": "single-line-sql",
+   "relation": "derives-from",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "raw-sql-interpolation",
+   "relation": "derives-from",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "async-write-loss-risk",
+   "relation": "derives-from",
+   "target": "async-exec-writes"
+  },
+  {
+   "source": "async-write-loss-risk",
+   "relation": "conflicts-with",
+   "target": "auditability"
+  },
+  {
+   "source": "serial-tests",
+   "relation": "derives-from",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "vite-proxy-api",
+   "relation": "derives-from",
+   "target": "port-3001"
+  },
+  {
+   "source": "statuslist-ui-console",
+   "relation": "implements",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "statuslist-ui-console",
+   "relation": "part-of",
+   "target": "identity-console"
+  },
+  {
+   "source": "web-console-validation",
+   "relation": "part-of",
+   "target": "identity-console"
+  },
+  {
+   "source": "admin-trust-mgmt",
+   "relation": "constrains",
+   "target": "eidas-trusted-lists"
+  },
+  {
+   "source": "expo-sdk-57",
+   "relation": "derives-from",
+   "target": "expo-conventions"
+  },
+  {
+   "source": "biometric-gating",
+   "relation": "implements",
+   "target": "user-presence"
+  },
+  {
+   "source": "e2e-share-encryption",
+   "relation": "implements",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "e2e-share-encryption",
+   "relation": "derives-from",
+   "target": "did-key-spec"
+  },
+  {
+   "source": "consent-wizard",
+   "relation": "implements",
+   "target": "user-consent"
+  },
+  {
+   "source": "consent-wizard",
+   "relation": "implements",
+   "target": "user-presence"
+  },
+  {
+   "source": "consent-wizard",
+   "relation": "enforces",
+   "target": "e2e-share-encryption"
+  },
+  {
+   "source": "share-requires-keyagreement",
+   "relation": "enforces",
+   "target": "e2e-share-encryption"
+  },
+  {
+   "source": "grant-max-90-days",
+   "relation": "part-of",
+   "target": "consent-wizard"
+  },
+  {
+   "source": "vault-regate",
+   "relation": "enforces",
+   "target": "biometric-gating"
+  },
+  {
+   "source": "honest-money-copy",
+   "relation": "implements",
+   "target": "honest-ux"
+  },
+  {
+   "source": "title-plaintext-only",
+   "relation": "implements",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "title-plaintext-only",
+   "relation": "part-of",
+   "target": "e2e-share-encryption"
+  },
+  {
+   "source": "network-retry-dedupe",
+   "relation": "part-of",
+   "target": "consent-wizard"
+  },
+  {
+   "source": "record-key-device-bound",
+   "relation": "constrains",
+   "target": "e2e-share-encryption"
+  },
+  {
+   "source": "scope-full-or-meta",
+   "relation": "constrains",
+   "target": "consent-wizard"
+  },
+  {
+   "source": "social-login-pending",
+   "relation": "part-of",
+   "target": "wallet-phase1"
+  },
+  {
+   "source": "share-field-level",
+   "relation": "constrains",
+   "target": "scope-full-or-meta"
+  },
+  {
+   "source": "share-field-level",
+   "relation": "implements",
+   "target": "data-minimization"
+  },
+  {
+   "source": "payments-pending",
+   "relation": "constrains",
+   "target": "honest-money-copy"
+  },
+  {
+   "source": "ondevice-did-pending",
+   "relation": "implements",
+   "target": "self-sovereign-identity"
+  },
+  {
+   "source": "ondevice-did-pending",
+   "relation": "part-of",
+   "target": "wallet-phase1"
+  },
+  {
+   "source": "openapi-31",
+   "relation": "implements",
+   "target": "standards-interop"
+  },
+  {
+   "source": "bun-runtime",
+   "relation": "conflicts-with",
+   "target": "systemd-node-tsx"
+  },
+  {
+   "source": "systemd-node-tsx",
+   "relation": "implements",
+   "target": "least-privilege"
+  },
+  {
+   "source": "ci-pipeline",
+   "relation": "enables",
+   "target": "deploy-pipeline"
+  },
+  {
+   "source": "health-endpoint",
+   "relation": "part-of",
+   "target": "port-3001"
+  },
+  {
+   "source": "deploy-target-todo",
+   "relation": "constrains",
+   "target": "deploy-pipeline"
+  },
+  {
+   "source": "admin-jwt-db-gate",
+   "relation": "implements",
+   "target": "least-privilege"
+  },
+  {
+   "source": "admin-jwt-db-gate",
+   "relation": "enforces",
+   "target": "admin-db-flag-source-of-truth"
+  },
+  {
+   "source": "admin-db-flag-source-of-truth",
+   "relation": "conflicts-with",
+   "target": "broken-jwtpayload-admin"
+  },
+  {
+   "source": "admin-seed-random-password",
+   "relation": "constrains",
+   "target": "admin-owner-seed"
+  },
+  {
+   "source": "admin-migrations-noop",
+   "relation": "derives-from",
+   "target": "single-line-sql"
+  },
+  {
+   "source": "admin-migrations-noop",
+   "relation": "constrains",
+   "target": "runtime-migration"
+  },
+  {
+   "source": "admin-all-actions-audited",
+   "relation": "implements",
+   "target": "auditability"
+  },
+  {
+   "source": "admin-cannot-suspend-admin-or-self",
+   "relation": "part-of",
+   "target": "admin-jwt-db-gate"
+  },
+  {
+   "source": "admin-apikey-valid-scopes",
+   "relation": "implements",
+   "target": "key-reveal-once"
+  },
+  {
+   "source": "admin-apikey-valid-scopes",
+   "relation": "part-of",
+   "target": "apikey-sha256-hashing"
+  },
+  {
+   "source": "admin-webhook-https-events",
+   "relation": "part-of",
+   "target": "webhook-design"
+  },
+  {
+   "source": "admin-health-detailed",
+   "relation": "implements",
+   "target": "graceful-degradation"
+  },
+  {
+   "source": "wallet-server-tables",
+   "relation": "part-of",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "wallet-remote-wipe",
+   "relation": "implements",
+   "target": "auditability"
+  },
+  {
+   "source": "wallet-quota-not-enforced",
+   "relation": "conflicts-with",
+   "target": "blob-quota-limits"
+  },
+  {
+   "source": "wallet-server-ciphertext-only",
+   "relation": "implements",
+   "target": "privacy-by-default"
+  },
+  {
+   "source": "wallet-server-ciphertext-only",
+   "relation": "part-of",
+   "target": "e2e-share-encryption"
+  },
+  {
+   "source": "wallet-consent-toggle",
+   "relation": "implements",
+   "target": "user-consent"
+  },
+  {
+   "source": "wallet-consent-toggle",
+   "relation": "implements",
+   "target": "aligned-economics"
+  },
+  {
+   "source": "wallet-consent-toggle",
+   "relation": "implements",
+   "target": "honest-ux"
+  },
+  {
+   "source": "wallet-grants-dual-role",
+   "relation": "part-of",
+   "target": "consent-wizard"
+  },
+  {
+   "source": "wallet-zk-present-endpoint",
+   "relation": "implements",
+   "target": "on-device-proving"
+  },
+  {
+   "source": "wallet-zk-present-endpoint",
+   "relation": "enforces",
+   "target": "orbis-zk-suite"
+  },
+  {
+   "source": "wallet-refresh-esm-gap",
+   "relation": "derives-from",
+   "target": "jwt-secret-ephemeral"
+  },
+  {
+   "source": "broken-statuslist-persistence",
+   "relation": "conflicts-with",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "broken-statuslist-persistence",
+   "relation": "part-of",
+   "target": "main-ci-red"
+  },
+  {
+   "source": "broken-jwtpayload-admin",
+   "relation": "conflicts-with",
+   "target": "admin-db-flag-source-of-truth"
+  },
+  {
+   "source": "broken-jwtpayload-admin",
+   "relation": "part-of",
+   "target": "main-ci-red"
+  },
+  {
+   "source": "broken-wallet-no-jwt-middleware",
+   "relation": "conflicts-with",
+   "target": "wallet-server-tables"
+  },
+  {
+   "source": "broken-admin-health-actiontype",
+   "relation": "conflicts-with",
+   "target": "audit-logging"
+  },
+  {
+   "source": "broken-admin-health-actiontype",
+   "relation": "part-of",
+   "target": "main-ci-red"
+  },
+  {
+   "source": "broken-did-owner-field",
+   "relation": "conflicts-with",
+   "target": "did-owner-scoping"
+  },
+  {
+   "source": "broken-did-owner-field",
+   "relation": "part-of",
+   "target": "main-ci-red"
+  },
+  {
+   "source": "broken-web-lockfile",
+   "relation": "conflicts-with",
+   "target": "web-vitest-harness"
+  },
+  {
+   "source": "broken-web-lockfile",
+   "relation": "part-of",
+   "target": "main-ci-red"
+  },
+  {
+   "source": "main-ci-red",
+   "relation": "conflicts-with",
+   "target": "ci-pipeline"
+  },
+  {
+   "source": "site-vercel-golive",
+   "relation": "part-of",
+   "target": "site-tanstack-marketing"
+  },
+  {
+   "source": "web-smoke-test",
+   "relation": "part-of",
+   "target": "web-vitest-harness"
+  },
+  {
+   "source": "sql-execfilesync-no-shell",
+   "relation": "part-of",
+   "target": "team-db-shell-store"
+  },
+  {
+   "source": "sql-execfilesync-no-shell",
+   "relation": "constrains",
+   "target": "raw-sql-interpolation"
+  }
+ ]
+};
+
+const TYPE_COLOR = {
+  law: "#e3b655", decision: "#5cc8e8", rule: "#6fd598",
+  constraint: "#e8756b", direction: "#a78be8", principle: "#f2efe6",
+};
+const TYPE_ORDER = ["principle", "decision", "rule", "constraint", "law", "direction"];
+
+const nodes = DATA.nodes;
+const byId = new Map(nodes.map(n => [n.id, n]));
+const edges = DATA.edges.filter(e => byId.has(e.source) && byId.has(e.target));
+const neighbors = new Map(nodes.map(n => [n.id, []]));
+for (const e of edges) {
+  neighbors.get(e.source).push({ other: e.target, rel: e.relation, dir: "→" });
+  neighbors.get(e.target).push({ other: e.source, rel: e.relation, dir: "←" });
+}
+
+// ---- state ----
+const DOMAIN_ORDER = [...new Set(nodes.map(n => n.domain))];
+const typeOn = Object.fromEntries(TYPE_ORDER.map(t => [t, true]));
+const domainOn = Object.fromEntries(DOMAIN_ORDER.map(d => [d, true]));
+let yaw = 0.6, pitch = 0.35, dist = 720;
+let spinEnabled = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+let ringsOn = true;
+let selected = null, hovered = null;
+let targetYaw = null, targetPitch = null; // eased focus animation
+
+// ---- canvas ----
+const canvas = document.getElementById("space");
+const ctx = canvas.getContext("2d");
+let W = 0, H = 0, dpr = 1;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+}
+window.addEventListener("resize", resize); resize();
+
+// starfield backdrop (deterministic)
+const stars = [];
+(function () {
+  let s = 42;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 130; i++) stars.push({ x: rnd(), y: rnd(), r: rnd() * 1.1 + 0.2, a: rnd() * 0.5 + 0.1 });
+})();
+
+function project(p) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  let x = p[0] * cy + p[2] * sy;
+  let z = -p[0] * sy + p[2] * cy;
+  let y = p[1] * cp - z * sp;
+  z = p[1] * sp + z * cp;
+  const scale = dist / (dist + z);
+  return { x: W / 2 + x * scale, y: H / 2 + y * scale, z, scale };
+}
+
+const projected = new Map();
+function visible(n) { return typeOn[n.type] && domainOn[n.domain]; }
+
+const SHELLS = [
+  ["principle", 75], ["decision", 155], ["rule", 225],
+  ["constraint", 275], ["law", 335], ["direction", 395],
+];
+function drawRing(r, color) {
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i <= 72; i++) {
+    const a = (i / 72) * Math.PI * 2;
+    const p = project([r * Math.cos(a), 0, r * Math.sin(a)]);
+    if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+}
+
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  // vignette ground
+  const vg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+  vg.addColorStop(0, "rgba(23, 33, 58, 0.55)");
+  vg.addColorStop(1, "rgba(7, 11, 20, 0)");
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+
+  for (const st of stars) {
+    ctx.globalAlpha = st.a;
+    ctx.fillStyle = "#c9d4ea";
+    ctx.beginPath(); ctx.arc(st.x * W, st.y * H, st.r, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  projected.clear();
+  for (const n of nodes) projected.set(n.id, project(n.pos));
+
+  // orbital shell rings
+  if (ringsOn) {
+    ctx.lineWidth = 1;
+    for (const [t, r] of SHELLS) {
+      if (!typeOn[t]) continue;
+      ctx.globalAlpha = 0.10;
+      drawRing(r, TYPE_COLOR[t]);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  const focusSet = selected ? new Set([selected, ...neighbors.get(selected).map(e => e.other)]) : null;
+
+  // edges
+  for (const e of edges) {
+    const a = byId.get(e.source), b = byId.get(e.target);
+    if (!visible(a) || !visible(b)) continue;
+    const pa = projected.get(a.id), pb = projected.get(b.id);
+    const onFocus = focusSet && (e.source === selected || e.target === selected);
+    if (focusSet && !onFocus) ctx.globalAlpha = 0.04;
+    else ctx.globalAlpha = onFocus ? 0.55 : 0.13;
+    ctx.strokeStyle = onFocus ? "#5cc8e8" : "#8b95aa";
+    ctx.lineWidth = onFocus ? 1.2 : 0.6;
+    ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // nodes, back to front
+  const order = [...nodes].filter(visible).sort((a, b) => projected.get(b.id).z - projected.get(a.id).z);
+  for (const n of order) {
+    const p = projected.get(n.id);
+    const base = n.type === "principle" ? 6.5 : 4.5;
+    const r = Math.max(1.5, base * p.scale);
+    const dim = focusSet && !focusSet.has(n.id);
+    const depth = Math.max(0.25, Math.min(1, p.scale * p.scale));
+    const col = TYPE_COLOR[n.type];
+    // soft halo
+    if (!dim) {
+      const halo = ctx.createRadialGradient(p.x, p.y, r * 0.4, p.x, p.y, r * 3);
+      halo.addColorStop(0, col + "55");
+      halo.addColorStop(1, col + "00");
+      ctx.globalAlpha = depth * 0.8;
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 3, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = dim ? 0.15 : depth;
+    const core = ctx.createRadialGradient(p.x - r * 0.3, p.y - r * 0.3, 0, p.x, p.y, r);
+    core.addColorStop(0, "#ffffff");
+    core.addColorStop(0.25, col);
+    core.addColorStop(1, col);
+    ctx.fillStyle = core;
+    if (n.id === selected || n.id === hovered) {
+      ctx.shadowColor = col; ctx.shadowBlur = 22;
+    }
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
+    ctx.shadowBlur = 0;
+    if (n.id === selected) {
+      ctx.strokeStyle = "#e9edf5"; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r + 4, 0, 7); ctx.stroke();
+    }
+    // labels: selected, hovered, neighbors of selected, or principles
+    if (!dim && (n.id === selected || n.id === hovered || (focusSet && focusSet.has(n.id)) || (n.type === "principle" && !focusSet && dist < 480))) {
+      ctx.globalAlpha = n.id === selected || n.id === hovered ? 1 : 0.75;
+      ctx.font = "10px " + "ui-monospace, Menlo, monospace";
+      ctx.fillStyle = "#e9edf5";
+      ctx.fillText(n.title.length > 38 ? n.title.slice(0, 37) + "…" : n.title, p.x + r + 5, p.y + 3);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function tick() {
+  if (targetYaw !== null) {
+    yaw += (targetYaw - yaw) * 0.12; pitch += (targetPitch - pitch) * 0.12;
+    if (Math.abs(targetYaw - yaw) < 0.002 && Math.abs(targetPitch - pitch) < 0.002) { targetYaw = targetPitch = null; }
+  } else if (spinEnabled && !dragging && !selected) {
+    yaw += 0.0016;
+  }
+  draw();
+  requestAnimationFrame(tick);
+}
+
+// ---- interaction ----
+let dragging = false, moved = false, lastX = 0, lastY = 0, pinchD = 0;
+canvas.addEventListener("pointerdown", ev => {
+  dragging = true; moved = false; lastX = ev.clientX; lastY = ev.clientY;
+  canvas.classList.add("dragging"); canvas.setPointerCapture(ev.pointerId);
+});
+canvas.addEventListener("pointermove", ev => {
+  if (dragging) {
+    const dx = ev.clientX - lastX, dy = ev.clientY - lastY;
+    if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+    yaw += dx * 0.005; pitch = Math.max(-1.4, Math.min(1.4, pitch + dy * 0.005));
+    targetYaw = targetPitch = null;
+    lastX = ev.clientX; lastY = ev.clientY;
+  } else {
+    hovered = pick(ev.clientX, ev.clientY);
+    const tip = document.getElementById("tooltip");
+    if (hovered) {
+      const n = byId.get(hovered);
+      tip.style.display = "block";
+      tip.innerHTML = `<span class="tid">${esc(n.type)} · ${esc(n.domain)} · ${esc(n.id)}</span><br>${esc(n.title)}`;
+      tip.style.left = Math.min(ev.clientX + 14, W - 280) + "px";
+      tip.style.top = (ev.clientY + 14) + "px";
+      canvas.style.cursor = "pointer";
+    } else {
+      tip.style.display = "none";
+      canvas.style.cursor = dragging ? "grabbing" : "grab";
+    }
+  }
+});
+canvas.addEventListener("pointerup", ev => {
+  dragging = false; canvas.classList.remove("dragging");
+  if (!moved) {
+    const hit = pick(ev.clientX, ev.clientY);
+    if (hit) select(hit); else deselect();
+  }
+});
+canvas.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  dist = Math.max(260, Math.min(2200, dist + ev.deltaY * 0.8));
+}, { passive: false });
+
+canvas.addEventListener("touchstart", ev => {
+  if (ev.touches.length === 2) pinchD = Math.hypot(
+    ev.touches[0].clientX - ev.touches[1].clientX, ev.touches[0].clientY - ev.touches[1].clientY);
+});
+canvas.addEventListener("touchmove", ev => {
+  if (ev.touches.length === 2) {
+    const d = Math.hypot(ev.touches[0].clientX - ev.touches[1].clientX, ev.touches[0].clientY - ev.touches[1].clientY);
+    dist = Math.max(260, Math.min(2200, dist - (d - pinchD) * 2));
+    pinchD = d;
+  }
+});
+
+function pick(cx, cy) {
+  let best = null, bestD = 14;
+  for (const n of nodes) {
+    if (!visible(n)) continue;
+    const p = projected.get(n.id);
+    if (!p) continue;
+    const d = Math.hypot(p.x - cx, p.y - cy);
+    if (d < bestD) { bestD = d; best = n.id; }
+  }
+  return best;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---- selection & panel ----
+function select(id) {
+  selected = id;
+  const n = byId.get(id);
+  // rotate the camera so the node faces front
+  const [x, , z] = n.pos;
+  if (x || z) targetYaw = Math.atan2(-x, z) + Math.PI, targetPitch = pitch;
+  const rel = neighbors.get(id);
+  const body = document.getElementById("panel-body");
+  body.innerHTML = `
+    <span class="type-tag" style="background:${TYPE_COLOR[n.type]}">${esc(n.type)}</span>
+    <span class="type-tag" style="background:transparent;border:1px solid var(--line);color:var(--muted)">${esc(n.domain || "")}</span>
+    <h2>${esc(n.title)}</h2>
+    <div class="nid">${esc(n.id)}</div>
+    <p class="stmt">${esc(n.statement)}</p>
+    <div class="src">${esc(n.source || "—")}</div>
+    ${rel.length ? "<h3>Connections</h3>" : ""}
+    ${rel.map(e => {
+      const o = byId.get(e.other);
+      return `<button class="edge-row" data-go="${esc(e.other)}">
+        <span class="rel">${esc(e.dir)} ${esc(e.rel)}</span>
+        <span style="color:${TYPE_COLOR[o.type]}">●</span> ${esc(o.title)}</button>`;
+    }).join("")}`;
+  body.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => select(b.dataset.go)));
+  document.getElementById("panel").classList.add("open");
+}
+function deselect() {
+  selected = null;
+  document.getElementById("panel").classList.remove("open");
+}
+document.getElementById("close-panel").addEventListener("click", deselect);
+window.addEventListener("keydown", ev => { if (ev.key === "Escape") deselect(); });
+
+// ---- legend / filters ----
+const typesEl = document.getElementById("types");
+for (const t of TYPE_ORDER) {
+  const count = nodes.filter(n => n.type === t).length;
+  const chip = document.createElement("button");
+  chip.className = "chip"; chip.setAttribute("aria-pressed", "true");
+  chip.innerHTML = `<span class="dot" style="background:${TYPE_COLOR[t]}"></span>${t}s<span class="n">${count}</span>`;
+  chip.addEventListener("click", () => {
+    typeOn[t] = !typeOn[t];
+    chip.classList.toggle("off", !typeOn[t]);
+    chip.setAttribute("aria-pressed", String(typeOn[t]));
+    if (selected && !typeOn[byId.get(selected).type]) deselect();
+  });
+  typesEl.appendChild(chip);
+}
+const domainsEl = document.getElementById("domains");
+for (const d of DOMAIN_ORDER) {
+  const count = nodes.filter(n => n.domain === d).length;
+  const chip = document.createElement("button");
+  chip.className = "chip"; chip.setAttribute("aria-pressed", "true");
+  chip.innerHTML = `${d}<span class="n">${count}</span>`;
+  chip.addEventListener("click", () => {
+    domainOn[d] = !domainOn[d];
+    chip.classList.toggle("off", !domainOn[d]);
+    chip.setAttribute("aria-pressed", String(domainOn[d]));
+    if (selected && !domainOn[byId.get(selected).domain]) deselect();
+  });
+  domainsEl.appendChild(chip);
+}
+
+// ---- view controls ----
+const spinBtn = document.getElementById("spin-toggle");
+function renderSpinBtn() {
+  spinBtn.textContent = spinEnabled ? "⏸" : "▶";
+  spinBtn.classList.toggle("active", spinEnabled);
+}
+spinBtn.addEventListener("click", () => { spinEnabled = !spinEnabled; renderSpinBtn(); });
+renderSpinBtn();
+const ringsBtn = document.getElementById("rings-toggle");
+ringsBtn.addEventListener("click", () => {
+  ringsOn = !ringsOn;
+  ringsBtn.classList.toggle("active", ringsOn);
+});
+document.getElementById("counts").textContent =
+  `${nodes.length} nodes · ${edges.length} edges · ${DATA.meta && DATA.meta.generated ? "as of " + DATA.meta.generated : ""}`;
+
+// ---- search ----
+const searchEl = document.getElementById("search");
+const resultsEl = document.getElementById("results");
+searchEl.addEventListener("input", () => {
+  const q = searchEl.value.trim().toLowerCase();
+  if (!q) { resultsEl.style.display = "none"; resultsEl.innerHTML = ""; return; }
+  const hits = nodes.filter(n =>
+    n.id.includes(q) || n.title.toLowerCase().includes(q) ||
+    n.statement.toLowerCase().includes(q) || (n.domain || "").includes(q)
+  ).slice(0, 12);
+  resultsEl.innerHTML = hits.map(n =>
+    `<button data-go="${esc(n.id)}"><span style="color:${TYPE_COLOR[n.type]}">●</span> ${esc(n.title)}<span class="rid">${esc(n.id)}</span></button>`
+  ).join("") || `<button disabled>no matches</button>`;
+  resultsEl.style.display = "block";
+  resultsEl.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
+    select(b.dataset.go); resultsEl.style.display = "none"; searchEl.value = "";
+  }));
+});
+searchEl.addEventListener("keydown", ev => {
+  if (ev.key === "Enter") {
+    const first = resultsEl.querySelector("[data-go]");
+    if (first) { select(first.dataset.go); resultsEl.style.display = "none"; searchEl.value = ""; }
+  }
+});
+
+// ---- guided tours ----
+const TOURS = [
+  {
+    name: "Start here",
+    steps: [
+      ["self-sovereign-identity", "The founding idea: your identity is something you hold, not an account a company grants you. Everything else in this map serves this."],
+      ["member-owned", "Orbis is owned by its members, not shareholders — members hold 50% of the operating company and control their own data."],
+      ["privacy-by-default", "The platform is built so it physically can't read your data: servers store ciphertext only, and nothing personal goes on chain."],
+      ["keys-not-persisted-server-side", "Your private keys never touch the server. Every signing operation requires you to bring your own key — so a server breach can't steal identities."],
+      ["data-minimization", "You can prove a fact (over 18, licensed) without revealing the underlying data. Fields you weren't asked for are hidden automatically."],
+      ["w3c-did-core", "It's all built on open W3C standards, so an Orbis identity works with the wider SSI world instead of locking you in."],
+      ["team-db-shell-store", "One quirky plumbing fact worth knowing: all storage goes through a 'team-db' command-line tool — the source of several rules you'll meet in the next tour."],
+      ["identity-console", "Where humans touch all of this: the web console for DIDs, credentials, trust and messaging — plus a mobile wallet with biometric locks."],
+    ],
+  },
+  {
+    name: "Hard rules before you code",
+    steps: [
+      ["single-line-sql", "Rule #1 that bites every newcomer: the team-db CLI only accepts single-line SQL. Multi-line statements silently break."],
+      ["keys-not-persisted-server-side", "Never write a private key to the database or logs — the entire security model depends on this."],
+      ["async-exec-writes", "High-frequency writes (audit logs, webhooks, usage) must use non-blocking async exec. execSync on a hot path blocks the whole event loop."],
+      ["predicates-over-hidden-only", "ZK predicates (like 'age >= 18') are only valid over hidden fields. A predicate on a revealed field fails verification — by design."],
+      ["secretkey-32-byte-check", "Every endpoint that accepts a secret key validates it's exactly 32 bytes of hex. Follow the pattern when adding endpoints."],
+      ["debug-key-production-guard", "Key material in responses is gated behind NODE_ENV !== production. Never add a debug field that leaks keys in prod."],
+      ["serial-tests", "Tests share one database file, so suites run serially. Don't enable test parallelism — you'll get phantom write races."],
+      ["metadata-only-store", "The shared store is for non-sensitive metadata only. Personal data never goes in it — encrypt on-device instead."],
+    ],
+  },
+  {
+    name: "What's broken right now",
+    steps: [
+      ["main-ci-red", "The honest state of the repo: both CI lanes on main are failing, and every PR inherits red checks until these are fixed."],
+      ["broken-statuslist-persistence", "The credential-revocation code calls database functions that were never written — the backend typecheck fails here."],
+      ["broken-jwtpayload-admin", "Code checks req.user.admin, but tokens never carry an admin flag. Besides the compile error, every wallet admin endpoint silently returns 403."],
+      ["broken-wallet-no-jwt-middleware", "The wallet API is mounted without its authentication middleware — all wallet endpoints currently answer 401."],
+      ["broken-admin-health-actiontype", "A one-line fix: the admin health check logs an audit action name that isn't in the allowed list."],
+      ["broken-did-owner-field", "DID records gained an owner field, but the DID module was never updated to provide it."],
+      ["broken-web-lockfile", "The web app's lockfile is out of sync with its package.json, so CI's npm ci aborts before tests even run."],
+    ],
+  },
+  {
+    name: "How members own Orbis",
+    steps: [
+      ["member-owned", "The principle: the people who create the network's value own the network."],
+      ["member-ownership", "Concretely: 50% of the operating company belongs to the Member Trust, with quarterly cash distributions to members."],
+      ["five-entity-structure", "Five legal entities make it durable: a perpetual trust holding the IP, the operating company, the member trust, a vested fund, and regional subsidiaries."],
+      ["perpetual-trust", "A South Dakota dynasty trust holds all IP and governance authority forever — creditor-protected, built to outlive any company."],
+      ["distribution-formula", "How money flows to members: 30% by activity, 25% equally, 25% by country volume, 10% to low-income members, 10% country-weighted."],
+      ["orbis-coin", "A 100-billion utility token: 50 coins per verified member, fee discounts, staking, and governance power."],
+      ["multi-tier-democracy", "One member, one vote — including a member veto over any change to privacy rules."],
+      ["roadmap-p1-foundation", "Where it's headed: US + EU launch and 10M members in years 1-2, scaling toward a billion members as a global identity standard."],
+    ],
+  },
+];
+for (const tour of TOURS) tour.steps = tour.steps.filter(s => byId.has(s[0]));
+
+let activeTour = null, tourIdx = 0;
+const tourbar = document.getElementById("tourbar");
+function startTour(t) {
+  activeTour = t; tourIdx = 0; spinEnabled = false; renderSpinBtn();
+  document.getElementById("intro").hidden = true;
+  showTourStep();
+}
+function showTourStep() {
+  const [id, note] = activeTour.steps[tourIdx];
+  select(id);
+  document.getElementById("t-title").textContent = activeTour.name;
+  document.getElementById("t-step").textContent = `${tourIdx + 1} / ${activeTour.steps.length}`;
+  document.getElementById("t-note").textContent = note;
+  document.getElementById("t-prev").disabled = tourIdx === 0;
+  document.getElementById("t-next").textContent = tourIdx === activeTour.steps.length - 1 ? "Finish ✓" : "Next →";
+  tourbar.classList.add("on");
+}
+function exitTour() { activeTour = null; tourbar.classList.remove("on"); deselect(); }
+document.getElementById("t-prev").addEventListener("click", () => { if (tourIdx > 0) { tourIdx--; showTourStep(); } });
+document.getElementById("t-next").addEventListener("click", () => {
+  if (tourIdx < activeTour.steps.length - 1) { tourIdx++; showTourStep(); } else exitTour();
+});
+document.getElementById("t-exit").addEventListener("click", exitTour);
+
+const toursEl = document.getElementById("tours");
+for (const t of TOURS) {
+  const chip = document.createElement("button");
+  chip.className = "chip";
+  chip.innerHTML = `▶ ${t.name}`;
+  chip.addEventListener("click", () => startTour(t));
+  toursEl.appendChild(chip);
+}
+
+// ---- intro overlay ----
+const intro = document.getElementById("intro");
+let introSeen = false;
+try { introSeen = sessionStorage.getItem("orbis-map-intro") === "1"; } catch (e) {}
+if (!introSeen) intro.hidden = false;
+function dismissIntro() {
+  intro.hidden = true;
+  try { sessionStorage.setItem("orbis-map-intro", "1"); } catch (e) {}
+}
+document.getElementById("intro-explore").addEventListener("click", dismissIntro);
+document.getElementById("intro-tour").addEventListener("click", () => { dismissIntro(); startTour(TOURS[0]); });
+
+// ---- list mode ----
+const listpane = document.getElementById("listpane");
+const listBody = document.getElementById("list-body");
+const DOMAIN_LABEL = {
+  core: "Core values", governance: "Governance & ownership", did: "Identifiers (DIDs)",
+  vc: "Credentials", zk: "Selective disclosure (ZK)", trust: "Trust registry",
+  didcomm: "Encrypted messaging", gateway: "Developer gateway", admin: "Administration",
+  security: "Security & auth", data: "Storage & data", web: "Web console & site",
+  wallet: "Mobile wallet", ops: "Operations & CI",
+};
+{
+  let html = "";
+  for (const d of ["core", ...DOMAIN_ORDER.filter(x => x !== "core")]) {
+    const group = nodes.filter(n => n.domain === d);
+    if (!group.length) continue;
+    html += `<h3>${esc(DOMAIN_LABEL[d] || d)}</h3>`;
+    for (const n of group) {
+      html += `<button class="row" data-go="${esc(n.id)}">
+        <span class="dot" style="background:${TYPE_COLOR[n.type]}"></span>${esc(n.title)}</button>`;
+    }
+  }
+  listBody.innerHTML = html;
+  listBody.querySelectorAll("[data-go]").forEach(b =>
+    b.addEventListener("click", () => { select(b.dataset.go); }));
+}
+document.getElementById("list-toggle").addEventListener("click", () =>
+  listpane.classList.toggle("open"));
+document.getElementById("close-list").addEventListener("click", () =>
+  listpane.classList.remove("open"));
+
+tick();
+</script>
