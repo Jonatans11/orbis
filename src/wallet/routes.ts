@@ -2,55 +2,84 @@
  * ORBIS.ID Wallet API Routes.
  *
  * Full wallet API surface including lifecycle, credential backup,
- * encrypted data vault, data sharing grants, DIDComm push, and admin.
+ * encrypted data vault, data sharing grants (consent ledger), grantee
+ * redemption, DIDComm push, and admin.
  *
- * All endpoints require JWT auth (existing middleware).
+ * Canonical contract: m/core/src/api/endpoints.ts (the mobile clients).
+ * All endpoints require JWT auth (requireJwt below) except POST /refresh.
+ * Admin endpoints additionally require the DB-verified admin role.
  * Device binding via X-Orbis-Device-Id header.
+ *
+ * The server stores ciphertext plus small plaintext meta (title ≤120 + type)
+ * only — record keys and sealed grant keys are never openable server-side.
  */
 
 import { Router, type Request, type Response } from "express";
-import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { v4 as uuidv4 } from "uuid";
-import { randomBytes } from "node:crypto";
-import { initWalletTables } from "./db.js";
+import * as walletDb from "./db.js";
+import { requireJwt, findUserById, generateToken } from "../security/jwt.js";
+import { requireAdmin } from "../admin/auth.js";
 import { logAudit, getClientIp } from "../security/audit.js";
 
 const router = Router();
-const TEAM_DB = "team-db";
 
-function query(sql: string): any[] {
-  const normalized = sql.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-  try {
-    const output = execFileSync(TEAM_DB, [normalized], { encoding: "utf-8", timeout: 10_000 });
-    return JSON.parse(output.trim());
-  } catch (err: any) {
-    if (err.stderr?.includes("no such table")) return [];
-    throw new Error(`DB query failed: ${err.message}`);
-  }
-}
+const QUOTA_LIMIT_BYTES = 50 * 1024 * 1024; // 50 MB free tier
+const MAX_GRANT_DAYS = 90;
+const VAULT_CATEGORIES = ["identity", "medical", "financial", "assets", "documents", "education", "membership"];
+const GRANT_SCOPES = ["full", "meta-only"];
 
-function quote(val: string | null | undefined): string {
-  if (val === null || val === undefined) return "NULL";
-  return `'${val.replace(/'/g, "''")}'`;
-}
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface WalletDevice {
-  id: string;
-  user_id: string;
-  wallet_id: string;
-  device_name: string | null;
-  platform: string | null;
-  push_token: string | null;
-  wiped: number;
-  wipe_reason: string | null;
-  created_at: string;
-  last_seen_at: string | null;
+/** Base for grantee share links; deep-links into the wallet's ShareRedeem screen. */
+function shareUrlBase(): string {
+  return process.env.ORBIS_PUBLIC_URL || "https://orbis.id";
 }
 
 function getDeviceId(req: Request): string | null {
   return (req.headers["x-orbis-device-id"] as string) || null;
+}
+
+/** Express 5 types params as string | string[]; wallet routes never use repeatable params. */
+function param(req: Request, name: string): string {
+  const v = req.params[name];
+  return Array.isArray(v) ? String(v[0]) : String(v);
+}
+
+function parseMetaJson(metaJson: string): Record<string, unknown> {
+  try {
+    return JSON.parse(metaJson || "{}");
+  } catch {
+    return {};
+  }
+}
+
+// ===========================================================================
+// 0. TOKEN REFRESH (the only route that must work WITHOUT a live JWT)
+// ===========================================================================
+/**
+ * POST /api/wallet/refresh
+ * Exchange a refresh token for a new JWT (signed with the shared secret).
+ * Body: { refreshToken }
+ */
+router.post("/refresh", (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) { res.status(400).json({ error: true, message: "refreshToken is required" }); return; }
+    const hash = createHash("sha256").update(refreshToken).digest("hex");
+    const tokenRow = walletDb.findRefreshToken(hash);
+    if (!tokenRow) { res.status(401).json({ error: true, message: "Invalid or expired refresh token" }); return; }
+    const user = findUserById(tokenRow.user_id);
+    if (!user) { res.status(401).json({ error: true, message: "User no longer exists" }); return; }
+    res.json({ success: true, token: generateToken(user) });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+// Everything below requires a valid Bearer JWT (sets req.user).
+router.use(requireJwt);
+
+function userId(req: Request): string {
+  return req.user!.sub;
 }
 
 // ===========================================================================
@@ -63,279 +92,391 @@ function getDeviceId(req: Request): string | null {
  */
 router.post("/register", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    initWalletTables();
+    walletDb.initWalletTables();
     const { deviceName, platform, pushToken } = req.body;
-    const walletId = uuidv4();
-    const deviceId = uuidv4();
     if (platform && !["ios", "android", "web"].includes(platform)) {
       res.status(400).json({ error: true, message: "platform must be ios, android, or web" });
       return;
     }
-    query(`INSERT INTO wallet_devices (id, user_id, wallet_id, device_name, platform, push_token) VALUES (${quote(deviceId)}, ${quote(userId)}, ${quote(walletId)}, ${quote(deviceName || null)}, ${quote(platform || null)}, ${quote(pushToken || null)})`);
-    if (pushToken) {
-      query(`INSERT INTO wallet_push_tokens (id, device_id, user_id, push_token) VALUES (${quote(uuidv4())}, ${quote(deviceId)}, ${quote(userId)}, ${quote(pushToken)})`);
-    }
-    res.status(201).json({
-      success: true,
-      walletId,
-      deviceId,
-      createdAt: new Date().toISOString(),
-    });
+    const walletId = uuidv4();
+    const deviceId = uuidv4();
+    walletDb.registerDevice(deviceId, userId(req), walletId, deviceName || null, platform || null, pushToken || null);
+    if (pushToken) walletDb.updatePushToken(deviceId, userId(req), pushToken);
+    res.status(201).json({ success: true, walletId, deviceId, createdAt: new Date().toISOString() });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
  * GET /api/wallet/status
- * Poll on app foreground. Returns wallet status.
- * If admin flagged wipe → HTTP 410 WALLET_WIPED.
+ * Poll on app foreground. If admin flagged wipe → HTTP 410 WALLET_WIPED.
  */
 router.get("/status", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const deviceId = getDeviceId(req);
-    const devices = query(`SELECT * FROM wallet_devices WHERE user_id = ${quote(userId)} ORDER BY created_at DESC`) as WalletDevice[];
-    const wipedDevice = devices.find((d) => d.wiped === 1);
+    const devices = walletDb.getDevicesByUser(userId(req));
+    const wipedDevice = devices.find((d: any) => d.wiped === 1);
     if (wipedDevice) {
       res.status(410).json({ error: true, code: "WALLET_WIPED", message: wipedDevice.wipe_reason || "Wallet has been remotely wiped" });
       return;
     }
-    if (deviceId) {
-      query(`UPDATE wallet_devices SET last_seen_at = datetime('now') WHERE id = ${quote(deviceId)}`);
-    }
-    // Compute quota: sum of vault record sizes
-    const quotaRows = query(`SELECT COALESCE(SUM(size), 0) as used FROM vault_records WHERE user_id = ${quote(userId)}`);
-    const quotaUsedBytes = (quotaRows[0] as any)?.used || 0;
+    const deviceId = getDeviceId(req);
+    if (deviceId) walletDb.updateDeviceLastSeen(deviceId);
     res.json({
       success: true,
       walletId: devices[0]?.wallet_id || null,
       wiped: false,
       deviceCount: devices.length,
-      quotaUsedBytes,
-      quotaLimitBytes: 50 * 1024 * 1024, // 50 MB free tier
+      quotaUsedBytes: walletDb.getVaultQuotaUsed(userId(req)),
+      quotaLimitBytes: QUOTA_LIMIT_BYTES,
     });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
  * DELETE /api/wallet/device/:deviceId
  * Unregister a device (user-initiated).
  */
 router.delete("/device/:deviceId", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { deviceId } = req.params;
-    query(`DELETE FROM wallet_devices WHERE id = ${quote(deviceId)} AND user_id = ${quote(userId)}`);
-    query(`DELETE FROM wallet_push_tokens WHERE device_id = ${quote(deviceId)}`);
+    walletDb.unregisterDevice(param(req, "deviceId"), userId(req));
     res.json({ success: true, message: "Device unregistered" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-// ===========================================================================
-// 2. PUSH TOKENS
-// ===========================================================================
+
 /**
  * PUT /api/wallet/push-token
  * Update the push token for a device (e.g., after token refresh).
- * Body: { deviceId, pushToken }
+ * Body: { deviceId?, pushToken } — deviceId falls back to X-Orbis-Device-Id.
  */
 router.put("/push-token", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { deviceId, pushToken } = req.body;
-    if (!deviceId || !pushToken) { res.status(400).json({ error: true, message: "deviceId and pushToken are required" }); return; }
-    query(`UPDATE wallet_devices SET push_token = ${quote(pushToken)}, last_seen_at = datetime('now') WHERE id = ${quote(deviceId)} AND user_id = ${quote(userId)}`);
-    query(`INSERT OR REPLACE INTO wallet_push_tokens (id, device_id, user_id, push_token) VALUES (${quote(uuidv4())}, ${quote(deviceId)}, ${quote(userId)}, ${quote(pushToken)})`);
+    const { pushToken } = req.body;
+    const deviceId = req.body.deviceId || getDeviceId(req);
+    if (!deviceId || !pushToken) { res.status(400).json({ error: true, message: "deviceId (or X-Orbis-Device-Id header) and pushToken are required" }); return; }
+    walletDb.updatePushToken(deviceId, userId(req), pushToken);
     res.json({ success: true, message: "Push token updated" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 // ===========================================================================
-// 3. CREDENTIAL BACKUP
+// 2. CREDENTIAL BACKUP  (POST/GET/DELETE /api/wallet/credentials/backup)
 // ===========================================================================
 /**
- * PUT /api/wallet/backup/:localId
- * Upsert a credential backup item.
- * Body: { category, ciphertext, iv, alg?, size }
+ * POST /api/wallet/credentials/backup
+ * Upsert a batch of encrypted credential backups.
+ * Body: { items: [{ localId, category, ciphertext, iv, alg? }] }
  */
-router.put("/backup/:localId", (req: Request, res: Response) => {
+router.post("/credentials/backup", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { localId } = req.params;
-    const { category, ciphertext, iv, alg, size } = req.body;
-    if (!category || !ciphertext || !iv) { res.status(400).json({ error: true, message: "category, ciphertext, and iv are required" }); return; }
-    if (Buffer.byteLength(ciphertext, "base64") > 50 * 1024 * 1024) { res.status(413).json({ error: true, message: "Payload exceeds 50 MB limit" }); return; }
-    query(`INSERT OR REPLACE INTO wallet_backup_items (local_id, user_id, category, ciphertext, iv, alg, size, updated_at) VALUES (${quote(localId)}, ${quote(userId)}, ${quote(category)}, ${quote(ciphertext)}, ${quote(iv)}, ${quote(alg || "A256GCM")}, ${size || 0}, datetime('now'))`);
-    res.json({ success: true, message: "Backup item saved" });
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: true, message: "items array is required" });
+      return;
+    }
+    const results = items.map((item: any) => {
+      const { localId, category, ciphertext, iv, alg } = item || {};
+      if (!localId || !category || !ciphertext || !iv) {
+        return { localId: localId || null, status: "error" as const, message: "localId, category, ciphertext, and iv are required" };
+      }
+      const size = Buffer.byteLength(ciphertext, "base64");
+      if (size > QUOTA_LIMIT_BYTES) {
+        return { localId, status: "error" as const, message: "Payload exceeds 50 MB limit" };
+      }
+      walletDb.upsertBackupItem(userId(req), localId, category, ciphertext, iv, alg || "A256GCM", size);
+      return { localId, status: "created" as const, size };
+    });
+    res.json({ success: results.every((r) => r.status === "created"), results });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
- * GET /api/wallet/backup
- * List backup items (metadata only, no ciphertext by default).
- * Query: ?includeCiphertext=true to get encrypted payloads.
+ * GET /api/wallet/credentials/backup
+ * List backup items (metadata only; ?include=ciphertext for payloads).
  */
-router.get("/backup", (req: Request, res: Response) => {
+router.get("/credentials/backup", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const includeCiphertext = req.query.includeCiphertext === "true";
-    const cols = includeCiphertext ? "*" : "local_id, category, size, updated_at";
-    const items = query(`SELECT ${cols} FROM wallet_backup_items WHERE user_id = ${quote(userId)} ORDER BY updated_at DESC`);
+    const includeCiphertext = req.query.include === "ciphertext" || req.query.includeCiphertext === "true";
+    const items = walletDb.getBackupItems(userId(req), includeCiphertext);
     res.json({ success: true, count: items.length, items });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
- * DELETE /api/wallet/backup/:localId
- * Delete a single backup item.
+ * DELETE /api/wallet/credentials/backup/:localId
  */
-router.delete("/backup/:localId", (req: Request, res: Response) => {
+router.delete("/credentials/backup/:localId", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { localId } = req.params;
-    query(`DELETE FROM wallet_backup_items WHERE user_id = ${quote(userId)} AND local_id = ${quote(localId)}`);
+    walletDb.deleteBackupItem(userId(req), param(req, "localId"));
     res.json({ success: true, message: "Backup item deleted" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 // ===========================================================================
-// 4. ENCRYPTED DATA VAULT
+// 3. ENCRYPTED DATA VAULT  (/api/wallet/data/*)
+//    Route order matters: /data/store, /data/grants, /data/share and
+//    /data/record/:id are registered before the /data/:category catch-all.
 // ===========================================================================
 /**
- * PUT /api/wallet/vault/:recordId
- * Upsert a vault record.
- * Body: { category, metaJson, ciphertext, iv, alg?, size, consent? }
+ * POST /api/wallet/data/store
+ * Store (upsert) an encrypted vault record. Enforces the 50 MB total quota.
+ * Body: { recordId, category, meta: { title ≤120, type ≤60 }, ciphertext, iv, alg }
+ * → { success, recordId, size, updatedAt }
  */
-router.put("/vault/:recordId", (req: Request, res: Response) => {
+router.post("/data/store", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { recordId } = req.params;
-    const { category, metaJson, ciphertext, iv, alg, size, consent } = req.body;
-    if (!category || !metaJson || !ciphertext || !iv) { res.status(400).json({ error: true, message: "category, metaJson, ciphertext, and iv are required" }); return; }
-    if (Buffer.byteLength(ciphertext, "base64") > 50 * 1024 * 1024) { res.status(413).json({ error: true, message: "Payload exceeds 50 MB limit" }); return; }
-    query(`INSERT OR REPLACE INTO vault_records (record_id, user_id, category, meta_json, ciphertext, iv, alg, size, consent, updated_at) VALUES (${quote(recordId)}, ${quote(userId)}, ${quote(category)}, ${quote(metaJson)}, ${quote(ciphertext)}, ${quote(iv)}, ${quote(alg || "A256GCM")}, ${size || 0}, ${quote(consent || "private")}, datetime('now'))`);
-    res.json({ success: true, message: "Vault record saved" });
+    const { recordId, category, meta, ciphertext, iv, alg } = req.body;
+    if (!recordId || !category || !meta || !ciphertext || !iv) {
+      res.status(400).json({ error: true, message: "recordId, category, meta, ciphertext, and iv are required" });
+      return;
+    }
+    if (!VAULT_CATEGORIES.includes(category)) {
+      res.status(400).json({ error: true, message: `category must be one of: ${VAULT_CATEGORIES.join(", ")}` });
+      return;
+    }
+    if (typeof meta.title !== "string" || meta.title.length === 0 || meta.title.length > 120) {
+      res.status(400).json({ error: true, message: "meta.title is required (max 120 chars)" });
+      return;
+    }
+    if (typeof meta.type !== "string" || meta.type.length > 60) {
+      res.status(400).json({ error: true, message: "meta.type is required (max 60 chars)" });
+      return;
+    }
+    const size = Buffer.byteLength(ciphertext, "base64");
+    if (size > QUOTA_LIMIT_BYTES) {
+      res.status(413).json({ error: true, message: "Payload exceeds 50 MB limit" });
+      return;
+    }
+    // Quota check: replacing a record frees its old bytes first.
+    const existing = walletDb.getVaultRecord(recordId, userId(req), false);
+    const used = walletDb.getVaultQuotaUsed(userId(req)) - (existing?.size || 0);
+    if (used + size > QUOTA_LIMIT_BYTES) {
+      res.status(413).json({ error: true, code: "QUOTA_EXCEEDED", message: "Vault quota (50 MB) exceeded" });
+      return;
+    }
+    // Only title + type are stored in plaintext; consent survives re-upload.
+    const metaJson = JSON.stringify({ title: meta.title, type: meta.type });
+    walletDb.upsertVaultRecord(recordId, userId(req), category, metaJson, ciphertext, iv, alg || "A256GCM", size, existing?.consent || "private");
+    res.json({ success: true, recordId, size, updatedAt: new Date().toISOString() });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
- * GET /api/wallet/vault
- * List vault records (metadata only, no ciphertext).
- * Query: ?category=&cursor=&limit=
+ * GET /api/wallet/data/grants[?recordId=]
+ * The consent ledger. Without recordId: every grant the user issued
+ * (grantor) plus grants issued to their linked DID (grantee). With
+ * recordId: that record's grants, each with its member-visible accessLog.
+ * Rows carry derived role / status / is_paid / access_count.
  */
-router.get("/vault", (req: Request, res: Response) => {
+router.get("/data/grants", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { category, cursor } = req.query as Record<string, string>;
-    const limit = parseInt(req.query.limit as string) || 20;
-    let sql = `SELECT record_id, meta_json, size, consent, updated_at FROM vault_records WHERE user_id = ${quote(userId)}`;
-    if (category) sql += ` AND category = ${quote(category)}`;
-    if (cursor) sql += ` AND updated_at < ${quote(cursor)}`;
-    sql += ` ORDER BY updated_at DESC LIMIT ${limit + 1}`;
-    const rows = query(sql);
-    const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const nextCursor = hasMore ? (items[items.length - 1] as any).updated_at : null;
-    res.json({ success: true, count: items.length, items, nextCursor });
+    const recordId = req.query.recordId as string | undefined;
+    let grants: any[];
+    if (recordId) {
+      grants = walletDb.getGrantsByRecord(recordId, userId(req));
+      const logs = walletDb.getAccessLogForGrants(grants.map((g) => g.grant_id));
+      const byGrant = new Map<string, any[]>();
+      for (const l of logs) {
+        if (!byGrant.has(l.grant_id)) byGrant.set(l.grant_id, []);
+        byGrant.get(l.grant_id)!.push({ accessed_by_did: l.accessed_by_did, accessed_at: l.accessed_at });
+      }
+      for (const g of grants) g.accessLog = byGrant.get(g.grant_id) || [];
+    } else {
+      grants = walletDb.getGrantsForUser(userId(req), req.user?.did);
+      for (const g of grants) g.accessLog = [];
+    }
+    res.json({ success: true, count: grants.length, grants });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
- * GET /api/wallet/vault/:recordId
- * Get a single vault record (with ciphertext).
+ * DELETE /api/wallet/data/grants/:grantId
+ * Revoke a grant (owner only). Audit-logged.
  */
-router.get("/vault/:recordId", (req: Request, res: Response) => {
+router.delete("/data/grants/:grantId", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { recordId } = req.params;
-    const rows = query(`SELECT * FROM vault_records WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
-    if (rows.length === 0) { res.status(404).json({ error: true, message: "Record not found" }); return; }
-    res.json({ success: true, record: rows[0] });
+    const grantId = param(req, "grantId");
+    const grant = walletDb.getGrant(grantId);
+    if (!grant || grant.owner_user_id !== userId(req)) {
+      res.status(404).json({ error: true, message: "Grant not found" });
+      return;
+    }
+    walletDb.revokeGrant(grantId, userId(req));
+    logAudit({
+      actorType: "user",
+      actorId: userId(req),
+      action: "vault.grant.revoke",
+      entityType: "vault_grant",
+      entityId: grantId,
+      result: "success",
+      message: `Grant to ${grant.grantee_did} revoked`,
+      ipAddress: getClientIp(req),
+    });
+    res.json({ success: true, message: "Grant revoked" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
- * DELETE /api/wallet/vault/:recordId
+ * POST /api/wallet/data/share
+ * Create a time-limited, DID-bound sharing grant for a vault record the
+ * caller owns. The record key arrives sealed to the grantee's X25519 key
+ * (ECDH-ES) — the server relays it but can never open it.
+ * Body: { recordId, granteeDid, scope, expiresAt, price?: {amount,currency}, encryptedKey }
+ * → { success, grantId, shareUrl }
+ */
+router.post("/data/share", (req: Request, res: Response) => {
+  try {
+    const { recordId, granteeDid, scope, encryptedKey, expiresAt, price } = req.body;
+    if (!recordId || !granteeDid || !scope || !encryptedKey || !expiresAt) {
+      res.status(400).json({ error: true, message: "recordId, granteeDid, scope, encryptedKey, and expiresAt are required" });
+      return;
+    }
+    if (!GRANT_SCOPES.includes(scope)) {
+      res.status(400).json({ error: true, message: "scope must be 'full' or 'meta-only'" });
+      return;
+    }
+    if (typeof granteeDid !== "string" || !granteeDid.startsWith("did:")) {
+      res.status(400).json({ error: true, message: "granteeDid must be a DID" });
+      return;
+    }
+    const record = walletDb.getVaultRecord(recordId, userId(req), false);
+    if (!record) {
+      res.status(404).json({ error: true, message: "Record not found" });
+      return;
+    }
+    const expiresMs = new Date(expiresAt).getTime();
+    const nowMs = Date.now();
+    if (!Number.isFinite(expiresMs) || expiresMs <= nowMs) {
+      res.status(400).json({ error: true, message: "Grant expiry must be in the future" });
+      return;
+    }
+    if (expiresMs > nowMs + MAX_GRANT_DAYS * 24 * 60 * 60 * 1000) {
+      res.status(400).json({ error: true, message: `Grant expiry cannot exceed ${MAX_GRANT_DAYS} days` });
+      return;
+    }
+    const priceAmount = price?.amount ?? req.body.priceAmount ?? 0;
+    const priceCurrency = price?.currency ?? req.body.priceCurrency ?? "USD";
+    if (!Number.isInteger(priceAmount) || priceAmount < 0) {
+      res.status(400).json({ error: true, message: "price.amount must be a non-negative integer" });
+      return;
+    }
+    const grantId = uuidv4();
+    walletDb.createGrant(grantId, recordId, userId(req), granteeDid, scope, encryptedKey, priceAmount, priceCurrency, expiresAt);
+    logAudit({
+      actorType: "user",
+      actorId: userId(req),
+      action: "vault.grant.create",
+      entityType: "vault_grant",
+      entityId: grantId,
+      result: "success",
+      message: `Grant (${scope}) to ${granteeDid}, expires ${expiresAt}`,
+      ipAddress: getClientIp(req),
+    });
+    res.status(201).json({ success: true, grantId, shareUrl: `${shareUrlBase()}/share/${grantId}` });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * GET /api/wallet/data/record/:recordId[?include=ciphertext]
+ * Get one vault record. Ciphertext only when explicitly requested.
+ */
+router.get("/data/record/:recordId", (req: Request, res: Response) => {
+  try {
+    const includeCiphertext = req.query.include === "ciphertext";
+    const record = walletDb.getVaultRecord(param(req, "recordId"), userId(req), includeCiphertext);
+    if (!record) { res.status(404).json({ error: true, message: "Record not found" }); return; }
+    res.json({ success: true, record });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/wallet/data/record/:recordId
  * Delete a vault record and its grants.
  */
-router.delete("/vault/:recordId", (req: Request, res: Response) => {
+router.delete("/data/record/:recordId", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { recordId } = req.params;
-    query(`DELETE FROM vault_grants WHERE record_id = ${quote(recordId)} AND owner_user_id = ${quote(userId)}`);
-    query(`DELETE FROM vault_records WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
+    walletDb.deleteVaultRecord(param(req, "recordId"), userId(req));
     res.json({ success: true, message: "Vault record and grants deleted" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
+/**
+ * GET /api/wallet/data/:category[?cursor=&limit=]
+ * List vault records in a category — metadata only, never ciphertext.
+ * Each row carries grantCount (active grants on that record).
+ */
+router.get("/data/:category", (req: Request, res: Response) => {
+  try {
+    const category = param(req, "category");
+    if (!VAULT_CATEGORIES.includes(category)) {
+      res.status(400).json({ error: true, message: `Unknown category '${category}'` });
+      return;
+    }
+    const cursor = req.query.cursor as string | undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const { items, nextCursor } = walletDb.getVaultRecords(userId(req), category, cursor, limit);
+    const grantCounts = walletDb.getGrantCountsByRecord(userId(req));
+    for (const item of items as any[]) item.grantCount = grantCounts.get(item.record_id) || 0;
+    res.json({ success: true, count: items.length, items, nextCursor });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
 /**
  * PATCH /api/wallet/vault/:recordId/consent
- * Update the consent/monetization flag on a vault record.
+ * Toggle a record between "private" and "monetizable".
  *
- * Allows toggling a record between "private" (no monetization) and
- * "monetizable" (user has opted in to receive access-compensation requests).
- *
- * Per design (07-vault-consent-screens.md §6): monetization toggle per record
- * lets the user opt in to request compensation when sharing. Toggling to
- * "monetizable" does NOT auto-share anything — explicit consent is still
- * required per grant. The "private" default means no compensation is requested.
- *
- * Body: { consent: "private" | "monetizable" }
- * Responses:
- *   200 — { success: true, message, recordId, consent }
- *   400 — Invalid consent value / missing
- *   401 — Authentication required
- *   404 — Record not found
+ * Per design (07-vault-consent-screens.md §6): toggling to "monetizable"
+ * does NOT auto-share anything — explicit consent is still required per
+ * grant. Audit-logged.
  */
 router.patch("/vault/:recordId/consent", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { recordId } = req.params;
+    const recordId = param(req, "recordId");
     const { consent } = req.body;
     if (!consent || !["private", "monetizable"].includes(consent)) {
       res.status(400).json({ error: true, message: "consent must be 'private' or 'monetizable'" });
       return;
     }
-    // Verify the record exists and belongs to this user
-    const existing = query(`SELECT record_id, consent FROM vault_records WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
-    if (existing.length === 0) {
+    const existing = walletDb.getVaultRecord(recordId, userId(req), false);
+    if (!existing) {
       res.status(404).json({ error: true, message: "Record not found" });
       return;
     }
-    const oldConsent = (existing[0] as any).consent;
-    query(`UPDATE vault_records SET consent = ${quote(consent)}, updated_at = datetime('now') WHERE record_id = ${quote(recordId)} AND user_id = ${quote(userId)}`);
-    // Audit-log the consent change
+    walletDb.updateVaultConsent(recordId, userId(req), consent);
     logAudit({
       actorType: "user",
-      actorId: userId,
+      actorId: userId(req),
       action: "vault.consent.update",
       entityType: "vault_record",
       entityId: recordId,
       result: "success",
-      message: `Consent changed from '${oldConsent}' to '${consent}'`,
+      message: `Consent changed from '${existing.consent}' to '${consent}'`,
       ipAddress: getClientIp(req),
     });
     res.json({ success: true, message: "Consent flag updated", recordId, consent });
@@ -345,135 +486,72 @@ router.patch("/vault/:recordId/consent", (req: Request, res: Response) => {
 });
 
 // ===========================================================================
-// 5. DATA-SHARING GRANTS
+// 4. GRANTEE REDEMPTION
 // ===========================================================================
 /**
- * POST /api/wallet/grants
- * Create a time-limited data-sharing grant for a vault record.
- * Body: { recordId, granteeDid, scope, encryptedKey, priceAmount?, priceCurrency?, expiresAt }
+ * GET /api/wallet/share/:grantId
+ * Redeem a sharing grant. DID-bound: the caller's linked DID must be the
+ * grant's grantee — a share link alone is never enough. Every successful
+ * redemption is written to the member-visible grant_access_log (async).
+ *
+ * Errors: 404 GRANT_NOT_FOUND · 410 GRANT_REVOKED / GRANT_EXPIRED ·
+ *         403 DEVICE_MISMATCH (caller's DID is not the grantee)
  */
-router.post("/grants", (req: Request, res: Response) => {
+router.get("/share/:grantId", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { recordId, granteeDid, scope, encryptedKey, priceAmount, priceCurrency, expiresAt } = req.body;
-    if (!recordId || !granteeDid || !scope || !encryptedKey || !expiresAt) {
-      res.status(400).json({ error: true, message: "recordId, granteeDid, scope, encryptedKey, and expiresAt are required" }); return;
+    const grant = walletDb.getGrant(param(req, "grantId"));
+    if (!grant) {
+      res.status(404).json({ error: true, code: "GRANT_NOT_FOUND", message: "Share not found" });
+      return;
     }
-    // Validate expiry: max 90 days
-    const expiresMs = new Date(expiresAt).getTime();
-    const nowMs = Date.now();
-    const maxExpiry = nowMs + 90 * 24 * 60 * 60 * 1000;
-    if (expiresMs > maxExpiry) { res.status(400).json({ error: true, message: "Grant expiry cannot exceed 90 days" }); return; }
-    if (expiresMs <= nowMs) { res.status(400).json({ error: true, message: "Grant expiry must be in the future" }); return; }
-    const grantId = uuidv4();
-    query(`INSERT INTO vault_grants (grant_id, record_id, owner_user_id, grantee_did, scope, encrypted_key, price_amount, price_currency, expires_at) VALUES (${quote(grantId)}, ${quote(recordId)}, ${quote(userId)}, ${quote(granteeDid)}, ${quote(scope)}, ${quote(encryptedKey)}, ${priceAmount || 0}, ${quote(priceCurrency || "USD")}, ${quote(expiresAt)})`);
-    res.status(201).json({ success: true, grantId, message: "Data-sharing grant created" });
-  } catch (err: any) {
-    res.status(500).json({ error: true, message: err.message });
-  }
-});
-/**
- * GET /api/wallet/grants/:recordId
- * List grants for a vault record.
- */
-router.get("/grants/:recordId", (req: Request, res: Response) => {
-  try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { recordId } = req.params;
-    const grants = query(`SELECT g.*, (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count FROM vault_grants g WHERE g.record_id = ${quote(recordId)} AND g.owner_user_id = ${quote(userId)} ORDER BY g.created_at DESC`);
-    res.json({ success: true, count: grants.length, grants });
-  } catch (err: any) {
-    res.status(500).json({ error: true, message: err.message });
-  }
-});
-/**
- * GET /api/wallet/grants
- *
- * List ALL data-sharing grants for the authenticated user, in two roles:
- *   - grantor — grants the user created (owner_user_id matches JWT sub)
- *   - grantee — grants received from others (grantee_did matches user's linked DID,
- *               from req.user.did set via PUT /api/auth/link-did)
- *
- * Each grant carries:
- *   role          — "grantor" | "grantee"
- *   status        — derived: "active" | "expired" | "revoked"
- *   is_paid       — true when price_amount > 0 and status is "active"
- *   access_count  — number of times the grantee accessed the shared data
- *
- * Used by AllSharesScreen (design 07-vault-consent-screens.md §5) with
- * filter chips: Active / Expired / Revoked / Paid.
- *
- * Responses:
- *   200 — { success: true, count, grants: [{ role, status, is_paid, ... }] }
- *   401 — Authentication required
- */
-router.get("/grants", (req: Request, res: Response) => {
-  try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const userDID = req.user?.did;
-    // Build grantor + grantee queries with UNION, add role, status derivation
-    let sql = `
-      SELECT g.*,
-        (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count,
-        'grantor' as role,
-        CASE
-          WHEN g.revoked = 1 THEN 'revoked'
-          WHEN g.expires_at < datetime('now') THEN 'expired'
-          ELSE 'active'
-        END as status,
-        CASE
-          WHEN g.price_amount > 0 AND g.revoked = 0 AND g.expires_at >= datetime('now') THEN 1
-          ELSE 0
-        END as is_paid
-      FROM vault_grants g
-      WHERE g.owner_user_id = ${quote(userId)}
-    `;
-    if (userDID) {
-      sql += `
-      UNION ALL
-      SELECT g.*,
-        (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count,
-        'grantee' as role,
-        CASE
-          WHEN g.revoked = 1 THEN 'revoked'
-          WHEN g.expires_at < datetime('now') THEN 'expired'
-          ELSE 'active'
-        END as status,
-        CASE
-          WHEN g.price_amount > 0 AND g.revoked = 0 AND g.expires_at >= datetime('now') THEN 1
-          ELSE 0
-        END as is_paid
-      FROM vault_grants g
-      WHERE g.grantee_did = ${quote(userDID)}
-      `;
+    if (grant.revoked === 1) {
+      res.status(410).json({ error: true, code: "GRANT_REVOKED", message: "This share has been revoked by its owner" });
+      return;
     }
-    sql += " ORDER BY created_at DESC";
-    const grants = query(sql);
-    res.json({ success: true, count: grants.length, grants });
+    if (new Date(grant.expires_at).getTime() <= Date.now()) {
+      res.status(410).json({ error: true, code: "GRANT_EXPIRED", message: "This share has expired" });
+      return;
+    }
+    const callerDid = req.user?.did;
+    if (!callerDid || callerDid !== grant.grantee_did) {
+      res.status(403).json({ error: true, code: "DEVICE_MISMATCH", message: "This share was issued to a different identity. Link the grantee DID to your account to redeem it." });
+      return;
+    }
+    const record = walletDb.getVaultRecordForGrant(grant.record_id);
+    if (!record) {
+      res.status(404).json({ error: true, code: "GRANT_NOT_FOUND", message: "The shared record no longer exists" });
+      return;
+    }
+    // Member-visible access log (async, never blocks redemption) + platform audit.
+    walletDb.logGrantAccess(grant.grant_id, callerDid);
+    logAudit({
+      actorType: "user",
+      actorId: userId(req),
+      action: "vault.share.redeem",
+      entityType: "vault_grant",
+      entityId: grant.grant_id,
+      result: "success",
+      message: `Redeemed by ${callerDid} (scope ${grant.scope})`,
+      ipAddress: getClientIp(req),
+    });
+    const metaOnly = grant.scope === "meta-only";
+    res.json({
+      success: true,
+      meta: parseMetaJson(record.meta_json),
+      ciphertext: metaOnly ? "" : record.ciphertext,
+      iv: metaOnly ? "" : record.iv,
+      encryptedKey: grant.encrypted_key,
+      scope: grant.scope,
+      expiresAt: grant.expires_at,
+      price: { amount: grant.price_amount || 0, currency: grant.price_currency || "USD" },
+    });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-/**
- * DELETE /api/wallet/grants/:grantId/revoke
- * Revoke a specific grant.
- */
-router.delete("/grants/:grantId/revoke", (req: Request, res: Response) => {
-  try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-    const { grantId } = req.params;
-    query(`UPDATE vault_grants SET revoked = 1 WHERE grant_id = ${quote(grantId)} AND owner_user_id = ${quote(userId)}`);
-    res.json({ success: true, message: "Grant revoked" });
-  } catch (err: any) {
-    res.status(500).json({ error: true, message: err.message });
-  }
-});
+
 // ===========================================================================
-// 6. DIDCOMM PUSH HINTS
+// 5. DIDCOMM PUSH HINTS + MESSAGE QUEUE
 // ===========================================================================
 /**
  * POST /api/wallet/didcomm/push-hint
@@ -482,44 +560,60 @@ router.delete("/grants/:grantId/revoke", (req: Request, res: Response) => {
  */
 router.post("/didcomm/push-hint", (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
     const { userDID, pushToken } = req.body;
     if (!userDID || !pushToken) { res.status(400).json({ error: true, message: "userDID and pushToken are required" }); return; }
-    query(`UPDATE wallet_push_tokens SET push_token = ${quote(pushToken)} WHERE user_id = ${quote(userId)}`);
-    query(`INSERT OR REPLACE INTO wallet_message_queue (id, device_id, user_did, unread_count, last_message_at) VALUES (${quote(uuidv4())}, 'push-hint', ${quote(userDID)}, 0, datetime('now'))`);
+    const deviceId = getDeviceId(req) || "push-hint";
+    walletDb.updatePushToken(deviceId, userId(req), pushToken);
+    walletDb.upsertMessageHint(userDID, deviceId);
     res.json({ success: true, message: "Push hint registered" });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
-// ===========================================================================
-// 7. REFRESH TOKENS
-// ===========================================================================
+
 /**
- * POST /api/wallet/refresh
- * Refresh the JWT using a refresh token.
- * Body: { refreshToken }
+ * GET /api/wallet/messages/waiting
+ * Lightweight poll: are DIDComm messages waiting for the caller's linked DID?
  */
-router.post("/refresh", (req: Request, res: Response) => {
+router.get("/messages/waiting", (req: Request, res: Response) => {
   try {
-    const { refreshToken } = req.body;
-    if (!refreshToken) { res.status(400).json({ error: true, message: "refreshToken is required" }); return; }
-    const hash = require("crypto").createHash("sha256").update(refreshToken).digest("hex");
-    const rows = query(`SELECT * FROM refresh_tokens WHERE token_hash = ${quote(hash)} AND revoked = 0 AND expires_at > datetime('now')`);
-    if (rows.length === 0) { res.status(401).json({ error: true, message: "Invalid or expired refresh token" }); return; }
-    const tokenRow = rows[0] as any;
-    // Issue a new JWT
-    const jwt = require("jsonwebtoken");
-    const secret = process.env.JWT_SECRET || require("crypto").randomBytes(32).toString("hex");
-    const newToken = jwt.sign({ sub: tokenRow.user_id, email: "" }, secret, { expiresIn: "24h" });
-    res.json({ success: true, token: newToken });
+    const did = req.user?.did;
+    if (!did) {
+      res.json({ success: true, waiting: false, unreadCount: 0, didLinked: false, lastMessageAt: null, pushHint: null });
+      return;
+    }
+    const { unreadCount, lastMessageAt } = walletDb.getMessageQueueSummary(did);
+    res.json({
+      success: true,
+      waiting: unreadCount > 0,
+      unreadCount,
+      didLinked: true,
+      lastMessageAt,
+      pushHint: unreadCount > 0 ? { type: "didcomm", count: unreadCount } : null,
+    });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
+/**
+ * PUT /api/wallet/messages/waiting
+ * Acknowledge receipt — clears unread counters (optionally by queue ids).
+ * Body: { messageIds? }
+ */
+router.put("/messages/waiting", (req: Request, res: Response) => {
+  try {
+    const did = req.user?.did;
+    if (!did) { res.status(400).json({ error: true, message: "No DID linked to this account" }); return; }
+    walletDb.ackMessageQueue(did, Array.isArray(req.body?.messageIds) ? req.body.messageIds : undefined);
+    res.json({ success: true, message: "Messages acknowledged" });
+  } catch (err: any) {
+    res.status(500).json({ error: true, message: err.message });
+  }
+});
+
 // ===========================================================================
-// 8. WALLET VERIFICATION STATUS
+// 6. ZK PRESENTATION (proof generated ON-DEVICE)
 // ===========================================================================
 /**
  * POST /api/wallet/vc/present
@@ -537,42 +631,14 @@ router.post("/refresh", (req: Request, res: Response) => {
  *      public key from DID document), challenge integrity, and optionally
  *      the trust registry status of the original VC issuer
  *
- * Body:
- * {
- *   "proof": {
- *     "@context": ["https://www.w3.org/ns/credentials/v2", "https://orbis.id/ns/zkp/v1"],
- *     "id": "urn:uuid:...",
- *     "type": ["VerifiablePresentation", "ZKPresentation"],
- *     "verifiableCredential": { ... },
- *     "holder": "did:key:z6Mk...",
- *     "revealedFields": ["name", "email"],
- *     "hiddenFields": ["ssn"],
- *     "hiddenCommitments": [{"field": "ssn", "hash": "abc...", "nonce": "123..."}],
- *     "proof": {
- *       "type": "OrbisZKSelectiveDisclosure2025",
- *       "created": "2025-01-01T00:00:00.000Z",
- *       "proofPurpose": "authentication",
- *       "verificationMethod": "did:key:z6Mk...#z6Mk...",
- *       "cryptosuite": "orbis-zk-sd-2025",
- *       "proofValue": "z...",
- *       "challenge": "abc123..."
- *     }
- *   },
- *   "challenge": "abc123...",
- *   "checkTrustRegistry": false
- * }
- *
+ * Body: { proof, challenge?, checkTrustRegistry? }
  * Responses:
  *   200 — { success: true, verified: true, proofId, holderDID, timestamp, checks }
  *   400 — { error: true, message: "..." }
- *   401 — { error: true, message: "Authentication required" }
- *   403 — { success: false, error: true, message: "ZK presentation verification failed: ...", checks, proofId }
+ *   403 — { success: false, error: true, message, checks, proofId }
  */
 router.post("/vc/present", async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
-
     const { proof, challenge, checkTrustRegistry } = req.body;
 
     if (!proof) {
@@ -614,9 +680,16 @@ router.post("/vc/present", async (req: Request, res: Response) => {
       return;
     }
 
-    // Log the successful wallet presentation for audit
-    query(`INSERT INTO wallet_message_queue (id, device_id, user_did, unread_count, last_message_at)
-           VALUES (${quote(uuidv4())}, 'zk-presentation', ${quote(proof.holder)}, 0, datetime('now'))`);
+    logAudit({
+      actorType: "user",
+      actorId: userId(req),
+      action: "zk.verify",
+      entityType: "zk_proof",
+      entityId: result.proofId,
+      result: "success",
+      message: `Wallet ZK presentation verified for ${result.holderDID}`,
+      ipAddress: getClientIp(req),
+    });
 
     res.json({
       success: true,
@@ -632,59 +705,46 @@ router.post("/vc/present", async (req: Request, res: Response) => {
 });
 
 // ===========================================================================
-// 9. ADMIN ENDPOINTS (wallet management)
+// 7. ADMIN ENDPOINTS (DB-verified admin role via requireAdmin)
 // ===========================================================================
 /**
  * GET /api/wallet/admin/users
- * List all wallet users with vault/grant counts and quota bytes. Admin only.
+ * List all wallet users with vault/grant counts and quota bytes.
  */
-router.get("/admin/users", (req: Request, res: Response) => {
+router.get("/admin/users", requireAdmin, (_req: Request, res: Response) => {
   try {
-    if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-    const items = query(`SELECT w.id, w.user_id, w.wallet_id, w.device_name, w.platform, w.wiped, w.created_at, w.last_seen_at,
-       (SELECT COUNT(*) FROM vault_records WHERE user_id = w.user_id) as vault_count,
-       (SELECT COUNT(*) FROM vault_grants WHERE owner_user_id = w.user_id) as grant_count,
-       (SELECT COALESCE(SUM(size), 0) FROM vault_records WHERE user_id = w.user_id) as quota_used_bytes
-       FROM wallet_devices w ORDER BY w.created_at DESC`);
+    const items = walletDb.getAdminWalletUsers();
     res.json({ success: true, count: items.length, items });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
- * GET /api/wallet/admin/credentials
- * List wallet credentials (backup items). Admin only.
- * Query: ?userId= — filter by user (optional)
+ * GET /api/wallet/admin/credentials[?userId=]
+ * List wallet credential backups (metadata only).
  */
-router.get("/admin/credentials", (req: Request, res: Response) => {
+router.get("/admin/credentials", requireAdmin, (req: Request, res: Response) => {
   try {
-    if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-    const userId = req.query.userId as string | undefined;
-    let sql = "SELECT b.local_id, b.user_id, b.category, b.size, b.updated_at FROM wallet_backup_items b";
-    const params: string[] = [];
-    if (userId) {
-      sql += ` WHERE b.user_id = ${quote(userId)}`;
-    }
-    sql += " ORDER BY b.updated_at DESC LIMIT 100";
-    const items = query(sql);
-    res.json({ success: true, count: items.length, items, filteredByUserId: userId || null });
+    const filterUserId = req.query.userId as string | undefined;
+    const items = walletDb.getAdminWalletCredentials(filterUserId);
+    res.json({ success: true, count: items.length, items, filteredByUserId: filterUserId || null });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
  * DELETE /api/wallet/admin/remote-wipe/:walletId
  * Remote wipe a wallet (sets wiped flag, reason required). Audit-logged.
  * Body: { reason }
  */
-router.delete("/admin/remote-wipe/:walletId", (req: Request, res: Response) => {
+router.delete("/admin/remote-wipe/:walletId", requireAdmin, (req: Request, res: Response) => {
   try {
-    if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-    const { walletId } = req.params;
+    const walletId = param(req, "walletId");
     const { reason } = req.body;
     if (!reason) { res.status(400).json({ error: true, message: "reason is required" }); return; }
-    query(`UPDATE wallet_devices SET wiped = 1, wipe_reason = ${quote(reason)} WHERE wallet_id = ${quote(walletId)}`);
-    // Audit-log the wipe action
+    walletDb.remoteWipeWallet(walletId, reason);
     logAudit({
       actorType: "user",
       actorId: req.user?.sub || undefined,
@@ -700,18 +760,14 @@ router.delete("/admin/remote-wipe/:walletId", (req: Request, res: Response) => {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
  * GET /api/wallet/admin/grants
- * List all data-sharing grants across users. Admin only. Metadata only.
- * Returns grantor, grantee, scope, expiry, revoked state, price, and access count.
+ * List all data-sharing grants across users. Metadata only.
  */
-router.get("/admin/grants", (req: Request, res: Response) => {
+router.get("/admin/grants", requireAdmin, (req: Request, res: Response) => {
   try {
-    if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-    const grants = query(`SELECT g.grant_id, g.record_id, g.owner_user_id, g.grantee_did, g.scope, g.price_amount, g.price_currency, g.expires_at, g.revoked, g.created_at,
-       (SELECT COUNT(*) FROM grant_access_log WHERE grant_id = g.grant_id) as access_count
-       FROM vault_grants g ORDER BY g.created_at DESC`);
-    // Audit-log the view
+    const grants = walletDb.getAdminGrants();
     logAudit({
       actorType: "user",
       actorId: req.user?.sub || undefined,
@@ -727,15 +783,15 @@ router.get("/admin/grants", (req: Request, res: Response) => {
     res.status(500).json({ error: true, message: err.message });
   }
 });
+
 /**
  * GET /api/wallet/admin/grants/:grantId/access-log
- * View access log entries for a specific grant. Admin only.
+ * View access log entries for a specific grant.
  */
-router.get("/admin/grants/:grantId/access-log", (req: Request, res: Response) => {
+router.get("/admin/grants/:grantId/access-log", requireAdmin, (req: Request, res: Response) => {
   try {
-    if (!req.user?.admin) { res.status(403).json({ error: true, message: "Admin access required" }); return; }
-    const { grantId } = req.params;
-    const logs = query(`SELECT l.id, l.accessed_by_did, l.accessed_at FROM grant_access_log l WHERE l.grant_id = ${quote(grantId)} ORDER BY l.accessed_at DESC LIMIT 50`);
+    const grantId = param(req, "grantId");
+    const logs = walletDb.getAccessLogForGrant(grantId);
     res.json({ success: true, count: logs.length, grantId, logs });
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });

@@ -25,6 +25,12 @@ import {
   authenticateWithBiometrics,
   isBiometricUnlockEnabled,
 } from '@/services/biometrics';
+import { ensureWalletRegistered } from '@/services/walletRegistration';
+
+/** Device registration must never block sign-in; it retries on next launch. */
+function registerWalletInBackground(): void {
+  void ensureWalletRegistered().catch(() => {});
+}
 
 export type AuthStatus = 'loading' | 'onboarding' | 'locked' | 'unlocked';
 
@@ -53,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       setUser(session.user);
+      registerWalletInBackground();
       const biometrics = await isBiometricUnlockEnabled();
       if (cancelled) return;
       setStatus(biometrics ? 'locked' : 'unlocked');
@@ -66,12 +73,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const profile = await loginWithEmail(email, password);
     setUser(profile);
     setStatus('unlocked');
+    registerWalletInBackground();
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name?: string) => {
     const profile = await registerWithEmail(email, password, name);
     setUser(profile);
     setStatus('unlocked');
+    registerWalletInBackground();
   }, []);
 
   const unlock = useCallback(async () => {

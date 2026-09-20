@@ -28,16 +28,20 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const token = await secureGet(SecureKeys.sessionToken);
+  const [token, deviceId] = await Promise.all([
+    secureGet(SecureKeys.sessionToken),
+    secureGet(SecureKeys.deviceId),
+  ]);
   const res = await fetch(`${getBaseUrl()}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(deviceId ? { 'X-Orbis-Device-Id': deviceId } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

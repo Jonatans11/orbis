@@ -88,7 +88,7 @@ function route(req: IncomingMessage, body: any, res: ServerResponse) {
   }
   if (p === "/api/wallet/data/store" && m === "POST") {
     if (!body.recordId) return json(res, 400, { error: true, message: "recordId is required" });
-    return json(res, 201, { success: true, recordId: body.recordId, size: 128, updatedAt: new Date().toISOString() });
+    return json(res, 200, { success: true, recordId: body.recordId, size: 128, updatedAt: new Date().toISOString() });
   }
   if (p === "/api/wallet/data/medical" && m === "GET") {
     return json(res, 200, {
@@ -106,11 +106,11 @@ function route(req: IncomingMessage, body: any, res: ServerResponse) {
   if (p === "/api/wallet/data/share" && m === "POST") {
     for (const k of ["recordId", "granteeDid", "scope", "expiresAt", "encryptedKey"])
       if (!body[k]) return json(res, 400, { error: true, message: `${k} is required` });
-    return json(res, 201, { success: true, grantId: "g-1", shareUrl: "https://orbis.id/api/wallet/share/g-1" });
+    return json(res, 201, { success: true, grantId: "g-1", shareUrl: "https://orbis.id/share/g-1" });
   }
   if (p === "/api/wallet/share/g-1" && m === "GET") {
     if (grantRevoked)
-      return json(res, 403, { error: true, code: "GRANT_REVOKED", message: "Grant has been revoked" });
+      return json(res, 410, { error: true, code: "GRANT_REVOKED", message: "This share has been revoked by its owner" });
     return json(res, 200, {
       success: true, meta: { title: "Blood panel" }, ciphertext: "AAA=", iv: "BBB=",
       encryptedKey: "sealed-key", scope: "full", expiresAt: "2026-08-01T00:00:00Z",
@@ -120,7 +120,7 @@ function route(req: IncomingMessage, body: any, res: ServerResponse) {
   if (p === "/api/wallet/data/grants" && m === "GET") {
     return json(res, 200, {
       success: true, count: 1,
-      grants: [{ grant_id: "g-1", record_id: "r-1", owner_user_id: "u1", grantee_did: "did:key:zGrantee", scope: "full", price_amount: 500, price_currency: "USD", expires_at: "2026-08-01T00:00:00Z", revoked: 0, access_count: 1, accessLog: [{ accessed_by_did: "did:key:zGrantee", accessed_at: "2026-07-10 21:00:00" }] }],
+      grants: [{ grant_id: "g-1", record_id: "r-1", owner_user_id: "u1", grantee_did: "did:key:zGrantee", scope: "full", price_amount: 500, price_currency: "USD", expires_at: "2026-08-01T00:00:00Z", revoked: 0, created_at: "2026-07-10 20:30:00", access_count: 1, status: "active", is_paid: 1, role: "grantor", accessLog: [] }],
     });
   }
   if (p === "/api/wallet/data/grants/g-1" && m === "DELETE") {
@@ -128,12 +128,12 @@ function route(req: IncomingMessage, body: any, res: ServerResponse) {
     return json(res, 200, { success: true, message: "Grant revoked" });
   }
   if (p === "/api/wallet/messages/waiting" && m === "GET") {
-    return json(res, 200, { success: true, waiting: true, unreadCount: 2, didLinked: true, lastMessageAt: "2026-07-10 21:00:00", pushHint: { type: "didcomm.message-waiting", count: 2 } });
+    return json(res, 200, { success: true, waiting: true, unreadCount: 2, didLinked: true, lastMessageAt: "2026-07-10 21:00:00", pushHint: { type: "didcomm", count: 2 } });
   }
   if (p === "/api/wallet/messages/waiting" && m === "PUT")
     return json(res, 200, { success: true, message: "Messages acknowledged" });
   if (p === "/api/wallet/admin/users" && m === "GET") {
-    return json(res, 200, { success: true, count: 1, users: [{ id: "d-1", user_id: "u1", wallet_id: "w-1", device_name: "Pixel", platform: "android", wiped: 0, created_at: "2026-07-10", last_seen_at: null, vault_count: 1, grant_count: 1 }] });
+    return json(res, 200, { success: true, count: 1, items: [{ id: "d-1", user_id: "u1", wallet_id: "w-1", device_name: "Pixel", platform: "android", wiped: 0, created_at: "2026-07-10", last_seen_at: null, vault_count: 1, grant_count: 1, quota_used_bytes: 1024 }] });
   }
   if (p === "/api/wallet/admin/remote-wipe/w-1" && m === "DELETE") {
     if (!body?.reason) return json(res, 400, { error: true, message: "reason is required" });
@@ -257,7 +257,7 @@ describe("OrbisApiClient against mock server (live backend envelopes)", () => {
       encryptedKey: "sealed-key",
     });
     expect(grant.grantId).toBe("g-1");
-    expect(grant.shareUrl).toContain("/api/wallet/share/g-1");
+    expect(grant.shareUrl).toContain("/share/g-1");
 
     const redeemed = await c.wallet.redeemGrant("g-1");
     expect(redeemed.encryptedKey).toBe("sealed-key");
@@ -277,7 +277,7 @@ describe("OrbisApiClient against mock server (live backend envelopes)", () => {
     const c = makeClient();
     const waiting = await c.wallet.messagesWaiting();
     expect(waiting.unreadCount).toBe(2);
-    expect(waiting.pushHint?.type).toBe("didcomm.message-waiting");
+    expect(waiting.pushHint?.type).toBe("didcomm");
     await c.wallet.ackMessages(["m1", "m2"]);
     expect(last().method).toBe("PUT");
     expect(last().body).toEqual({ messageIds: ["m1", "m2"] });
@@ -287,7 +287,7 @@ describe("OrbisApiClient against mock server (live backend envelopes)", () => {
     const onWalletWiped = vi.fn();
     const c = makeClient({ onWalletWiped });
     const users = await c.admin.walletUsers();
-    expect(users.users[0]!.wallet_id).toBe("w-1");
+    expect(users.items[0]!.wallet_id).toBe("w-1");
 
     await c.admin.remoteWipe("w-1", "device reported stolen");
     expect(last().method).toBe("DELETE");

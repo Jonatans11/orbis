@@ -19,6 +19,12 @@ export function ScanQRScreen() {
   const onScan = ({ data }: { data: string }) => {
     if (scanned) return;
     setScanned(true);
+    // Vault share links: https://orbis.id/share/<grantId> or orbisid://share/<grantId>
+    const shareMatch = data.match(/(?:https:\/\/orbis\.id|orbisid:\/)\/share\/([\w-]+)/);
+    if (shareMatch) {
+      navigation.navigate('ShareRedeem', { grantId: shareMatch[1] });
+      return;
+    }
     // Phase 2: route to credential-offer / presentation / OOB handlers.
     Alert.alert('QR code scanned', data.slice(0, 200), [
       { text: 'Scan again', onPress: () => setScanned(false) },

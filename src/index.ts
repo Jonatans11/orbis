@@ -62,7 +62,7 @@ import { fileURLToPath } from "node:url";
 import express, { type Request, type Response } from "express";
 import cors from "cors";
 import { randomBytes, createHash } from "node:crypto";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { join, extname, resolve as pathResolve } from "node:path";
 import { initDatabase, listDIDs, listCredentials, getVerificationsForCredential } from "./db/metadata.js";
 import * as didRegistry from "./did/index.js";
@@ -83,7 +83,7 @@ import adminRoutes from "./admin/routes.js";
 import { ensureAdminColumns, ensureApiKeyColumns, ensureSystemWebhooksTable, seedAdminUser } from "./admin/auth.js";
 import walletRoutes from "./wallet/routes.js";
 import { initWalletTables } from "./wallet/db.js";
-import { initAuthTables, registerHandler, loginHandler, meHandler, changePasswordHandler, linkDIDHandler, requireJwt } from "./security/jwt.js";
+import { initAuthTables, registerHandler, loginHandler, meHandler, changePasswordHandler, linkDIDHandler, requireJwt, isAdminUser } from "./security/jwt.js";
 import * as didcommContacts from "./didcomm/contacts.js";
 import * as didcommPush from "./didcomm/push.js";
 import { purgePlaintextBodies, getDIDCommConversation, getDIDCommThreadMessages, getUnreadMessageCountFrom } from "./db/metadata.js";
@@ -269,7 +269,7 @@ app.get("/api/did/list", requireJwt, (req: Request, res: Response) => {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
     const method = req.query.method as string | undefined;
-    const isAdmin = req.user?.admin === true;
+    const isAdmin = isAdminUser(userId);
 
     if (isAdmin) {
       const items = didRegistry.listDIDs(method as didRegistry.DIDMethod | undefined);
@@ -278,10 +278,10 @@ app.get("/api/did/list", requireJwt, (req: Request, res: Response) => {
     }
 
     // Non-admin: filter DIDs by owner_user_id matching the authenticated user
-    const q = (s) => "'" + s.replace(/'/g, "''") + "'";
+    const q = (s: string) => "'" + s.replace(/'/g, "''") + "'";
     const rows = execFileSync("team-db", [`SELECT * FROM ssi_dids WHERE owner_user_id = ${q(userId)}` + (method ? ` AND method = ${q(method)}` : "") + ` ORDER BY created_at DESC`], { encoding: "utf-8", timeout: 10_000 });
     const records = JSON.parse(rows.toString().trim());
-    res.json({ success: true, count: records.length, dids: records.map(r => ({ id: r.id, did: r.did, method: r.method, status: r.status, created_at: r.created_at })) });
+    res.json({ success: true, count: records.length, dids: records.map((r: any) => ({ id: r.id, did: r.did, method: r.method, status: r.status, created_at: r.created_at })) });
 
   } catch (err: any) {
     res.status(500).json({ error: true, message: err.message });
@@ -319,6 +319,7 @@ app.post("/api/vc/issue", async (req: Request, res: Response) => {
       type,
       schemaUrl,
       expirationDate,
+      credentialStatus,
     } = req.body;
 
     if (!issuerDID) {
@@ -345,6 +346,7 @@ app.post("/api/vc/issue", async (req: Request, res: Response) => {
       return;
     }
 
+    const startTime = Date.now();
     const result = await issueCredential({
       issuerDID,
       issuerSecretKey: secretKeyBytes,
@@ -353,10 +355,10 @@ app.post("/api/vc/issue", async (req: Request, res: Response) => {
       type: type || ["VerifiableCredential"],
       schemaUrl,
       expirationDate,
+      // Included BEFORE signing so the proof covers it — post-hoc injection
+      // would invalidate the signature at verification.
+      credentialStatus,
     });
-
-    const startTime = Date.now();
-    // The credential is already issued at this point
     const elapsed = Date.now() - startTime;
 
     res.status(201).json({
@@ -412,7 +414,7 @@ app.get("/api/vc/credentials", requireJwt, (req: Request, res: Response) => {
     const userId = req.user?.sub;
     if (!userId) { res.status(401).json({ error: true, message: "Authentication required" }); return; }
     const issuer = req.query.issuer as string | undefined;
-    const isAdmin = req.user?.admin === true;
+    const isAdmin = isAdminUser(userId);
 
     const allRecords = listCredentials(issuer);
 
@@ -1200,7 +1202,8 @@ app.put("/api/didcomm/messages/:id/receipt", async (req: Request, res: Response)
       body: { content: status === "read" ? "Message read" : "Message delivered", receiptFor: req.params.id, receiptStatus: status },
     };
     const stored = await didcomm.encryptAndStoreMessage(receiptMsg, secretKeyBytes, recipientPubKey, "authcrypt");
-    if (status === "delivered") didcomm.markAsDelivered(req.params.id); else didcomm.markAsRead(req.params.id);
+    const receiptMsgId = String(req.params.id);
+    if (status === "delivered") didcomm.markAsDelivered(receiptMsgId); else didcomm.markAsRead(receiptMsgId);
     res.status(201).json({ success: true, message: "Receipt sent", receiptMessageId: stored.id });
   } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
 });
@@ -1215,7 +1218,7 @@ app.post("/api/didcomm/send-packed", async (req: Request, res: Response) => {
     if (!encryptedPayload) { res.status(400).json({ error: true, message: "encryptedPayload is required (pre-packed DIDComm envelope)" }); return; }
     const msgId = uuidv4();
     const { insertDIDCommMessage } = await import("./db/metadata.js");
-    const stored = { id: msgId, msg_type: msgType || didcommTypes.BASIC_MESSAGE_TYPE, from_did: fromDID, to_did: toDID, body: "", encrypted_payload: encryptedPayload, status: "sent", thread_id: threadId || null };
+    const stored = { id: msgId, msg_type: msgType || didcommTypes.BASIC_MESSAGE_TYPE, from_did: fromDID, to_did: toDID, body: "", encrypted_payload: encryptedPayload, status: "sent" as const, thread_id: threadId || null };
     insertDIDCommMessage(stored);
     res.status(201).json({ success: true, messageId: msgId, storedMessage: { id: stored.id, msg_type: stored.msg_type, from_did: stored.from_did, to_did: stored.to_did, status: stored.status, created_at: new Date().toISOString() } });
   } catch (err: any) { res.status(500).json({ error: true, message: err.message }); }
@@ -1258,7 +1261,8 @@ app.use("/api/admin", adminRoutes);
 
 // ─── Wallet Routes ──────────────────────────────────────────────────────��────
 
-// Mount wallet routes (JWT auth per-route via requireJwt middleware)
+// Mount wallet routes. The router applies requireJwt itself (everything
+// except POST /refresh) and requireAdmin on the /admin/* subset.
 app.use("/api/wallet", walletRoutes);
 
 // ─── Auth Routes ──────────────────────���──────────────────────────────────────

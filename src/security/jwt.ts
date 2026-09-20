@@ -79,9 +79,12 @@ function quote(val: string | null | undefined): string {
 // ─── Table Init ─────────────────────────────────────────────────────────────
 
 export function initAuthTables(): void {
-  // Users table for JWT authentication
+  // Users table for JWT authentication. admin/status are part of the base
+  // schema so fresh databases (tests, new deployments) match production —
+  // ALTER TABLE migrations are unavailable (team-db parse errors on
+  // duplicate columns), so the full shape must be born here.
   query(
-    "CREATE TABLE IF NOT EXISTS ssi_users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, display_name TEXT NOT NULL, did TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), verified INTEGER NOT NULL DEFAULT 0)"
+    "CREATE TABLE IF NOT EXISTS ssi_users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, display_name TEXT NOT NULL, did TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), verified INTEGER NOT NULL DEFAULT 0, admin INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active')"
   );
 }
 
@@ -97,6 +100,16 @@ export function findUserByEmail(email: string): UserRecord | null {
 export function findUserById(id: string): UserRecord | null {
   const rows = query(`SELECT * FROM ssi_users WHERE id = ${quote(id)}`);
   return rows.length > 0 ? (rows[0] as UserRecord) : null;
+}
+
+/**
+ * Admin check against the DB (source of truth) — the JWT payload
+ * deliberately carries no admin flag, so role changes take effect
+ * without waiting for token expiry.
+ */
+export function isAdminUser(userId: string): boolean {
+  const rows = query(`SELECT admin FROM ssi_users WHERE id = ${quote(userId)}`);
+  return rows.length > 0 && (rows[0] as any).admin === 1;
 }
 
 export async function createUser(

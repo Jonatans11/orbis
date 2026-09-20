@@ -61,6 +61,8 @@ export const ENDPOINTS = {
     redeemGrant: { method: "GET", path: "/api/wallet/share/:grantId", status: "live" },
     listGrants: { method: "GET", path: "/api/wallet/data/grants", status: "live" },
     revokeGrant: { method: "DELETE", path: "/api/wallet/data/grants/:grantId", status: "live" },
+    setConsent: { method: "PATCH", path: "/api/wallet/vault/:recordId/consent", status: "live" },
+    refresh: { method: "POST", path: "/api/wallet/refresh", status: "live" },
     presentVc: { method: "POST", path: "/api/wallet/vc/present", status: "live" },
     messagesWaiting: { method: "GET", path: "/api/wallet/messages/waiting", status: "live" },
     ackMessages: { method: "PUT", path: "/api/wallet/messages/waiting", status: "live" },
@@ -68,6 +70,8 @@ export const ENDPOINTS = {
   admin: {
     walletUsers: { method: "GET", path: "/api/wallet/admin/users", status: "live" },
     walletCredentials: { method: "GET", path: "/api/wallet/admin/credentials", status: "live" },
+    walletGrants: { method: "GET", path: "/api/wallet/admin/grants", status: "live" },
+    grantAccessLog: { method: "GET", path: "/api/wallet/admin/grants/:grantId/access-log", status: "live" },
     remoteWipe: { method: "DELETE", path: "/api/wallet/admin/remote-wipe/:walletId", status: "live" },
   },
 } as const;

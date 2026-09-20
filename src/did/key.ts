@@ -167,6 +167,26 @@ export function extractPublicKey(did: string): Uint8Array | null {
 }
 
 /**
+ * Get the public key bytes from a single verification method.
+ * Decodes publicKeyMultibase (base58btc), stripping the Ed25519 multicodec
+ * prefix when present.
+ */
+export function getPublicKeyFromVerificationMethod(vm: VerificationMethod): Uint8Array | null {
+  const mb = vm.publicKeyMultibase;
+  if (!mb || !mb.startsWith("z")) return null;
+  try {
+    const decoded = base58btc.decode(mb as `z${string}`);
+    // Skip multicodec prefix if present
+    if (decoded[0] === 0xed && decoded[1] === 0x01) {
+      return decoded.slice(2);
+    }
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Get the public key bytes from a DID Document's verification method.
  */
 export function getPublicKeyFromDocument(doc: DIDDocument): Uint8Array | null {

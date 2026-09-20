@@ -81,6 +81,9 @@ export type ActionType =
   | "admin.wallet.wipe"
   | "admin.wallet.grants.view"
   | "vault.consent.update"
+  | "vault.grant.create"
+  | "vault.grant.revoke"
+  | "vault.share.redeem"
   | "admin.users.list"
   | "admin.user.suspend"
   | "admin.user.activate"
@@ -94,7 +97,8 @@ export type ActionType =
   | "admin.apikeys.update"
   | "admin.integrations.docs"
   | "admin.integrations.webhook"
-  | "admin.health.view";
+  | "admin.health.view"
+  | "admin.health.detailed";
 
 export type EntityType =
   | "did"

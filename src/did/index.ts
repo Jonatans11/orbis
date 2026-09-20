@@ -34,6 +34,7 @@ export async function createDIDKey(): Promise<DIDCreationResult> {
     verification_method_id: result.verificationMethodId,
     document: JSON.stringify(result.didDocument),
     status: "active",
+    owner_user_id: null,
   });
 
   return {
@@ -61,6 +62,7 @@ export async function createDIDWeb(options: webModule.DIDWebOptions): Promise<DI
     verification_method_id: result.verificationMethodId,
     document: JSON.stringify(result.didDocument),
     status: "active",
+    owner_user_id: null,
   });
 
   return {
