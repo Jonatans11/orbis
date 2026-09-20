@@ -43,6 +43,11 @@ jobs:
       - name: Type check
         run: bun run build
 
+      - name: Install team-db shim (local SQLite)
+        run: |
+          chmod +x scripts/team-db
+          echo "$GITHUB_WORKSPACE/scripts" >> "$GITHUB_PATH"
+
       - name: Run tests
         run: bun run test
         env:
