@@ -7,11 +7,7 @@ import {
 import {
   Card, CardHeader, Input, Button, StatusPill, Mono, ErrorNote, EmptyState, Table, StatTile,
 } from "../../components/ui";
-
-function adminFetch(path: string, init?: RequestInit) {
-  const token = localStorage.getItem("orbis_admin_token");
-  return fetch(path, { ...init, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers } }).then(r => r.json());
-}
+import { adminFetch } from "../../lib/adminFetch";
 
 function formatBytes(bytes: number): string {
   if (!bytes) return "0 B";
@@ -103,7 +99,6 @@ export default function AdminWallets() {
       <div className="rounded-lg border border-[rgba(77,124,255,0.15)] bg-[rgba(77,124,255,0.05)] px-4 py-3 text-[12.5px] leading-6 text-ink-2">
         <span className="font-medium text-[var(--color-accent)]">Admin visibility:</span> Admins see device metadata (name, platform, wallet ID, last seen, vault record count, quota usage) and grant metadata (scope, expiry, access counts). <span className="font-medium">Vault contents, credential data, message contents, and private keys are end-to-end encrypted and are never visible to admins or ORBIS servers.</span>
       </div>
-
 
       {error && <ErrorNote message={error} />}
 

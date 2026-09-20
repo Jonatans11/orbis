@@ -1,14 +1,14 @@
 # ORBIS.ID Reasoning Map — index
 
 Human-readable index of [`reasoning-map.json`](reasoning-map.json) (the
-authoritative machine-readable graph: 217 nodes, 210 typed edges).
+authoritative machine-readable graph: 226 nodes, 226 typed edges).
 Interactive 3D view: open [`viewer.html`](viewer.html) in a browser; regenerate
 it after data changes with `node reasoning/build-viewer.mjs`.
 
 Consult the `reason` subagent (`.claude/agents/reason.md`) to query this map,
 check a proposed change against it, or record a new decision into it.
 
-Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
+Generated 2026-09-20. Do not hand-edit numbers here without updating the JSON.
 
 ## Principles — values the project favors (17)
 
@@ -81,7 +81,7 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 
 - `openapi-31` — **OpenAPI 3.1 API contract.** The full public API surface is specified as an OpenAPI 3.1.0 document served at /openapi.yaml. _(openapi.yaml:1-7; src/gateway/routes.ts:531)_
 
-## Decisions — choices the project made (55)
+## Decisions — choices the project made (60)
 
 **governance**
 
@@ -157,8 +157,13 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 - `e2e-share-encryption` — **End-to-end encrypted vault sharing.** Vault records are encrypted on-device with a per-record AES-256-GCM key (AAD-bound to record id) wrapped under a keychain-held device master key; sharing seals only that record's key for the grantee's X25519 key (ECDH-ES) — the server sees ciphertext only. _(m/wallet-app/src/services/vaultCrypto.ts:1-116)_
 - `wallet-api-base-url` — **Wallet talks to https://orbis.ctonew.app.** The wallet's live backend base URL is https://orbis.ctonew.app, overridable via app.json extra.apiBaseUrl, with a JWT bearer held in the secure store. _(m/wallet-app/src/services/api.ts:12-43)_
 - `wallet-server-tables` — **Wallet server owns 9 tables in the shared store.** initWalletTables creates wallet_devices, wallet_backup_items, vault_records, vault_grants, grant_access_log, refresh_tokens, wallet_push_tokens, wallet_message_queue, and oauth_identities. _(src/wallet/db.ts:31-41)_
-- `wallet-consent-toggle` — **Per-record consent flag: private ↔ monetizable.** PATCH /vault/:recordId/consent toggles between private (default) and monetizable (opt-in to compensation requests); toggling never auto-shares — explicit per-grant consent is still required — and the change is audit-logged. _(src/wallet/routes.ts:293-345)_
-- `wallet-grants-dual-role` — **Unified grant list spans grantor and grantee roles.** GET /grants unions grants the user owns with grants received by their DID, deriving status active/expired/revoked and an is_paid flag. _(src/wallet/routes.ts:412-459)_
+- `wallet-consent-toggle` — **Per-record consent flag: private ↔ monetizable.** PATCH /api/wallet/vault/:recordId/consent toggles between private (default) and monetizable (opt-in to compensation requests); toggling never auto-shares — explicit per-grant consent is still required — and the change is audit-logged. _(src/wallet/routes.ts:458-486)_
+- `wallet-grants-dual-role` — **Unified grant list spans grantor and grantee roles.** GET /api/wallet/data/grants unions grants the user owns with grants received by their linked DID, deriving role, status active/expired/revoked, is_paid, and access_count; with ?recordId= it returns that record's grants with member-visible access logs. _(src/wallet/routes.ts:278-306)_
+- `wallet-client-contract-canonical` — **m/core client contract is the canonical wallet API surface.** The mobile client contract (m/core/src/api/endpoints.ts) is authoritative: the backend serves /api/wallet/data/*, /api/wallet/credentials/backup, /api/wallet/share/:grantId, and /api/wallet/messages/waiting with the client's response shapes; old /api/wallet/vault/* CRUD and /grants paths were removed (only the consent PATCH kept its path); a backend contract test enforces coverage. _(src/wallet/routes.ts:1-15; m/core/src/api/endpoints.ts:48-76; tests/wallet.test.ts:105)_
+- `vault-quota-enforced` — **50 MB vault quota enforced server-side on store.** POST /api/wallet/data/store enforces the 50 MB total vault quota (413 QUOTA_EXCEEDED); replacing a record frees its old bytes first — resolves the former wallet-quota-not-enforced constraint. _(src/wallet/routes.ts:238-276)_
+- `consent-server-authoritative` — **Per-record monetization consent lives on the server.** Consent is stored in vault_records.consent and the app reads/writes it via walletApi.setConsent; the old device-local per-record map was removed; toggling never auto-shares. _(m/wallet-app/src/screens/vault/VaultRecordScreen.tsx; m/wallet-app/src/features/vault/session.ts:42-43; src/wallet/routes.ts:458-486)_
+- `share-deep-links` — **Grantee redemption via deep links and QR.** orbisid://share/:grantId and https://orbis.id/share/:grantId (prefix configurable via ORBIS_PUBLIC_URL) land on ShareRedeemScreen, also reachable from the QR scanner; POST /api/wallet/data/share returns a shareUrl. _(m/wallet-app/src/navigation/RootNavigator.tsx:70-78; m/wallet-app/src/screens/ScanQRScreen.tsx; src/wallet/routes.ts:32-35,393)_
+- `wallet-device-registration` — **App registers once after sign-in, sends device id everywhere.** After sign-in the app calls POST /api/wallet/register once, stores walletId/deviceId in the keychain, and sends X-Orbis-Device-Id on every request. _(m/wallet-app/src/services/walletRegistration.ts; m/wallet-app/src/services/api.ts)_
 
 **ops**
 
@@ -168,7 +173,7 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 - `deploy-pipeline` — **Deploy: push image to GHCR on main.** On push to main, tests run then a Docker image is built and pushed to ghcr.io with sha/branch/semver/latest tags; the actual cloud deploy step is a documented placeholder. _(.github/workflows/deploy.yml:1-79)_
 - `port-3001` — **Fixed port 3001 contract.** The service listens on 3001 across the env default, docker-compose mapping and healthcheck, Dockerfile EXPOSE, and the OpenAPI local server URL. _(.env.example:7-8; Dockerfile:27-31; openapi.yaml:11-13)_
 
-## Rules — invariants enforced in code and tests (70)
+## Rules — invariants enforced in code and tests (74)
 
 **did**
 
@@ -188,6 +193,7 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 - `vc-issuance-contract` — **Issuance contract pinned by tests.** Issued VCs must carry a urn:uuid id, the requested types, correct issuer/subject/claims, an Ed25519Signature2020 assertionMethod proof, and support expirationDate, additionalContexts, and credentialSchema; issuance under 5s. _(tests/ssi.test.ts:220-316)_
 - `vc-metadata-logging` — **Issuance and verification leave metadata trails.** Issuance persists credential metadata (issuer, subject, id, status active); every verification appends a verification log row. _(tests/ssi.test.ts:774-827)_
 - `vc-claims-fidelity` — **Claims survive round-trips with full fidelity.** Claims preserve mixed types (string/number/bool/null/nested/array); empty claims yield a subject with only id; 10k-character values survive. _(tests/ssi.test.ts:831-887)_
+- `credentialstatus-signed-at-issuance` — **credentialStatus must be signed at issuance.** credentialStatus is passed into issueCredential and included BEFORE proof creation — post-hoc injection invalidates the Ed25519 proof; /api/vc/issue passes req.body.credentialStatus through. Supersedes the credentialstatus-backcompat direction. _(src/vc/issue.ts:49-59,123-124; src/index.ts:312-362; tests/statuslist.test.ts:72-108)_
 
 **zk**
 
@@ -233,12 +239,14 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 - `audit-logging` — **Append-only audit log for sensitive operations.** All sensitive operations (did.*, vc.*, zk.*, trust.*, auth.*, compliance.*, key rotation) log actor type/id, action, entity, result, IP, and timestamp; writes are async and never crash the caller. _(src/security/audit.ts:41-135; tests/audit.test.ts:10-30)_
 - `audit-actor-derivation` — **Actor and client IP derivation.** Actor is user (req.user.sub), else api_key (req.apiKey.id), else unknown; client IP prefers the first x-forwarded-for entry, then req.ip, then 0.0.0.0. _(src/security/audit.ts:194-217)_
 - `audit-db-constraints` — **Audit rows constrained by CHECK enums.** ssi_audit_log enforces actor_type IN (user, api_key, system, unknown) and result IN (success, failure) at the schema level, with entity/timestamp/actor indexes. _(src/security/audit.ts:41-56)_
+- `wallet-jwt-router-gate` — **Wallet router self-applies requireJwt; admin is DB-verified.** The wallet router applies requireJwt to every route except POST /api/wallet/refresh; admin wallet routes additionally use requireAdmin (DB re-read); req.user.admin does not exist — isAdminUser(userId) is the DB-backed check used by /api/did/list and /api/vc/credentials. _(src/wallet/routes.ts:63-79,708-806; src/security/jwt.ts:110; src/index.ts:267-289,412-424)_
 
 **data**
 
 - `metadata-only-store` — **No personal data in the metadata store.** The team-db store holds only non-sensitive indexed metadata (DID/credential/trust metadata); personal data never touches this store. _(src/db/metadata.ts:4-9)_
 - `sql-quote-escaping` — **Single-quote doubling as SQL escaping.** Values are interpolated via a quote() helper that null-checks and doubles single quotes (SQLite escaping) — string escaping, not parameterization. _(src/db/metadata.ts:258-262)_
 - `sql-execfilesync-no-shell` — **SQL executed via execFileSync argv, no shell.** New admin/wallet modules pass SQL as an argv element to execFileSync('team-db', [sql]) — avoiding shell interpolation so bcrypt hashes and whitespace survive — with quote-doubling as the only injection guard. _(src/admin/auth.ts:23-41; src/wallet/routes.ts:21-35)_
+- `fresh-db-schema-complete` — **CREATE TABLE statements carry the full production schema.** CREATE TABLE IF NOT EXISTS must carry the FULL production schema (ssi_users includes admin/status; api_keys includes plan) because ALTER TABLE migrations are unavailable through team-db; ensure*Columns functions stay no-ops. _(src/security/jwt.ts:81-108; src/db/metadata.ts:96; src/admin/auth.ts:51-86)_
 
 **web**
 
@@ -255,11 +263,12 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 - `title-plaintext-only` — **Only record titles are plaintext server-side.** The only plaintext the server sees is record metadata (title ≤120 chars + type); the title helper warns to keep personal details out; the body is ciphertext. _(m/wallet-app/src/services/walletApi.ts:29-33)_
 - `blob-quota-limits` — **512 KB per record, 50 MB per vault.** Per-record blobs are capped at 512 KB and total vault quota at 50 MB, with quota warnings and vault-full copy. _(m/wallet-app/src/services/walletApi.ts:105-106)_
 - `network-retry-dedupe` — **Share retries dedupe against recent grants.** On a network error after a share POST, the client checks for a just-created (<2 min) matching non-revoked grant before retrying, avoiding duplicate grants. _(m/wallet-app/src/screens/vault/VaultShareScreen.tsx:216-234)_
-- `wallet-device-binding` — **Device identity via X-Orbis-Device-Id header.** Wallet installs are bound per device: /register mints walletId and deviceId, platform must be ios/android/web, and the device id header identifies subsequent requests. _(src/wallet/routes.ts:52-89)_
-- `wallet-remote-wipe` — **Remote wipe surfaces as HTTP 410 WALLET_WIPED.** GET /status returns 410 WALLET_WIPED if any of the user's devices is flagged wiped; the admin wipe endpoint requires a reason and audit-logs admin.wallet.wipe. _(src/wallet/routes.ts:95-108,680-702)_
-- `wallet-payload-cap-50mb` — **Single encrypted payload capped at 50 MB.** Backup and vault PUT endpoints reject ciphertext over 50 MB with 413; the encryption algorithm defaults to A256GCM. _(src/wallet/routes.ts:176,230)_
-- `wallet-server-ciphertext-only` — **Wallet server persists only encrypted blobs.** Vault and backup rows store ciphertext, IV, and algorithm; list endpoints omit ciphertext by default and the vault list never returns it. _(src/wallet/routes.ts:192-194,248)_
-- `wallet-zk-present-endpoint` — **Server verifies on-device ZK presentations.** POST /vc/present verifies a selective-disclosure proof the wallet generated and signed on-device (the holder secret never leaves the device); failures return 403 with per-check detail. _(src/wallet/routes.ts:524-632)_
+- `wallet-device-binding` — **Device identity via X-Orbis-Device-Id header.** Wallet installs are bound per device: /register mints walletId and deviceId, platform must be ios/android/web, and the device id header identifies subsequent requests. _(src/wallet/routes.ts:37-39,93-109)_
+- `wallet-remote-wipe` — **Remote wipe surfaces as HTTP 410 WALLET_WIPED.** GET /status returns 410 WALLET_WIPED if any of the user's devices is flagged wiped; the admin wipe endpoint requires a reason and audit-logs admin.wallet.wipe. _(src/wallet/routes.ts:115-136,742-766)_
+- `wallet-payload-cap-50mb` — **Single encrypted payload capped at 50 MB.** Backup items and vault store payloads reject ciphertext over 50 MB (413 / per-item error); the encryption algorithm defaults to A256GCM. _(src/wallet/routes.ts:188-191,257-261)_
+- `wallet-server-ciphertext-only` — **Wallet server persists only encrypted blobs.** Vault and backup rows store ciphertext, IV, and algorithm; list endpoints omit ciphertext by default and the vault category list never returns it (record GET requires ?include=ciphertext). _(src/wallet/routes.ts:400-412,427-448)_
+- `wallet-zk-present-endpoint` — **Server verifies on-device ZK presentations.** POST /vc/present verifies a selective-disclosure proof the wallet generated and signed on-device (the holder secret never leaves the device); failures return 403 with per-check detail. _(src/wallet/routes.ts:640-706)_
+- `share-redemption-did-bound` — **Share redemption is DID-bound, expiring, and logged.** GET /api/wallet/share/:grantId returns ciphertext + sealed key ONLY when the caller's JWT-linked DID equals the grant's grantee_did (403 DEVICE_MISMATCH otherwise); revoked → 410 GRANT_REVOKED, expired → 410 GRANT_EXPIRED; every redemption writes grant_access_log (async) plus ssi_audit_log. _(src/wallet/routes.ts:500-551)_
 
 **ops**
 
@@ -271,14 +280,14 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 **did**
 
 - `did-web-mock-fallback` — **did:web falls back to an empty mock document.** If the HTTPS fetch fails and no local record exists, resolution returns a mock DID Document with empty verification arrays (cached 5 min) — resolution can 'succeed' with no keys. _(src/did/web.ts:188-227)_
-- `resolvedid-not-awaited` — **resolveDID promise not awaited in resolve endpoint.** GET /api/did/resolve/:did truthiness-checks an un-awaited Promise, so did:web resolution results are mishandled at this endpoint — a known defect recorded here until fixed. _(src/index.ts:137-149)_
-- `broken-did-owner-field` — **did/index.ts omits owner_user_id and calls a missing helper.** insertDID calls omit the now-required owner_user_id and did/index.ts:138 calls getPublicKeyFromVerificationMethod which does not exist on did/key — both are tsc errors on main. _(src/did/index.ts:29,56,138)_
+- `resolvedid-not-awaited` — **resolveDID promise not awaited in resolve endpoint.** RESOLVED 2026-09-20: the handler previously truthiness-checked an un-awaited Promise (resolveDID is async), mishandling did:web resolution results; it now awaits resolveDID. _(src/index.ts:228-260)_
+- `broken-did-owner-field` — **did/index.ts omitted owner_user_id and called a missing helper (RESOLVED 2026-09-20).** getPublicKeyFromVerificationMethod now exists in src/did/key.ts and insertDID calls pass owner_user_id (null at creation, stamped by the route). _(src/did/key.ts:174; src/did/index.ts)_
 
 **vc**
 
 - `verify-vm-derivation-fragile` — **verificationMethod derived by string-splitting the DID.** Issuance builds the VM id as ${issuerDID}#${lastSegment}, which aligns only with did:key fragments; did:web VMs (uuid fragment) can mismatch at verification. _(src/vc/issue.ts:167; src/did/web.ts:82-84)_
-- `issuance-perf-noop` — **Issuance timing telemetry is a no-op.** issuanceTimeMs measures Date.now() - startTime where both are captured after issuance completes — always ~0ms placeholder telemetry. _(src/index.ts:262-271)_
-- `broken-statuslist-persistence` — **StatusList persistence layer missing (typecheck fails).** src/vc/statuslist.ts imports db.insertStatusList/getStatusListById/updateStatusListEncoded and the StatusListRecord type, none of which exist in src/db/metadata.ts — npm run build fails on main. _(src/vc/statuslist.ts:106-171 vs src/db/metadata.ts)_
+- `issuance-perf-noop` — **Issuance timing telemetry is a no-op (RESOLVED 2026-09-20).** /api/vc/issue now captures startTime before issueCredential and reports real elapsed time as issuanceTimeMs. _(src/index.ts:349-370)_
+- `broken-statuslist-persistence` — **StatusList persistence layer missing (RESOLVED 2026-09-20).** src/db/metadata.ts now defines StatusListRecord/insertStatusList/getStatusListById/updateStatusListEncoded plus the ssi_status_lists table. _(src/db/metadata.ts:117,519-541)_
 
 **zk**
 
@@ -301,7 +310,7 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 **security**
 
 - `jwt-secret-ephemeral` — **Auto-generated JWT secret invalidates tokens on restart.** If JWT_SECRET is unset a random per-process secret is generated (dev only), invalidating all JWTs on restart; .env.example instructs openssl rand -hex 32 for production. _(src/security/jwt.ts:20-22; .env.example:13-23)_
-- `broken-jwtpayload-admin` — **req.user.admin read but JwtPayload has no admin field.** JwtPayload defines only sub/email/did/iat/exp, yet req.user?.admin is read in wallet routes (5 sites) and index.ts (2 sites): a compile error, and at runtime tokens never carry admin so every wallet admin endpoint returns 403. _(src/security/jwt.ts:39-45 vs src/wallet/routes.ts:643-736; src/index.ts:272,415)_
+- `broken-jwtpayload-admin` — **req.user.admin read but JwtPayload has no admin field (RESOLVED 2026-09-20).** req.user.admin no longer exists anywhere; admin authority is DB-backed via requireAdmin and isAdminUser(userId) — the JWT never carries an admin claim. _(src/security/jwt.ts:110; src/index.ts:272,417; src/wallet/routes.ts:708-806)_
 
 **data**
 
@@ -312,7 +321,7 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 
 **web**
 
-- `broken-web-lockfile` — **web/package-lock.json out of sync — npm ci fails.** The web testing/lint devDependencies (vitest, @testing-library/react, eslint, jsdom and their trees) are in web/package.json but absent from package-lock.json, so the CI web lane aborts at npm ci. _(web/package.json:24-46 vs web/package-lock.json)_
+- `broken-web-lockfile` — **web/package-lock.json out of sync (RESOLVED 2026-09-20).** The lockfile was regenerated; web `npm ci && npm run build` passes. _(web/package-lock.json; web/package.json)_
 
 **wallet**
 
@@ -320,13 +329,13 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 - `scope-full-or-meta` — **Share scope: full or meta-only.** V1 share scope is limited to full or meta-only; field-level sharing is not yet available. _(m/wallet-app/src/services/walletApi.ts:27)_
 - `usd-only` — **Compensation currency is USD only.** Only USD is supported for share compensation; more currencies are promised later. _(m/wallet-app/src/screens/vault/VaultShareScreen.tsx:193,460)_
 - `ios-portrait-dark-only` — **iOS: no tablet, portrait, dark only.** app.json sets supportsTablet false, portrait orientation, and a dark-only UI. _(m/wallet-app/app.json:6-12)_
-- `wallet-quota-not-enforced` — **50 MB vault quota reported but not enforced.** /status reports quotaLimitBytes of 50 MB and usage as SUM(vault_records.size), but writes only check per-payload size — total quota is not enforced server-side. _(src/wallet/routes.ts:109-119)_
-- `wallet-refresh-esm-gap` — **Refresh handler uses require() in an ESM module.** POST /refresh calls CommonJS require('crypto')/require('jsonwebtoken') in a type:module package and, when JWT_SECRET is unset, signs with a per-call random secret that can never verify later tokens. _(src/wallet/routes.ts:504-519)_
-- `broken-wallet-no-jwt-middleware` — **Wallet routes mounted without JWT middleware.** app.use('/api/wallet', walletRoutes) claims per-route requireJwt in a comment, but no handler attaches it and req.user is never populated — wallet endpoints return 401 Authentication required. _(src/index.ts:758; src/wallet/routes.ts)_
+- `wallet-quota-not-enforced` — **50 MB vault quota reported but not enforced (RESOLVED 2026-09-20).** POST /api/wallet/data/store now enforces the total quota server-side (413 QUOTA_EXCEEDED, replaced records free their old bytes first) — see decision `vault-quota-enforced`. _(src/wallet/routes.ts:262-268)_
+- `wallet-refresh-esm-gap` — **Refresh handler uses require() in an ESM module (RESOLVED 2026-09-20).** POST /api/wallet/refresh now uses ESM imports and signs via findUserById + generateToken under the shared JWT secret. _(src/wallet/routes.ts:18-21,63-76)_
+- `broken-wallet-no-jwt-middleware` — **Wallet routes mounted without JWT middleware (RESOLVED 2026-09-20).** The wallet router now applies requireJwt itself to every route except POST /api/wallet/refresh — see rule `wallet-jwt-router-gate`. _(src/wallet/routes.ts:63-79; src/index.ts:1266)_
 
 **ops**
 
-- `main-ci-red` — **Both CI lanes fail on current main.** As of 2026-07-18, main's last 8 CI runs failed: the Bun lane on backend typecheck errors (statuslist persistence, JwtPayload.admin, admin health ActionType, DID owner fields) and the Node web lane on the out-of-sync lockfile. Any PR against main inherits red CI until these are fixed. _(.github/workflows/ci.yml; GitHub Actions history)_
+- `main-ci-red` — **Both CI lanes fail on current main (RESOLVED 2026-09-20).** All recorded causes fixed — statuslist persistence, JwtPayload.admin, admin health ActionType, DID owner fields, web lockfile — plus the missing didcomm calls/mediation db functions and ssi_calls/ssi_call_messages tables. Backend tsc clean, 193/193 backend tests green, web build green. _(src/db/metadata.ts:120-123,568-600; .github/workflows/ci.yml)_
 - `ssi-backend-legacy-duplicate` — **ssi-backend/ is a stale legacy duplicate of src/.** Top-level ssi-backend/ is the pre-expansion lineage (db/did/middleware/trust/vc only — no admin, wallet, security, gateway, didcomm); history shows it was merged into root src/, which is now the superset source of truth. _(ssi-backend/; git log ('ssi-backend wins conflicts as deployed truth'))_
 
 ## Directions — roadmap, TODOs, planned evolution (18)
@@ -340,7 +349,7 @@ Generated 2026-07-20. Do not hand-edit numbers here without updating the JSON.
 
 **vc**
 
-- `credentialstatus-backcompat` — **credentialStatus injection kept for back-compat.** The issue endpoint supports injecting a credentialStatus after issuance 'for backward compatibility' — a transitional path. _(src/index.ts:257-260)_
+- `credentialstatus-backcompat` — **credentialStatus injection superseded by signed-at-issuance (2026-09-20).** Post-issuance injection was removed because it invalidated the Ed25519 proof; credentialStatus is now signed at issuance — see rule `credentialstatus-signed-at-issuance`. _(src/index.ts:358-360; src/vc/issue.ts:58-59)_
 
 **didcomm**
 

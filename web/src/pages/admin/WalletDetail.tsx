@@ -2,11 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Smartphone, HardDrive, Key, Clock, ShieldAlert, Eye, AlertTriangle } from "lucide-react";
 import { Card, CardHeader, Button, StatusPill, Mono, ErrorNote, EmptyState, Table, SectionLabel, CopyButton } from "../../components/ui";
-
-function adminFetch(path: string, init?: RequestInit) {
-  const token = localStorage.getItem("orbis_admin_token");
-  return fetch(path, { ...init, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers } }).then(r => r.json());
-}
+import { adminFetch } from "../../lib/adminFetch";
 
 function formatBytes(bytes: number): string {
   if (!bytes) return "0 B";

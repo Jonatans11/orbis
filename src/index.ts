@@ -225,7 +225,7 @@ app.post("/api/did/create", requireJwt, async (req: Request, res: Response) => {
  * GET /api/did/resolve/:did
  * Resolve a DID to its DID Document.
  */
-app.get("/api/did/resolve/:did", (req: Request, res: Response) => {
+app.get("/api/did/resolve/:did", async (req: Request, res: Response) => {
   try {
     const did = req.params.did as string;
     if (!did || !did.startsWith("did:")) {
@@ -233,7 +233,9 @@ app.get("/api/did/resolve/:did", (req: Request, res: Response) => {
       return;
     }
 
-    const didDocument = didRegistry.resolveDID(did);
+    // resolveDID is async (did:web fetches over HTTPS) — an un-awaited
+    // Promise is always truthy, which used to mask resolution failures.
+    const didDocument = await didRegistry.resolveDID(did);
     if (!didDocument) {
       res.status(404).json({ error: true, message: `DID not found: ${did}` });
       return;

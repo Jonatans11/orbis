@@ -1,11 +1,7 @@
 import { useState, useEffect } from "react";
 import { Key, Search, RefreshCw, Eye, X } from "lucide-react";
 import { Card, CardHeader, Input, Button, StatusPill, Mono, ErrorNote, EmptyState, Table, StatTile } from "../../components/ui";
-
-function adminFetch(path: string, init?: RequestInit) {
-  const token = localStorage.getItem("orbis_admin_token");
-  return fetch(path, { ...init, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers } }).then(r => r.json());
-}
+import { adminFetch } from "../../lib/adminFetch";
 
 export default function AdminGrants() {
   const [grants, setGrants] = useState<any[]>([]);

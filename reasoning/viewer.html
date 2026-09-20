@@ -299,7 +299,7 @@ const DATA = {
  "meta": {
   "project": "ORBIS.ID",
   "description": "Reasoning map of the ORBIS.ID self-sovereign identity platform: every known law/standard, decision, rule, constraint, direction, and principle, with sources and typed relations. Authoritative for agents; see CLAUDE.md and .claude/agents/reason.md.",
-  "generated": "2026-07-20",
+  "generated": "2026-09-20",
   "nodeTypes": [
    "law",
    "decision",
@@ -914,8 +914,8 @@ const DATA = {
    "type": "constraint",
    "domain": "did",
    "title": "resolveDID promise not awaited in resolve endpoint",
-   "statement": "GET /api/did/resolve/:did truthiness-checks an un-awaited Promise, so did:web resolution results are mishandled at this endpoint — a known defect recorded here until fixed.",
-   "source": "src/index.ts:137-149",
+   "statement": "RESOLVED 2026-09-20: GET /api/did/resolve/:did previously truthiness-checked an un-awaited Promise (resolveDID is async), mishandling did:web resolution results. The handler is now async and awaits resolveDID.",
+   "source": "src/index.ts:228-260",
    "pos": [
     223.1,
     87,
@@ -1108,9 +1108,9 @@ const DATA = {
    "id": "issuance-perf-noop",
    "type": "constraint",
    "domain": "vc",
-   "title": "Issuance timing telemetry is a no-op",
-   "statement": "issuanceTimeMs measures Date.now() - startTime where both are captured after issuance completes — always ~0ms placeholder telemetry.",
-   "source": "src/index.ts:262-271",
+   "title": "Issuance timing telemetry is a no-op (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): /api/vc/issue now captures startTime before issueCredential and reports the real elapsed time as issuanceTimeMs. Historical defect: both timestamps were captured after issuance, yielding ~0ms placeholder telemetry.",
+   "source": "src/index.ts:349-370",
    "pos": [
     142.7,
     -80.2,
@@ -1121,9 +1121,9 @@ const DATA = {
    "id": "credentialstatus-backcompat",
    "type": "direction",
    "domain": "vc",
-   "title": "credentialStatus injection kept for back-compat",
-   "statement": "The issue endpoint supports injecting a credentialStatus after issuance 'for backward compatibility' — a transitional path.",
-   "source": "src/index.ts:257-260",
+   "title": "credentialStatus injection superseded by signed-at-issuance",
+   "statement": "SUPERSEDED 2026-09-20 by rule credentialstatus-signed-at-issuance: post-issuance credentialStatus injection was removed because it invalidated the Ed25519 proof; credentialStatus is now passed into issueCredential and covered by the signature.",
+   "source": "src/index.ts:358-360; src/vc/issue.ts:58-59",
    "pos": [
     192.2,
     193.9,
@@ -2852,7 +2852,7 @@ const DATA = {
    "domain": "wallet",
    "title": "Device identity via X-Orbis-Device-Id header",
    "statement": "Wallet installs are bound per device: /register mints walletId and deviceId, platform must be ios/android/web, and the device id header identifies subsequent requests.",
-   "source": "src/wallet/routes.ts:52-89",
+   "source": "src/wallet/routes.ts:37-39,93-109",
    "pos": [
     203.7,
     50.7,
@@ -2865,7 +2865,7 @@ const DATA = {
    "domain": "wallet",
    "title": "Remote wipe surfaces as HTTP 410 WALLET_WIPED",
    "statement": "GET /status returns 410 WALLET_WIPED if any of the user's devices is flagged wiped; the admin wipe endpoint requires a reason and audit-logs admin.wallet.wipe.",
-   "source": "src/wallet/routes.ts:95-108,680-702",
+   "source": "src/wallet/routes.ts:115-136,742-766",
    "pos": [
     211,
     -27.7,
@@ -2877,8 +2877,8 @@ const DATA = {
    "type": "rule",
    "domain": "wallet",
    "title": "Single encrypted payload capped at 50 MB",
-   "statement": "Backup and vault PUT endpoints reject ciphertext over 50 MB with 413; the encryption algorithm defaults to A256GCM.",
-   "source": "src/wallet/routes.ts:176,230",
+   "statement": "Backup items and vault store payloads reject ciphertext over 50 MB (413 / per-item error); the encryption algorithm defaults to A256GCM.",
+   "source": "src/wallet/routes.ts:188-191,257-261",
    "pos": [
     200.8,
     -53.1,
@@ -2889,9 +2889,9 @@ const DATA = {
    "id": "wallet-quota-not-enforced",
    "type": "constraint",
    "domain": "wallet",
-   "title": "50 MB vault quota reported but not enforced",
-   "statement": "/status reports quotaLimitBytes of 50 MB and usage as SUM(vault_records.size), but writes only check per-payload size — total quota is not enforced server-side.",
-   "source": "src/wallet/routes.ts:109-119",
+   "title": "50 MB vault quota reported but not enforced (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): POST /api/wallet/data/store now enforces the 50 MB total vault quota server-side (413 QUOTA_EXCEEDED), freeing a replaced record's old bytes first — see decision vault-quota-enforced. Historical defect: writes only checked per-payload size while /status reported the quota.",
+   "source": "src/wallet/routes.ts:262-268",
    "pos": [
     228.5,
     112.7,
@@ -2903,8 +2903,8 @@ const DATA = {
    "type": "rule",
    "domain": "wallet",
    "title": "Wallet server persists only encrypted blobs",
-   "statement": "Vault and backup rows store ciphertext, IV, and algorithm; list endpoints omit ciphertext by default and the vault list never returns it.",
-   "source": "src/wallet/routes.ts:192-194,248",
+   "statement": "Vault and backup rows store ciphertext, IV, and algorithm; list endpoints omit ciphertext by default and the vault category list never returns it (record GET requires ?include=ciphertext).",
+   "source": "src/wallet/routes.ts:400-412,427-448",
    "pos": [
     202.5,
     81.8,
@@ -2916,8 +2916,8 @@ const DATA = {
    "type": "decision",
    "domain": "wallet",
    "title": "Per-record consent flag: private ↔ monetizable",
-   "statement": "PATCH /vault/:recordId/consent toggles between private (default) and monetizable (opt-in to compensation requests); toggling never auto-shares — explicit per-grant consent is still required — and the change is audit-logged.",
-   "source": "src/wallet/routes.ts:293-345",
+   "statement": "PATCH /api/wallet/vault/:recordId/consent toggles between private (default) and monetizable (opt-in to compensation requests); toggling never auto-shares — explicit per-grant consent is still required — and the change is audit-logged.",
+   "source": "src/wallet/routes.ts:458-486",
    "pos": [
     137.1,
     56.5,
@@ -2929,8 +2929,8 @@ const DATA = {
    "type": "decision",
    "domain": "wallet",
    "title": "Unified grant list spans grantor and grantee roles",
-   "statement": "GET /grants unions grants the user owns with grants received by their DID, deriving status active/expired/revoked and an is_paid flag.",
-   "source": "src/wallet/routes.ts:412-459",
+   "statement": "GET /api/wallet/data/grants unions grants the user owns with grants received by their linked DID, deriving role, status active/expired/revoked, is_paid, and access_count; with ?recordId= it returns that record's grants with member-visible access logs.",
+   "source": "src/wallet/routes.ts:278-306",
    "pos": [
     141.7,
     54.5,
@@ -2943,7 +2943,7 @@ const DATA = {
    "domain": "wallet",
    "title": "Server verifies on-device ZK presentations",
    "statement": "POST /vc/present verifies a selective-disclosure proof the wallet generated and signed on-device (the holder secret never leaves the device); failures return 403 with per-check detail.",
-   "source": "src/wallet/routes.ts:524-632",
+   "source": "src/wallet/routes.ts:640-706",
    "pos": [
     223,
     33.7,
@@ -2954,9 +2954,9 @@ const DATA = {
    "id": "wallet-refresh-esm-gap",
    "type": "constraint",
    "domain": "wallet",
-   "title": "Refresh handler uses require() in an ESM module",
-   "statement": "POST /refresh calls CommonJS require('crypto')/require('jsonwebtoken') in a type:module package and, when JWT_SECRET is unset, signs with a per-call random secret that can never verify later tokens.",
-   "source": "src/wallet/routes.ts:504-519",
+   "title": "Refresh handler uses require() in an ESM module (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): POST /api/wallet/refresh now uses ESM imports and signs via findUserById + generateToken from src/security/jwt.ts, so refresh tokens are exchanged under the shared JWT secret. Historical defect: CommonJS require() in a type:module package and a per-call random secret that could never verify later tokens.",
+   "source": "src/wallet/routes.ts:18-21,63-76",
    "pos": [
     270.4,
     14.3,
@@ -2980,9 +2980,9 @@ const DATA = {
    "id": "broken-statuslist-persistence",
    "type": "constraint",
    "domain": "vc",
-   "title": "StatusList persistence layer missing (typecheck fails)",
-   "statement": "src/vc/statuslist.ts imports db.insertStatusList/getStatusListById/updateStatusListEncoded and the StatusListRecord type, none of which exist in src/db/metadata.ts — npm run build fails on main.",
-   "source": "src/vc/statuslist.ts:106-171 vs src/db/metadata.ts",
+   "title": "StatusList persistence layer missing (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): src/db/metadata.ts now defines StatusListRecord, insertStatusList, getStatusListById, and updateStatusListEncoded plus the ssi_status_lists table, so src/vc/statuslist.ts compiles and persists. Historical defect: these were imported but did not exist, failing npm run build on main.",
+   "source": "src/db/metadata.ts:117,519-541",
    "pos": [
     51,
     -84.3,
@@ -2993,9 +2993,9 @@ const DATA = {
    "id": "broken-jwtpayload-admin",
    "type": "constraint",
    "domain": "security",
-   "title": "req.user.admin read but JwtPayload has no admin field",
-   "statement": "JwtPayload defines only sub/email/did/iat/exp, yet req.user?.admin is read in wallet routes (5 sites) and index.ts (2 sites): a compile error, and at runtime tokens never carry admin so every wallet admin endpoint returns 403.",
-   "source": "src/security/jwt.ts:39-45 vs src/wallet/routes.ts:643-736; src/index.ts:272,415",
+   "title": "req.user.admin read but JwtPayload has no admin field (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): req.user.admin no longer exists anywhere. Admin authority is DB-backed: wallet admin routes use requireAdmin, and /api/did/list and /api/vc/credentials call isAdminUser(userId) in src/security/jwt.ts — the JWT never carries an admin claim. Historical defect: req.user?.admin reads were a compile error and always-403 at runtime.",
+   "source": "src/security/jwt.ts:110; src/index.ts:272,417; src/wallet/routes.ts:708-806",
    "pos": [
     -117.6,
     7.4,
@@ -3006,9 +3006,9 @@ const DATA = {
    "id": "broken-wallet-no-jwt-middleware",
    "type": "constraint",
    "domain": "wallet",
-   "title": "Wallet routes mounted without JWT middleware",
-   "statement": "app.use('/api/wallet', walletRoutes) claims per-route requireJwt in a comment, but no handler attaches it and req.user is never populated — wallet endpoints return 401 Authentication required.",
-   "source": "src/index.ts:758; src/wallet/routes.ts",
+   "title": "Wallet routes mounted without JWT middleware (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): the wallet router now applies requireJwt itself via router.use(requireJwt) to every route except POST /api/wallet/refresh, so req.user is populated for all wallet handlers. Historical defect: no handler attached requireJwt and every wallet endpoint returned 401.",
+   "source": "src/wallet/routes.ts:63-79; src/index.ts:1266",
    "pos": [
     259.8,
     78.5,
@@ -3019,9 +3019,9 @@ const DATA = {
    "id": "broken-admin-health-actiontype",
    "type": "constraint",
    "domain": "admin",
-   "title": "admin.health.detailed is not a valid ActionType",
-   "statement": "The audit action literal 'admin.health.detailed' is not in the ActionType union in security/audit.ts, so admin/routes.ts fails the backend typecheck.",
-   "source": "src/admin/routes.ts:943,954",
+   "title": "admin.health.detailed is not a valid ActionType (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): 'admin.health.detailed' was added to the ActionType union in src/security/audit.ts, so admin/routes.ts typechecks. Historical defect: the literal was missing from the union and failed the backend typecheck.",
+   "source": "src/security/audit.ts:101",
    "pos": [
     -210.8,
     -3.4,
@@ -3032,9 +3032,9 @@ const DATA = {
    "id": "broken-did-owner-field",
    "type": "constraint",
    "domain": "did",
-   "title": "did/index.ts omits owner_user_id and calls a missing helper",
-   "statement": "insertDID calls omit the now-required owner_user_id and did/index.ts:138 calls getPublicKeyFromVerificationMethod which does not exist on did/key — both are tsc errors on main.",
-   "source": "src/did/index.ts:29,56,138",
+   "title": "did/index.ts omitted owner_user_id and called a missing helper (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): getPublicKeyFromVerificationMethod now exists in src/did/key.ts, and insertDID calls pass owner_user_id (null at creation, stamped by the route). Historical defect: both were tsc errors on main.",
+   "source": "src/did/key.ts:174; src/did/index.ts",
    "pos": [
     161.6,
     -58.9,
@@ -3045,9 +3045,9 @@ const DATA = {
    "id": "broken-web-lockfile",
    "type": "constraint",
    "domain": "web",
-   "title": "web/package-lock.json out of sync — npm ci fails",
-   "statement": "The web testing/lint devDependencies (vitest, @testing-library/react, eslint, jsdom and their trees) are in web/package.json but absent from package-lock.json, so the CI web lane aborts at npm ci.",
-   "source": "web/package.json:24-46 vs web/package-lock.json",
+   "title": "web/package-lock.json out of sync (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): web/package-lock.json was regenerated; web `npm ci && npm run build` passes. Historical defect: testing/lint devDependencies were in web/package.json but absent from the lockfile, aborting the CI web lane at npm ci.",
+   "source": "web/package-lock.json; web/package.json",
    "pos": [
     146.4,
     29.5,
@@ -3058,9 +3058,9 @@ const DATA = {
    "id": "main-ci-red",
    "type": "constraint",
    "domain": "ops",
-   "title": "Both CI lanes fail on current main",
-   "statement": "As of 2026-07-18, main's last 8 CI runs failed: the Bun lane on backend typecheck errors (statuslist persistence, JwtPayload.admin, admin health ActionType, DID owner fields) and the Node web lane on the out-of-sync lockfile. Any PR against main inherits red CI until these are fixed.",
-   "source": ".github/workflows/ci.yml; GitHub Actions history",
+   "title": "Both CI lanes fail on current main (RESOLVED)",
+   "statement": "RESOLVED 2026-09-20 (Data Vault completion): all recorded causes fixed — statuslist persistence, JwtPayload.admin, admin health ActionType, DID owner fields, and the web lockfile. This fix also added the missing didcomm calls/mediation db functions and ssi_calls/ssi_call_messages tables to src/db/metadata.ts (a cause not previously recorded in the map). Backend tsc is clean, 193/193 backend tests pass, and the web build is green. Historical defect: as of 2026-07-18 main's last 8 CI runs failed on both lanes.",
+   "source": "src/db/metadata.ts:120-123,568-600; .github/workflows/ci.yml",
    "pos": [
     -61.1,
     -76.4,
@@ -3156,6 +3156,123 @@ const DATA = {
     15.7,
     10.7,
     -224.7
+   ]
+  },
+  {
+   "id": "wallet-client-contract-canonical",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "m/core client contract is the canonical wallet API surface",
+   "statement": "The mobile client contract (m/core/src/api/endpoints.ts) is authoritative: the backend serves /api/wallet/data/*, /api/wallet/credentials/backup, /api/wallet/share/:grantId, and /api/wallet/messages/waiting with the client's response shapes. The old /api/wallet/vault/* CRUD and /grants paths were removed; only PATCH /api/wallet/vault/:recordId/consent kept its path. A backend contract test ('m/core endpoint contract') enforces route coverage.",
+   "source": "src/wallet/routes.ts:1-15; m/core/src/api/endpoints.ts:48-76; tests/wallet.test.ts:105",
+   "pos": [
+    131.2,
+    -44.3,
+    -61.8
+   ]
+  },
+  {
+   "id": "vault-quota-enforced",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "50 MB vault quota enforced server-side on store",
+   "statement": "POST /api/wallet/data/store enforces the 50 MB total vault quota server-side, returning 413 QUOTA_EXCEEDED; replacing an existing record frees its old bytes before the check. Resolves the former wallet-quota-not-enforced constraint.",
+   "source": "src/wallet/routes.ts:238-276",
+   "pos": [
+    125.6,
+    62.8,
+    -66.4
+   ]
+  },
+  {
+   "id": "consent-server-authoritative",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Per-record monetization consent lives on the server",
+   "statement": "Per-record consent (private/monetizable) is stored in vault_records.consent and the mobile app reads/writes it via walletApi.setConsent (PATCH /api/wallet/vault/:recordId/consent); the old device-local per-record map was removed. Toggling never auto-shares — explicit per-grant consent is still required.",
+   "source": "m/wallet-app/src/screens/vault/VaultRecordScreen.tsx; m/wallet-app/src/features/vault/session.ts:42-43; src/wallet/routes.ts:458-486",
+   "pos": [
+    142.7,
+    39.6,
+    -45.3
+   ]
+  },
+  {
+   "id": "share-deep-links",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "Grantee redemption via deep links and QR",
+   "statement": "Grantee redemption is reachable via deep links (orbisid://share/:grantId and https://orbis.id/share/:grantId — prefix configurable server-side via ORBIS_PUBLIC_URL) and via the QR scanner; linking is wired in RootNavigator and ScanQRScreen, and POST /api/wallet/data/share returns a shareUrl.",
+   "source": "m/wallet-app/src/navigation/RootNavigator.tsx:70-78; m/wallet-app/src/screens/ScanQRScreen.tsx; src/wallet/routes.ts:32-35,393",
+   "pos": [
+    108.3,
+    -86.6,
+    -70.2
+   ]
+  },
+  {
+   "id": "wallet-device-registration",
+   "type": "decision",
+   "domain": "wallet",
+   "title": "App registers once after sign-in, sends device id everywhere",
+   "statement": "After sign-in the app calls POST /api/wallet/register once, stores walletId/deviceId in the keychain, and sends X-Orbis-Device-Id on every request for device binding.",
+   "source": "m/wallet-app/src/services/walletRegistration.ts; m/wallet-app/src/services/api.ts",
+   "pos": [
+    118.9,
+    77.5,
+    -63.1
+   ]
+  },
+  {
+   "id": "share-redemption-did-bound",
+   "type": "rule",
+   "domain": "wallet",
+   "title": "Share redemption is DID-bound, expiring, and logged",
+   "statement": "GET /api/wallet/share/:grantId returns ciphertext + sealed key ONLY when the caller's JWT-linked DID equals the grant's grantee_did (403 DEVICE_MISMATCH otherwise); revoked grants return 410 GRANT_REVOKED and expired grants 410 GRANT_EXPIRED; every redemption writes the member-visible grant_access_log (async) plus ssi_audit_log.",
+   "source": "src/wallet/routes.ts:500-551",
+   "pos": [
+    214.2,
+    -47.8,
+    -49.3
+   ]
+  },
+  {
+   "id": "wallet-jwt-router-gate",
+   "type": "rule",
+   "domain": "security",
+   "title": "Wallet router self-applies requireJwt; admin is DB-verified",
+   "statement": "The wallet router applies requireJwt itself to every route except POST /api/wallet/refresh; admin wallet routes additionally use requireAdmin (DB re-read of the admin column). req.user.admin does not exist anywhere — isAdminUser(userId) in src/security/jwt.ts is the DB-backed check used by /api/did/list and /api/vc/credentials.",
+   "source": "src/wallet/routes.ts:63-79,708-806; src/security/jwt.ts:110; src/index.ts:267-289,412-424",
+   "pos": [
+    -178.4,
+    51.7,
+    -126.6
+   ]
+  },
+  {
+   "id": "fresh-db-schema-complete",
+   "type": "rule",
+   "domain": "data",
+   "title": "CREATE TABLE statements carry the full production schema",
+   "statement": "CREATE TABLE IF NOT EXISTS statements must carry the FULL production schema (ssi_users includes admin and status; api_keys includes plan) because ALTER TABLE migrations are unavailable through team-db; the ensure*Columns functions stay deliberate no-ops.",
+   "source": "src/security/jwt.ts:81-108; src/db/metadata.ts:96; src/admin/auth.ts:51-86",
+   "pos": [
+    -38.2,
+    44.5,
+    -216.8
+   ]
+  },
+  {
+   "id": "credentialstatus-signed-at-issuance",
+   "type": "rule",
+   "domain": "vc",
+   "title": "credentialStatus must be signed at issuance",
+   "statement": "credentialStatus must be passed into issueCredential and included BEFORE proof creation — post-hoc injection invalidates the Ed25519 proof. issueCredential takes a credentialStatus option and /api/vc/issue passes req.body.credentialStatus through; pinned by the statuslist revocation tests. Supersedes the credentialstatus-backcompat direction.",
+   "source": "src/vc/issue.ts:49-59,123-124; src/index.ts:312-362; tests/statuslist.test.ts:72-108",
+   "pos": [
+    96.4,
+    -34.7,
+    200.2
    ]
   }
  ],
@@ -4209,6 +4326,86 @@ const DATA = {
    "source": "sql-execfilesync-no-shell",
    "relation": "constrains",
    "target": "raw-sql-interpolation"
+  },
+  {
+   "source": "wallet-client-contract-canonical",
+   "relation": "constrains",
+   "target": "wallet-server-tables"
+  },
+  {
+   "source": "share-redemption-did-bound",
+   "relation": "enforces",
+   "target": "user-consent"
+  },
+  {
+   "source": "share-redemption-did-bound",
+   "relation": "derives-from",
+   "target": "share-requires-keyagreement"
+  },
+  {
+   "source": "share-redemption-did-bound",
+   "relation": "implements",
+   "target": "auditability"
+  },
+  {
+   "source": "share-redemption-did-bound",
+   "relation": "part-of",
+   "target": "wallet-client-contract-canonical"
+  },
+  {
+   "source": "wallet-jwt-router-gate",
+   "relation": "enforces",
+   "target": "jwt-bcrypt-auth"
+  },
+  {
+   "source": "wallet-jwt-router-gate",
+   "relation": "enforces",
+   "target": "admin-db-flag-source-of-truth"
+  },
+  {
+   "source": "fresh-db-schema-complete",
+   "relation": "derives-from",
+   "target": "admin-migrations-noop"
+  },
+  {
+   "source": "fresh-db-schema-complete",
+   "relation": "constrains",
+   "target": "runtime-migration"
+  },
+  {
+   "source": "credentialstatus-signed-at-issuance",
+   "relation": "enforces",
+   "target": "ed25519-signature-2020"
+  },
+  {
+   "source": "credentialstatus-signed-at-issuance",
+   "relation": "implements",
+   "target": "statuslist-2021"
+  },
+  {
+   "source": "vault-quota-enforced",
+   "relation": "enforces",
+   "target": "blob-quota-limits"
+  },
+  {
+   "source": "consent-server-authoritative",
+   "relation": "implements",
+   "target": "user-consent"
+  },
+  {
+   "source": "consent-server-authoritative",
+   "relation": "part-of",
+   "target": "wallet-consent-toggle"
+  },
+  {
+   "source": "share-deep-links",
+   "relation": "enables",
+   "target": "share-redemption-did-bound"
+  },
+  {
+   "source": "wallet-device-registration",
+   "relation": "implements",
+   "target": "wallet-device-binding"
   }
  ]
 };

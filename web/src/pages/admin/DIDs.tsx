@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { KeyRound, RefreshCw, Search } from "lucide-react";
 import { Card, CardHeader, Input, StatusPill, Mono, ErrorNote, EmptyState, Table, CodeBlock, Button } from "../../components/ui";
-function adminFetch(path: string) { const t = localStorage.getItem("orbis_admin_token"); return fetch(path, { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json()); }
+import { adminFetch } from "../../lib/adminFetch";
 export default function AdminDIDs() {
   const [dids, setDids] = useState<any[]>([]);
   const [total, setTotal] = useState(0);

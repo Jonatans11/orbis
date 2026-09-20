@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Activity, RefreshCw, Server, Database, Shield, Clock } from "lucide-react";
 import { Card, CardHeader, StatTile, ErrorNote, CodeBlock } from "../../components/ui";
-function adminFetch(path: string) { const t = localStorage.getItem("orbis_admin_token"); return fetch(path, { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json()); }
+import { adminFetch } from "../../lib/adminFetch";
 export default function AdminSystemHealth() {
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(true);
