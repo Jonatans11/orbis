@@ -28,11 +28,7 @@ import { Sheet } from '@/components/Sheet';
 import { GrantRow } from '@/components/vault/GrantRow';
 import { grantCopy, monetizeCopy, recordCopy } from '@/features/vault/copy';
 import { parseServerDate, truncateDid } from '@/features/vault/format';
-import {
-  isMonetizationEnabled,
-  isRecordMonetizable,
-  setRecordMonetizable,
-} from '@/features/vault/session';
+import { isMonetizationEnabled } from '@/features/vault/session';
 import { decryptRecordPayload, deleteRecordKey, type VaultRecordPayload } from '@/services/vaultCrypto';
 import {
   parseMeta,
@@ -64,15 +60,15 @@ export function VaultRecordScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [recordRes, grantsRes, recMonetizable] = await Promise.all([
+      const [recordRes, grantsRes] = await Promise.all([
         walletApi.getRecord(recordId, true),
         walletApi.listGrants(recordId),
-        isRecordMonetizable(recordId),
       ]);
       setRecord(recordRes.record);
       setMeta(parseMeta(recordRes.record.meta_json));
       setGrants(grantsRes);
-      setMonetizable(recMonetizable);
+      // Consent is server-authoritative — the same flag drives the list badge.
+      setMonetizable(recordRes.record.consent === 'monetizable');
       if (recordRes.record.ciphertext && recordRes.record.iv) {
         try {
           const decrypted = await decryptRecordPayload(recordId, {
@@ -181,7 +177,6 @@ export function VaultRecordScreen() {
             try {
               await walletApi.deleteRecord(recordId);
               await deleteRecordKey(recordId);
-              await setRecordMonetizable(recordId, false);
               navigation.goBack();
             } catch {
               Alert.alert('Delete failed', 'Please check your connection and try again.');
@@ -194,8 +189,12 @@ export function VaultRecordScreen() {
 
   const toggleMonetize = async (next: boolean) => {
     if (!next) {
-      setMonetizable(false);
-      await setRecordMonetizable(recordId, false);
+      try {
+        await walletApi.setConsent(recordId, 'private');
+        setMonetizable(false);
+      } catch {
+        Alert.alert('Update failed', 'Please check your connection and try again.');
+      }
       return;
     }
     if (!(await isMonetizationEnabled())) {
@@ -209,9 +208,14 @@ export function VaultRecordScreen() {
   };
 
   const confirmMonetize = async () => {
-    setMonetizable(true);
-    await setRecordMonetizable(recordId, true);
-    setMonetizeConfirmOpen(false);
+    try {
+      await walletApi.setConsent(recordId, 'monetizable');
+      setMonetizable(true);
+    } catch {
+      Alert.alert('Update failed', 'Please check your connection and try again.');
+    } finally {
+      setMonetizeConfirmOpen(false);
+    }
   };
 
   return (

@@ -71,7 +71,7 @@ export default function StatusLists() {
       });
       if (res.success) {
         setSuccessMsg(`Index ${bitIndex} successfully updated to ${bitStatus ? "REVOKED/SUSPENDED" : "ACTIVE"}.`);
-        fetchList.run(); // Reload list state
+        fetchList.reload(); // Reload list state
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to update status bit");

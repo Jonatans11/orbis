@@ -127,6 +127,21 @@ export function isGrantActive(grant: Grant, now: Date = new Date()): boolean {
 export const walletApi = {
   status: () => request<WalletStatus>('GET', '/api/wallet/status'),
 
+  register: (body: { deviceName?: string; platform?: 'ios' | 'android' | 'web'; pushToken?: string }) =>
+    request<{ success: boolean; walletId: string; deviceId: string; createdAt: string }>(
+      'POST',
+      '/api/wallet/register',
+      body,
+    ),
+
+  /** Server-authoritative monetization consent (spec 07 §6) — never auto-shares. */
+  setConsent: (recordId: string, consent: 'private' | 'monetizable') =>
+    request<{ success: boolean; recordId: string; consent: string }>(
+      'PATCH',
+      `/api/wallet/vault/${encodeURIComponent(recordId)}/consent`,
+      { consent },
+    ),
+
   listRecords: (category: VaultCategoryId, cursor?: string, limit = 20) =>
     request<{ success: boolean; items: VaultListItem[]; nextCursor: string | null }>(
       'GET',

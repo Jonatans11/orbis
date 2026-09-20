@@ -9,10 +9,13 @@ const testDbPath = join(mkdtempSync(join(tmpdir(), "orbis-test-")), "team.db");
 
 export default defineConfig({
   test: {
+    // Backend suites only — web/ and m/* run their own vitest configs
+    // (web needs a jsdom environment; m/core ships its own package).
+    include: ["tests/**/*.test.ts"],
     env: {
       TEAM_DB_PATH: testDbPath,
     },
-    // The three suites share one SQLite file; run them sequentially to
+    // The suites share one SQLite file; run them sequentially to
     // avoid cross-file write races on the shared team-db.
     fileParallelism: false,
   },

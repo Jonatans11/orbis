@@ -1,10 +1,7 @@
 import { useState, useEffect } from "react";
 import { LayoutGrid, Users, KeyRound, FileBadge2, KeySquare, ScrollText, ShieldCheck, RefreshCw, Activity } from "lucide-react";
 import { Card, CardHeader, StatTile, useAsync } from "../../components/ui";
-function adminFetch(path: string) {
-  const token = localStorage.getItem("orbis_admin_token");
-  return fetch(path, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
-}
+import { adminFetch } from "../../lib/adminFetch";
 export default function AdminOverview() {
   const [stats, setStats] = useState<any>(null);
   const [health, setHealth] = useState<any>(null);

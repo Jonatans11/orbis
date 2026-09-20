@@ -8,7 +8,7 @@
  * NOTE: team-db CLI requires single-line SQL statements (no newlines).
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, exec } from "node:child_process";
 
 const TEAM_DB = "team-db";
 
@@ -31,6 +31,39 @@ function query(sql: string): any[] {
     }
     throw new Error(`DB query failed: ${err.message}`);
   }
+}
+
+/**
+ * Execute a SQL write asynchronously in the background (non-blocking).
+ * Used for high-frequency writes (call signaling messages, mediated queues)
+ * so they never block critical request paths. Mirrors audit.ts's logAudit.
+ */
+function execAsync(sql: string): void {
+  try {
+    const normalized = sql.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    exec(`${TEAM_DB} ${JSON.stringify(normalized)}`, { timeout: 15_000 }, (err) => {
+      if (err) {
+        console.error(`[DB] Background write failed: ${err.message}`);
+      }
+    });
+  } catch (err) {
+    // Background writes should never crash the caller
+    console.error("[DB] Failed to schedule background write:", err);
+  }
+}
+
+/**
+ * Public synchronous SQL helper (used by the DIDComm mediation module).
+ */
+export function executeSQL(sql: string): any[] {
+  return query(sql);
+}
+
+/**
+ * Public non-blocking SQL write helper (used by the DIDComm mediation module).
+ */
+export function executeSQLAsync(sql: string): void {
+  execAsync(sql);
 }
 
 /**
@@ -60,7 +93,7 @@ export function initDatabase(): void {
   query("CREATE TABLE IF NOT EXISTS didcomm_key_agreement (id TEXT PRIMARY KEY, did TEXT NOT NULL UNIQUE, x25519_public_key TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
 
   // Gateway API keys table
-  query("CREATE TABLE IF NOT EXISTS api_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL, member_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), revoked_at TEXT, last_used_at TEXT)");
+  query("CREATE TABLE IF NOT EXISTS api_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, key_hash TEXT NOT NULL UNIQUE, scopes TEXT NOT NULL, member_id TEXT, plan TEXT NOT NULL DEFAULT 'free', created_at TEXT NOT NULL DEFAULT (datetime('now')), revoked_at TEXT, last_used_at TEXT)");
 
   // Gateway usage logs table
   query("CREATE TABLE IF NOT EXISTS usage_logs (id TEXT PRIMARY KEY, api_key_id TEXT NOT NULL, method TEXT NOT NULL, path TEXT NOT NULL, status_code INTEGER NOT NULL, response_time_ms INTEGER NOT NULL DEFAULT 0, timestamp TEXT NOT NULL DEFAULT (datetime('now')))");
@@ -79,6 +112,15 @@ export function initDatabase(): void {
 
   // DIDComm push registration table (maps DIDs to device push tokens)
   query("CREATE TABLE IF NOT EXISTS didcomm_push_registrations (id TEXT PRIMARY KEY, did TEXT NOT NULL, push_token TEXT NOT NULL, platform TEXT NOT NULL CHECK(platform IN ('ios', 'android', 'web')), device_id TEXT NOT NULL UNIQUE, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
+
+  // StatusList2021 bitstring storage (gzipped, base64url-encoded lists)
+  query("CREATE TABLE IF NOT EXISTS ssi_status_lists (id TEXT PRIMARY KEY, name TEXT NOT NULL, issuer_did TEXT NOT NULL, status_purpose TEXT NOT NULL DEFAULT 'revocation' CHECK(status_purpose IN ('revocation', 'suspension')), encoded_list TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))");
+
+  // WebRTC call state table (DIDComm-encrypted call signaling)
+  query("CREATE TABLE IF NOT EXISTS ssi_calls (id TEXT PRIMARY KEY, call_id TEXT NOT NULL UNIQUE, caller_did TEXT NOT NULL, callee_did TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'ringing' CHECK(status IN ('ringing', 'connecting', 'active', 'ended')), started_at TEXT, ended_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
+
+  // WebRTC call signaling messages table (offers/answers/ICE candidates)
+  query("CREATE TABLE IF NOT EXISTS ssi_call_messages (id TEXT PRIMARY KEY, call_id TEXT NOT NULL, from_did TEXT NOT NULL, msg_type TEXT NOT NULL CHECK(msg_type IN ('offer', 'answer', 'ice_candidate', 'end')), sdp TEXT, ice_candidate TEXT, encrypted_payload TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
 }
 
 /**
@@ -437,7 +479,7 @@ export interface PushRegistrationRecord {
   id: string;
   did: string;
   push_token: string;
-  platform: string;
+  platform: "ios" | "android" | "web";
   device_id: string;
   active: number;
   created_at: string;
@@ -470,4 +512,90 @@ export function updatePushRegistration(id: string, pushToken: string, did: strin
 
 export function deactivatePushRegistration(id: string): void {
   query(`UPDATE didcomm_push_registrations SET active = 0, updated_at = datetime('now') WHERE id = ${quote(id)}`);
+}
+
+// ─── StatusList2021 Storage ─────────────────────────────────────────────────
+
+export interface StatusListRecord {
+  id: string;
+  name: string;
+  issuer_did: string;
+  status_purpose: "revocation" | "suspension";
+  encoded_list: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function insertStatusList(record: StatusListRecord): void {
+  query(`INSERT INTO ssi_status_lists (id, name, issuer_did, status_purpose, encoded_list, created_at, updated_at) VALUES (${quote(record.id)}, ${quote(record.name)}, ${quote(record.issuer_did)}, ${quote(record.status_purpose)}, ${quote(record.encoded_list)}, ${quote(record.created_at)}, ${quote(record.updated_at)})`);
+}
+
+export function getStatusListById(id: string): StatusListRecord | null {
+  const rows = query(`SELECT * FROM ssi_status_lists WHERE id = ${quote(id)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as StatusListRecord;
+}
+
+export function updateStatusListEncoded(id: string, encodedList: string): void {
+  query(`UPDATE ssi_status_lists SET encoded_list = ${quote(encodedList)}, updated_at = datetime('now') WHERE id = ${quote(id)}`);
+}
+
+// ─── WebRTC Call Signaling Storage ──────────────────────────────────────────
+
+export interface CallRecord {
+  id: string;
+  call_id: string;
+  caller_did: string;
+  callee_did: string;
+  status: "ringing" | "connecting" | "active" | "ended";
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+}
+
+export interface CallMessage {
+  id: string;
+  call_id: string;
+  from_did: string;
+  msg_type: "offer" | "answer" | "ice_candidate" | "end";
+  sdp: string | null;
+  ice_candidate: string | null;
+  encrypted_payload: string;
+  created_at: string;
+}
+
+export function insertCall(record: Omit<CallRecord, "created_at">): void {
+  query(`INSERT INTO ssi_calls (id, call_id, caller_did, callee_did, status, started_at, ended_at) VALUES (${quote(record.id)}, ${quote(record.call_id)}, ${quote(record.caller_did)}, ${quote(record.callee_did)}, ${quote(record.status)}, ${quote(record.started_at)}, ${quote(record.ended_at)})`);
+}
+
+/**
+ * Insert a call signaling message. ICE candidates arrive in rapid bursts,
+ * so this is a non-blocking background write (never execSync on hot paths).
+ */
+export function insertCallMessage(record: Omit<CallMessage, "created_at">): void {
+  execAsync(`INSERT INTO ssi_call_messages (id, call_id, from_did, msg_type, sdp, ice_candidate, encrypted_payload) VALUES (${quote(record.id)}, ${quote(record.call_id)}, ${quote(record.from_did)}, ${quote(record.msg_type)}, ${quote(record.sdp)}, ${quote(record.ice_candidate)}, ${quote(record.encrypted_payload)})`);
+}
+
+export function getCallByCallId(callId: string): CallRecord | null {
+  const rows = query(`SELECT * FROM ssi_calls WHERE call_id = ${quote(callId)}`);
+  if (rows.length === 0) return null;
+  return rows[0] as CallRecord;
+}
+
+export function updateCallStatus(callId: string, status: "ringing" | "connecting" | "active" | "ended"): void {
+  if (status === "active") {
+    query(`UPDATE ssi_calls SET status = ${quote(status)}, started_at = COALESCE(started_at, datetime('now')) WHERE call_id = ${quote(callId)}`);
+  } else if (status === "ended") {
+    query(`UPDATE ssi_calls SET status = ${quote(status)}, ended_at = COALESCE(ended_at, datetime('now')) WHERE call_id = ${quote(callId)}`);
+  } else {
+    query(`UPDATE ssi_calls SET status = ${quote(status)} WHERE call_id = ${quote(callId)}`);
+  }
+}
+
+export function listCalls(did: string): CallRecord[] {
+  return query(`SELECT * FROM ssi_calls WHERE caller_did = ${quote(did)} OR callee_did = ${quote(did)} ORDER BY created_at DESC`) as CallRecord[];
+}
+
+export function getCallMessages(callId: string): CallMessage[] {
+  return query(`SELECT * FROM ssi_call_messages WHERE call_id = ${quote(callId)} ORDER BY created_at ASC`) as CallMessage[];
 }

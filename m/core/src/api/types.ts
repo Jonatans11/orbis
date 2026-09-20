@@ -296,7 +296,7 @@ export interface WalletAdminUserRow {
 export interface WalletAdminUsersResult {
   success: boolean;
   count: number;
-  users: WalletAdminUserRow[];
+  items: WalletAdminUserRow[];
 }
 export interface WalletAdminCredentialsResult {
   success: boolean;

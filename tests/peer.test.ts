@@ -13,7 +13,7 @@ describe("did:peer Method 2", () => {
       serviceEndpoint
     });
 
-    expect(peerDID).startsWith("did:peer:2.");
+    expect(peerDID.startsWith("did:peer:2.")).toBe(true);
     expect(peerDID).toContain(".V");
     expect(peerDID).toContain(".E");
     expect(peerDID).toContain(".S");

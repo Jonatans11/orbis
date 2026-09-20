@@ -14,6 +14,7 @@ export const VALID_SCOPES = [
   "vc:verify",
   "trust:read",
   "trust:write",
+  "admin:manage",
 ] as const;
 
 export type Scope = (typeof VALID_SCOPES)[number];

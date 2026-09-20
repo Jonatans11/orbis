@@ -37,6 +37,10 @@ export async function runVaultGate(): Promise<boolean> {
 
 // ---------------------------------------------------------------------------
 // Monetization preferences
+//
+// The master switch is a device preference and stays local. Per-record
+// consent is server-authoritative: PATCH /api/wallet/vault/:recordId/consent
+// via walletApi.setConsent — the old local per-record map is gone.
 // ---------------------------------------------------------------------------
 
 export async function isMonetizationEnabled(): Promise<boolean> {
@@ -45,26 +49,4 @@ export async function isMonetizationEnabled(): Promise<boolean> {
 
 export async function setMonetizationEnabled(enabled: boolean): Promise<void> {
   await secureSet(SecureKeys.monetizationEnabled, enabled ? 'true' : 'false');
-}
-
-async function readMonetizableMap(): Promise<Record<string, boolean>> {
-  try {
-    return JSON.parse((await secureGet(SecureKeys.vaultMonetizableMap)) ?? '{}') as Record<
-      string,
-      boolean
-    >;
-  } catch {
-    return {};
-  }
-}
-
-export async function isRecordMonetizable(recordId: string): Promise<boolean> {
-  return (await readMonetizableMap())[recordId] === true;
-}
-
-export async function setRecordMonetizable(recordId: string, on: boolean): Promise<void> {
-  const map = await readMonetizableMap();
-  if (on) map[recordId] = true;
-  else delete map[recordId];
-  await secureSet(SecureKeys.vaultMonetizableMap, JSON.stringify(map));
 }

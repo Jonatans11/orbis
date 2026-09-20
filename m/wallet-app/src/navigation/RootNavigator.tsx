@@ -1,8 +1,9 @@
 import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as Linking from 'expo-linking';
 
 import { useAuth } from '@/context/AuthContext';
 import { CredentialsScreen } from '@/screens/CredentialsScreen';
@@ -64,11 +65,26 @@ function MainTabs() {
   );
 }
 
+/**
+ * Deep links (app.json scheme `orbisid` + share links). A grantee tapping
+ * `https://orbis.id/share/<grantId>` or `orbisid://share/<grantId>` lands on
+ * ShareRedeemScreen. Links received while locked/logged-out are dropped by
+ * React Navigation because the screen isn't registered in those states.
+ */
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: [Linking.createURL('/'), 'orbisid://', 'https://orbis.id'],
+  config: {
+    screens: {
+      ShareRedeem: 'share/:grantId',
+    },
+  },
+};
+
 export function RootNavigator() {
   const { status } = useAuth();
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer theme={navigationTheme} linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {status === 'onboarding' || status === 'loading' ? (
           <>

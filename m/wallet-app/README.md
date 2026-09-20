@@ -31,14 +31,39 @@ The backend base URL is configured in `app.json` under `expo.extra.apiBaseUrl`.
 ```
 src/
   components/   # Design-system primitives (Screen, Button, Card, Badge, …)
+                # + vault/ (QuotaMeter, GrantRow, ShareStatusPill)
   context/      # AuthContext — loading → onboarding → locked → unlocked
-  navigation/   # RootNavigator (auth stack, main tabs, QR modals)
-  screens/      # Onboarding, Login, Locked, Home, Credentials, Vault,
-                # Messages, Settings, ScanQR, ShowQR
-  services/     # api (ORBIS backend client), auth, biometrics
+  features/     # vault/ — biometric re-gate, copy, categories, formatting
+  navigation/   # RootNavigator (auth stack, main tabs, QR modals, deep links)
+  screens/      # Onboarding, Login, Locked, Home, Credentials, Messages,
+                # Settings, ScanQR, ShowQR + vault/ (Home, Category, Record,
+                # Share, AllShares, Compensation, ShareRedeem)
+  services/     # api (ORBIS backend client), walletApi (vault + grants),
+                # walletRegistration, vaultCrypto, auth, biometrics
   storage/      # secureStore — single gate for all secrets
   theme/        # Design tokens from /design/colors/tokens.json (dark default)
 ```
+
+## Data Vault (spec 07)
+
+End-to-end encrypted personal data vault with a consent ledger:
+
+- **On-device encryption** — every record gets a fresh AES-256-GCM key
+  (AAD-bound to the record id), wrapped under the device vault master key
+  (`services/vaultCrypto.ts` + `@orbis/wallet-core`). The server stores
+  ciphertext plus plaintext title/type only.
+- **Categories** — medical, financial, assets, documents, identity, with
+  notes, key/value fields, camera captures, and picked files as payloads.
+- **Selective sharing** — a grant seals the record key to the grantee's
+  X25519 key (ECDH-ES); scope `full` or `meta-only`, expiry ≤ 90 days,
+  optional requested compensation. Consent is server-authoritative
+  (`PATCH /api/wallet/vault/:recordId/consent`).
+- **Redemption** — grantees open shares via the `orbisid://share/:grantId`
+  deep link, `https://orbis.id/share/:grantId`, or by scanning a share QR;
+  shares are DID-bound, never "anyone with the link". Every access lands in
+  the member-visible access log.
+- **Device binding** — `POST /api/wallet/register` runs after sign-in and
+  the returned device id is sent on every request as `X-Orbis-Device-Id`.
 
 ## Status (Phase 1 — Foundation)
 

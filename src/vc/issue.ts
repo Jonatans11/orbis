@@ -55,6 +55,8 @@ export interface IssueCredentialOptions {
   schemaUrl?: string;
   expirationDate?: string;
   additionalContexts?: string[];
+  /** W3C credentialStatus (e.g. StatusList2021Entry). Must be set at issuance so the proof signature covers it — injecting it after signing invalidates the proof. */
+  credentialStatus?: Record<string, unknown>;
 }
 
 export interface IssueCredentialResult {
@@ -79,6 +81,7 @@ export async function issueCredential(options: IssueCredentialOptions): Promise<
     schemaUrl,
     expirationDate,
     additionalContexts = [],
+    credentialStatus,
   } = options;
 
   const credentialId = `urn:uuid:${uuidv4()}`;
@@ -117,6 +120,10 @@ export async function issueCredential(options: IssueCredentialOptions): Promise<
     };
   }
 
+  if (credentialStatus) {
+    (credential as any).credentialStatus = credentialStatus;
+  }
+
   // Create the proof
   const proof = await createProof(credential, issuerDID, issuerSecretKey);
 
@@ -139,6 +146,7 @@ export async function issueCredential(options: IssueCredentialOptions): Promise<
     expiration_date: expirationDate || null,
     status: "active",
     proof_type: "Ed25519Signature2020",
+    owner_user_id: null,
   });
 
   return {

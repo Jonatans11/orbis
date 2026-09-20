@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { FileBadge2, RefreshCw } from "lucide-react";
 import { Card, CardHeader, StatusPill, Mono, ErrorNote, EmptyState, Table, Button, CodeBlock } from "../../components/ui";
-function adminFetch(path: string) { const t = localStorage.getItem("orbis_admin_token"); return fetch(path, { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json()); }
+import { adminFetch } from "../../lib/adminFetch";
 function credType(raw: string) { try { const t = JSON.parse(raw); return Array.isArray(t) ? (t.filter((x: string) => x !== "VerifiableCredential").join(", ") || "VerifiableCredential") : raw; } catch { return raw; } }
 export default function AdminCredentials() {
   const [creds, setCreds] = useState<any[]>([]);

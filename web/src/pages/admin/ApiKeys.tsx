@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { KeySquare, RefreshCw, ShieldOff } from "lucide-react";
 import { Card, CardHeader, StatusPill, Mono, ErrorNote, EmptyState, Table, Button, useAsync, StatTile } from "../../components/ui";
-function adminFetch(path: string, init?: RequestInit) { const t = localStorage.getItem("orbis_admin_token"); return fetch(path, { ...init, headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}`, ...init?.headers } }).then(r => r.json()); }
+import { adminFetch } from "../../lib/adminFetch";
 export default function AdminApiKeys() {
   const [keys, setKeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

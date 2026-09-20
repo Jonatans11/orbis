@@ -25,8 +25,12 @@ export const SecureKeys = {
   vaultMasterKey: 'orbis.vault.master',
   /** Data monetization master switch (Settings → Privacy & data). */
   monetizationEnabled: 'orbis.privacy.monetization',
-  /** JSON map recordId → true for records with "Allow paid access requests" on. */
+  /** Legacy per-record monetizable map — consent is now server-authoritative; kept only so secureWipe clears old installs. */
   vaultMonetizableMap: 'orbis.vault.monetizable',
+  /** Wallet id returned by POST /api/wallet/register. */
+  walletId: 'orbis.wallet.id',
+  /** Device id returned by POST /api/wallet/register — sent as X-Orbis-Device-Id. */
+  deviceId: 'orbis.wallet.device',
 } as const;
 
 /** Prefix for per-record wrapped vault keys (dynamic keys: `orbis.vault.rk.<recordId>`). */

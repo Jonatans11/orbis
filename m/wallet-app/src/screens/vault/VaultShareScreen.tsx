@@ -225,7 +225,7 @@ export function VaultShareScreen() {
                 twoMinAgo,
           );
           if (existing) {
-            setSuccessUrl(`https://orbis.id/api/wallet/share/${existing.grant_id}`);
+            setSuccessUrl(`https://orbis.id/share/${existing.grant_id}`);
             return;
           }
         } catch {

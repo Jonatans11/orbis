@@ -1,10 +1,7 @@
 import { useState, useEffect } from "react";
 import { ScrollText, RefreshCw, Filter } from "lucide-react";
 import { Card, CardHeader, Input, Button, Field, ErrorNote, EmptyState, CodeBlock, useAsync } from "../../components/ui";
-function adminFetch(path: string) {
-  const token = localStorage.getItem("orbis_admin_token");
-  return fetch(path, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
-}
+import { adminFetch } from "../../lib/adminFetch";
 export default function AdminAuditLog() {
   const [entries, setEntries] = useState<any[]>([]);
   const [total, setTotal] = useState(0);

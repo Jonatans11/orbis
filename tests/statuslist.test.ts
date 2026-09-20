@@ -77,22 +77,21 @@ describe("StatusList2021 Core", () => {
       issuerDid: issuer.did,
     });
 
-    // Create a credential that references index 5 in the status list
+    // Create a credential that references index 5 in the status list.
+    // credentialStatus goes in at issuance so the proof signature covers it.
     const { credential } = await issueCredential({
       issuerDID: issuer.did,
       issuerSecretKey: issuer.keyPair.secretKey,
       subjectDID: subject.did,
       claims: { email: "user@example.com" },
+      credentialStatus: {
+        id: `https://orbis.id/api/status/list/${list.id}#5`,
+        type: "StatusList2021Entry",
+        statusPurpose: "revocation",
+        statusListIndex: "5",
+        statusListCredential: `https://orbis.id/api/status/list/${list.id}`,
+      },
     });
-
-    // Manually inject W3C credentialStatus
-    credential.credentialStatus = {
-      id: `https://orbis.id/api/status/list/${list.id}#5`,
-      type: "StatusList2021Entry",
-      statusPurpose: "revocation",
-      statusListIndex: "5",
-      statusListCredential: `https://orbis.id/api/status/list/${list.id}`,
-    };
 
     // First check: should be verified (bit 5 is 0)
     let result = await verifyCredential(credential);

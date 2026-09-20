@@ -8,10 +8,16 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomBytes } from "node:crypto";
 import express from "express";
 
+import { initDatabase } from "../src/db/metadata.js";
 import { generateApiKey, findApiKey, revokeApiKey, listApiKeys, hasScope, type Scope } from "../src/gateway/apikey.js";
 import { checkRateLimit, resetCache, getRateLimitState } from "../src/gateway/ratelimit.js";
 import { logUsage, getUsageStats, getAggregateStats } from "../src/gateway/usage.js";
 import { registerWebhook, listWebhooks, deleteWebhook, getWebhookDeliveries } from "../src/gateway/webhooks.js";
+
+// Fresh test databases are born empty — create the gateway tables first.
+beforeAll(() => {
+  initDatabase();
+});
 
 // ─── API Key Management ─────────────────────────────────────────────────────
 
@@ -121,12 +127,17 @@ describe("Rate Limiting", () => {
 describe("Usage Tracking", () => {
   const testKeyId = "usage-test-key";
 
-  it("should log usage events", () => {
+  it("should log usage events", async () => {
     logUsage(testKeyId, "POST", "/api/did/create", 201, 45);
     logUsage(testKeyId, "GET", "/api/did/list", 200, 12);
     logUsage(testKeyId, "POST", "/api/vc/issue", 500, 230);
 
-    const stats = getUsageStats(testKeyId);
+    // Usage writes are non-blocking background exec — poll until they land.
+    let stats = getUsageStats(testKeyId);
+    for (let i = 0; i < 20 && stats.totalRequests < 3; i++) {
+      await new Promise((r) => setTimeout(r, 150));
+      stats = getUsageStats(testKeyId);
+    }
 
     expect(stats.totalRequests).toBe(3);
     expect(stats.successCount).toBe(2);

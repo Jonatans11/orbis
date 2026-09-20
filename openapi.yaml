@@ -455,21 +455,468 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
-  /api/wallet/grants:
-    get:
-      summary: List all data-sharing grants for the authenticated user
+  /api/wallet/refresh:
+    post:
+      summary: Exchange a refresh token for a new JWT
       description: |
-        Returns grants where the user is either grantor (owner) or grantee (recipient).
-        Each grant includes role, derived status (active/expired/revoked), paid flag,
-        and access count. The grantee query requires a DID linked via PUT /api/auth/link-did.
+        The only wallet route that works without a live Bearer JWT. Looks the
+        refresh token up by SHA-256 hash; revoked or expired tokens are rejected.
+      operationId: walletRefreshToken
+      tags:
+        - Wallet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  description: Opaque refresh token issued at login
+      responses:
+        "200":
+          description: New JWT issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                    description: Freshly signed JWT
+        "400":
+          description: refreshToken is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid or expired refresh token, or user no longer exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/wallet/register:
+    post:
+      summary: Register a wallet installation
+      description: Binds a wallet installation (device) to the authenticated user.
+      operationId: registerWallet
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deviceName:
+                  type: string
+                platform:
+                  type: string
+                  enum: [ios, android, web]
+                pushToken:
+                  type: string
+      responses:
+        "201":
+          description: Wallet registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  walletId:
+                    type: string
+                    format: uuid
+                  deviceId:
+                    type: string
+                    format: uuid
+                  createdAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: platform must be ios, android, or web
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+  /api/wallet/status:
+    get:
+      summary: Wallet status poll
+      description: |
+        Polled on app foreground. If an admin has flagged any of the user's
+        devices for remote wipe, returns HTTP 410 with code WALLET_WIPED.
+        The optional X-Orbis-Device-Id header updates the device's last-seen time.
+      operationId: getWalletStatus
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-Orbis-Device-Id
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Wallet status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  walletId:
+                    type: string
+                    nullable: true
+                  wiped:
+                    type: boolean
+                    example: false
+                  deviceCount:
+                    type: integer
+                  quotaUsedBytes:
+                    type: integer
+                  quotaLimitBytes:
+                    type: integer
+                    example: 52428800
+        "401":
+          description: Authentication required
+        "410":
+          description: Wallet has been remotely wiped (code WALLET_WIPED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodedErrorResponse"
+  /api/wallet/device/{deviceId}:
+    delete:
+      summary: Unregister a device
+      description: User-initiated device unregistration.
+      operationId: unregisterWalletDevice
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Device unregistered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Authentication required
+  /api/wallet/push-token:
+    put:
+      summary: Update a device push token
+      description: |
+        Updates the push token for a device (e.g., after token refresh).
+        deviceId falls back to the X-Orbis-Device-Id header when omitted.
+      operationId: updatePushToken
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pushToken
+              properties:
+                deviceId:
+                  type: string
+                  description: Falls back to the X-Orbis-Device-Id header
+                pushToken:
+                  type: string
+      responses:
+        "200":
+          description: Push token updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: deviceId (or X-Orbis-Device-Id header) and pushToken are required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+  /api/wallet/credentials/backup:
+    post:
+      summary: Upsert encrypted credential backups
+      description: |
+        Upserts a batch of encrypted credential backups. Each item is validated
+        independently; the top-level success flag is true only when every item
+        was created. Items over 50 MB are rejected per-item.
+      operationId: backupCredentials
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - items
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                      - localId
+                      - category
+                      - ciphertext
+                      - iv
+                    properties:
+                      localId:
+                        type: string
+                      category:
+                        type: string
+                      ciphertext:
+                        type: string
+                        description: Base64 ciphertext
+                      iv:
+                        type: string
+                      alg:
+                        type: string
+                        default: A256GCM
+      responses:
+        "200":
+          description: Per-item results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: true only when every item has status "created"
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        localId:
+                          type: string
+                          nullable: true
+                        status:
+                          type: string
+                          enum: [created, error]
+                        size:
+                          type: integer
+                          description: Ciphertext size in bytes (created items only)
+                        message:
+                          type: string
+                          description: Error detail (error items only)
+        "400":
+          description: items array is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+    get:
+      summary: List credential backup items
+      description: |
+        Lists the caller's backup items — metadata only by default. Pass
+        ?include=ciphertext (or ?includeCiphertext=true) for full payloads.
+      operationId: listCredentialBackups
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: include
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ciphertext]
+        - name: includeCiphertext
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["true"]
+      responses:
+        "200":
+          description: Backup items, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WalletBackupItem"
+        "401":
+          description: Authentication required
+  /api/wallet/credentials/backup/{localId}:
+    delete:
+      summary: Delete a credential backup item
+      operationId: deleteCredentialBackup
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: localId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Backup item deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Authentication required
+  /api/wallet/data/store:
+    post:
+      summary: Store an encrypted vault record
+      description: |
+        Stores (upserts) an encrypted vault record. Only meta.title and
+        meta.type are stored in plaintext; the consent flag survives
+        re-upload. Enforces the 50 MB total vault quota (replacing a record
+        frees its old bytes first).
+      operationId: storeVaultRecord
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - recordId
+                - category
+                - meta
+                - ciphertext
+                - iv
+              properties:
+                recordId:
+                  type: string
+                category:
+                  type: string
+                  enum: [identity, medical, financial, assets, documents, education, membership]
+                meta:
+                  type: object
+                  required:
+                    - title
+                    - type
+                  properties:
+                    title:
+                      type: string
+                      minLength: 1
+                      maxLength: 120
+                    type:
+                      type: string
+                      maxLength: 60
+                ciphertext:
+                  type: string
+                  description: Base64 ciphertext
+                iv:
+                  type: string
+                alg:
+                  type: string
+                  default: A256GCM
+      responses:
+        "200":
+          description: Record stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  recordId:
+                    type: string
+                  size:
+                    type: integer
+                  updatedAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Missing/invalid fields, unknown category, or meta constraints violated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+        "413":
+          description: |
+            Payload exceeds the 50 MB per-record limit, or the 50 MB vault
+            quota would be exceeded (code QUOTA_EXCEEDED).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodedErrorResponse"
+  /api/wallet/data/grants:
+    get:
+      summary: List data-sharing grants (consent ledger)
+      description: |
+        Without recordId: every grant the user issued (role grantor) plus
+        grants issued to their linked DID (role grantee), each with an empty
+        accessLog. With recordId: that record's grants, each carrying its
+        member-visible accessLog. Rows carry derived role / status / is_paid /
+        access_count. The grantee query requires a DID linked via
+        PUT /api/auth/link-did.
       operationId: listUserGrants
       tags:
         - Wallet
       security:
         - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
-          description: List of grants with role and status
+          description: List of grants with role, status, and access log
           content:
             application/json:
               schema:
@@ -485,6 +932,257 @@ paths:
                       $ref: "#/components/schemas/GrantWithRole"
         "401":
           description: Authentication required
+  /api/wallet/data/grants/{grantId}:
+    delete:
+      summary: Revoke a sharing grant
+      description: Revokes a grant (owner only). Audit-logged.
+      operationId: revokeGrant
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: grantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Grant revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Authentication required
+        "404":
+          description: Grant not found (or not owned by the caller)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/wallet/data/share:
+    post:
+      summary: Create a data-sharing grant
+      description: |
+        Creates a time-limited, DID-bound sharing grant for a vault record the
+        caller owns. The record key arrives sealed to the grantee's X25519 key
+        (ECDH-ES) — the server relays it but can never open it. Expiry must be
+        in the future and at most 90 days out. price.amount / price.currency
+        may also be sent as top-level priceAmount / priceCurrency.
+      operationId: shareVaultRecord
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - recordId
+                - granteeDid
+                - scope
+                - encryptedKey
+                - expiresAt
+              properties:
+                recordId:
+                  type: string
+                granteeDid:
+                  type: string
+                  pattern: "^did:"
+                scope:
+                  type: string
+                  enum: [full, meta-only]
+                encryptedKey:
+                  type: string
+                  description: Record key sealed to the grantee's X25519 key (ECDH-ES)
+                expiresAt:
+                  type: string
+                  format: date-time
+                  description: Must be in the future, at most 90 days out
+                price:
+                  type: object
+                  properties:
+                    amount:
+                      type: integer
+                      minimum: 0
+                      default: 0
+                    currency:
+                      type: string
+                      default: USD
+      responses:
+        "201":
+          description: Grant created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  grantId:
+                    type: string
+                    format: uuid
+                  shareUrl:
+                    type: string
+                    format: uri
+                    example: "https://orbis.id/share/6f1e..."
+        "400":
+          description: Missing/invalid fields, bad scope or DID, or expiry out of range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+        "404":
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/wallet/data/record/{recordId}:
+    get:
+      summary: Get one vault record
+      description: Ciphertext is only included when explicitly requested via ?include=ciphertext.
+      operationId: getVaultRecord
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: include
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ciphertext]
+      responses:
+        "200":
+          description: The vault record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  record:
+                    $ref: "#/components/schemas/VaultRecord"
+        "401":
+          description: Authentication required
+        "404":
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Delete a vault record
+      description: Deletes a vault record and all of its grants.
+      operationId: deleteVaultRecord
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vault record and grants deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Authentication required
+  /api/wallet/data/{category}:
+    get:
+      summary: List vault records in a category
+      description: |
+        Metadata only — never ciphertext. Each row carries grantCount (active
+        grants on that record). Cursor-paginated by updated_at.
+      operationId: listVaultRecords
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [identity, medical, financial, assets, documents, education, membership]
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: nextCursor from the previous page
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Vault record metadata, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        record_id:
+                          type: string
+                        meta_json:
+                          type: string
+                          description: 'JSON string: {"title","type"}'
+                        size:
+                          type: integer
+                        consent:
+                          type: string
+                          enum: [private, monetizable]
+                        updated_at:
+                          type: string
+                          format: date-time
+                        grantCount:
+                          type: integer
+                  nextCursor:
+                    type: string
+                    nullable: true
+        "400":
+          description: Unknown category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
   /api/wallet/vault/{recordId}/consent:
     patch:
       summary: Update consent/monetization flag on a vault record
@@ -492,6 +1190,7 @@ paths:
         Toggles a record between "private" (default, no compensation requests)
         and "monetizable" (user has opted in to request access compensation).
         Does NOT auto-share — explicit grant consent is still required per share.
+        Audit-logged.
       operationId: updateVaultConsent
       tags:
         - Wallet
@@ -525,11 +1224,534 @@ paths:
                 $ref: "#/components/schemas/ConsentUpdateResponse"
         "400":
           description: Invalid consent value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Authentication required
         "404":
           description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/wallet/share/{grantId}:
+    get:
+      summary: Redeem a sharing grant (grantee)
+      description: |
+        DID-bound redemption: the caller's linked DID must be the grant's
+        grantee — a share link alone is never enough. With scope "meta-only",
+        ciphertext and iv are returned as empty strings. Every successful
+        redemption is written to the member-visible grant access log.
+      operationId: redeemShare
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: grantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Shared record payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  meta:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                      type:
+                        type: string
+                  ciphertext:
+                    type: string
+                    description: Empty string when scope is meta-only
+                  iv:
+                    type: string
+                    description: Empty string when scope is meta-only
+                  encryptedKey:
+                    type: string
+                    description: Record key sealed to the grantee's X25519 key
+                  scope:
+                    type: string
+                    enum: [full, meta-only]
+                  expiresAt:
+                    type: string
+                    format: date-time
+                  price:
+                    type: object
+                    properties:
+                      amount:
+                        type: integer
+                      currency:
+                        type: string
+        "401":
+          description: Authentication required
+        "403":
+          description: Caller's DID is not the grantee (code DEVICE_MISMATCH)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodedErrorResponse"
+        "404":
+          description: Share or shared record not found (code GRANT_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodedErrorResponse"
+        "410":
+          description: Share revoked or expired (code GRANT_REVOKED or GRANT_EXPIRED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodedErrorResponse"
+  /api/wallet/didcomm/push-hint:
+    post:
+      summary: Register a DIDComm push hint
+      description: Registers a DID-to-push-token hint for incoming DIDComm messages.
+      operationId: registerDidcommPushHint
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userDID
+                - pushToken
+              properties:
+                userDID:
+                  type: string
+                pushToken:
+                  type: string
+      responses:
+        "200":
+          description: Push hint registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: userDID and pushToken are required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+  /api/wallet/messages/waiting:
+    get:
+      summary: Poll for waiting DIDComm messages
+      description: |
+        Lightweight poll — are DIDComm messages waiting for the caller's
+        linked DID? Without a linked DID, returns didLinked false with zero
+        counts.
+      operationId: getWaitingMessages
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Waiting-message summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  waiting:
+                    type: boolean
+                  unreadCount:
+                    type: integer
+                  didLinked:
+                    type: boolean
+                  lastMessageAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  pushHint:
+                    type: object
+                    nullable: true
+                    properties:
+                      type:
+                        type: string
+                        example: didcomm
+                      count:
+                        type: integer
+        "401":
+          description: Authentication required
+    put:
+      summary: Acknowledge waiting messages
+      description: Clears unread counters, optionally only for the given queue ids.
+      operationId: ackWaitingMessages
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                messageIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Messages acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: No DID linked to this account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+  /api/wallet/vc/present:
+    post:
+      summary: Verify a ZK selective-disclosure presentation
+      description: |
+        Verifies a ZK selective disclosure proof generated ON-DEVICE by the
+        wallet (the holder's secret key never leaves the device). The server
+        verifies structure, hidden commitments, holder binding, challenge
+        integrity, and optionally the trust registry status of the original
+        VC issuer. Obtain a replay-proof challenge via POST /api/vc/zk/challenge.
+      operationId: presentWalletCredential
+      tags:
+        - Wallet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - proof
+              properties:
+                proof:
+                  type: object
+                  required:
+                    - holder
+                    - proof
+                    - verifiableCredential
+                  properties:
+                    holder:
+                      type: string
+                      description: Holder DID
+                    proof:
+                      type: object
+                      required:
+                        - proofValue
+                      properties:
+                        proofValue:
+                          type: string
+                          description: Ed25519 signature
+                    verifiableCredential:
+                      type: object
+                  description: The signed on-device ZK proof
+                challenge:
+                  type: string
+                  description: Challenge from POST /api/vc/zk/challenge
+                checkTrustRegistry:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Presentation verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  verified:
+                    type: boolean
+                  proofId:
+                    type: string
+                  holderDID:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  checks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        passed:
+                          type: boolean
+                        message:
+                          type: string
+        "400":
+          description: proof (with holder, proof.proofValue, verifiableCredential) is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+        "403":
+          description: Verification failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                  checks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        passed:
+                          type: boolean
+                        message:
+                          type: string
+                  proofId:
+                    type: string
+  /api/wallet/admin/users:
+    get:
+      summary: List all wallet users (admin)
+      description: Lists all wallet devices/users with vault/grant counts and quota bytes. Requires an admin JWT.
+      operationId: adminListWalletUsers
+      tags:
+        - Wallet Admin
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Wallet users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminWalletUser"
+        "401":
+          description: Authentication required
+        "403":
+          description: Admin role required
+  /api/wallet/admin/credentials:
+    get:
+      summary: List wallet credential backups (admin)
+      description: Metadata only, never ciphertext. Requires an admin JWT.
+      operationId: adminListWalletCredentials
+      tags:
+        - Wallet Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Backup metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        local_id:
+                          type: string
+                        user_id:
+                          type: string
+                        category:
+                          type: string
+                        size:
+                          type: integer
+                        updated_at:
+                          type: string
+                          format: date-time
+                  filteredByUserId:
+                    type: string
+                    nullable: true
+        "401":
+          description: Authentication required
+        "403":
+          description: Admin role required
+  /api/wallet/admin/grants:
+    get:
+      summary: List all data-sharing grants (admin)
+      description: Lists all grants across users — metadata only. Audit-logged. Requires an admin JWT.
+      operationId: adminListGrants
+      tags:
+        - Wallet Admin
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All grants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  grants:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminGrant"
+        "401":
+          description: Authentication required
+        "403":
+          description: Admin role required
+  /api/wallet/admin/grants/{grantId}/access-log:
+    get:
+      summary: View a grant's access log (admin)
+      operationId: adminGetGrantAccessLog
+      tags:
+        - Wallet Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: grantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Access log entries, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  grantId:
+                    type: string
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        accessed_by_did:
+                          type: string
+                        accessed_at:
+                          type: string
+                          format: date-time
+        "401":
+          description: Authentication required
+        "403":
+          description: Admin role required
+  /api/wallet/admin/remote-wipe/{walletId}:
+    delete:
+      summary: Remote wipe a wallet (admin)
+      description: |
+        Sets the wiped flag on the wallet's devices; the wallet learns of the
+        wipe on its next GET /api/wallet/status poll (410 WALLET_WIPED).
+        A reason is required. Audit-logged. Requires an admin JWT.
+      operationId: adminRemoteWipeWallet
+      tags:
+        - Wallet Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: walletId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Remote wipe initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: reason is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+        "403":
+          description: Admin role required
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Wallet JWT from login or POST /api/wallet/refresh. Admin endpoints
+        additionally require the DB-verified admin role.
   schemas:
     HealthResponse:
       type: object
@@ -866,6 +2088,10 @@ components:
           type: string
         scope:
           type: string
+          enum: [full, meta-only]
+        encrypted_key:
+          type: string
+          description: Record key sealed to the grantee's X25519 key (opaque to the server)
         price_amount:
           type: integer
         price_currency:
@@ -889,6 +2115,137 @@ components:
         is_paid:
           type: integer
           enum: [0, 1]
+        accessLog:
+          type: array
+          description: Member-visible redemptions; populated only when querying by recordId
+          items:
+            type: object
+            properties:
+              accessed_by_did:
+                type: string
+              accessed_at:
+                type: string
+                format: date-time
+    CodedErrorResponse:
+      type: object
+      properties:
+        error:
+          type: boolean
+          example: true
+        code:
+          type: string
+          description: Machine-readable error code
+          enum: [WALLET_WIPED, QUOTA_EXCEEDED, GRANT_NOT_FOUND, GRANT_REVOKED, GRANT_EXPIRED, DEVICE_MISMATCH]
+        message:
+          type: string
+    WalletBackupItem:
+      type: object
+      description: Ciphertext, iv, and alg are present only when requested via ?include=ciphertext
+      properties:
+        local_id:
+          type: string
+        category:
+          type: string
+        size:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+        ciphertext:
+          type: string
+        iv:
+          type: string
+        alg:
+          type: string
+          example: A256GCM
+    VaultRecord:
+      type: object
+      description: Ciphertext, iv, and alg are present only when requested via ?include=ciphertext
+      properties:
+        record_id:
+          type: string
+        user_id:
+          type: string
+        category:
+          type: string
+          enum: [identity, medical, financial, assets, documents, education, membership]
+        meta_json:
+          type: string
+          description: 'JSON string: {"title","type"}'
+        size:
+          type: integer
+        consent:
+          type: string
+          enum: [private, monetizable]
+        updated_at:
+          type: string
+          format: date-time
+        ciphertext:
+          type: string
+        iv:
+          type: string
+        alg:
+          type: string
+          example: A256GCM
+    AdminWalletUser:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        wallet_id:
+          type: string
+        device_name:
+          type: string
+          nullable: true
+        platform:
+          type: string
+          nullable: true
+        wiped:
+          type: integer
+          enum: [0, 1]
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+        vault_count:
+          type: integer
+        grant_count:
+          type: integer
+        quota_used_bytes:
+          type: integer
+    AdminGrant:
+      type: object
+      properties:
+        grant_id:
+          type: string
+        record_id:
+          type: string
+        owner_user_id:
+          type: string
+        grantee_did:
+          type: string
+        scope:
+          type: string
+          enum: [full, meta-only]
+        price_amount:
+          type: integer
+        price_currency:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        revoked:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        access_count:
+          type: integer
     ConsentUpdateResponse:
       type: object
       properties:
