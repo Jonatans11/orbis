@@ -47,7 +47,7 @@ node_major() { node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo
 npm_prefix() {
   local p
   p="$(npm prefix -g)"
-  [[ -d "$p" ]] || p="$(dirname "$(dirname "$(node -p 'process.execPath')")")"
+  [[ -d "$p" ]] || p="$(dirname "$(dirname "$(command -v node)")")"
   printf '%s' "$p"
 }
 
@@ -97,7 +97,9 @@ if [[ $(node_major) -lt $NODE_MIN_MAJOR ]]; then
   hash -r
   [[ $(node_major) -ge $NODE_MIN_MAJOR ]] || die "Node.js install did not produce node >= $NODE_MIN_MAJOR."
 fi
-NODE_BIN="$(node -p 'process.execPath')"
+# The PATH entry, not process.execPath: for Homebrew that resolves into a versioned Cellar directory
+# (/opt/homebrew/Cellar/node/<ver>/bin) that `brew upgrade node` deletes, which would break the MCP server.
+NODE_BIN="$(command -v node)"
 log "Node.js $(node -v) at $NODE_BIN"
 
 NPM_PREFIX="$(npm_prefix)"
