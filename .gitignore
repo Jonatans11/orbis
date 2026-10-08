@@ -39,3 +39,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Frontend
 web/node_modules/
 web/dist/
+
+# Ruflo / xFlo runtime state
+.swarm/
+.claude-flow/
+ruvector.db
